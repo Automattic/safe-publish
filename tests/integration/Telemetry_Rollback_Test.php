@@ -171,6 +171,51 @@ class Telemetry_Rollback_Test extends WP_Ajax_UnitTestCase {
 	}
 
 	/**
+	 * Verifies that an item rollback with omissions reports the retained values.
+	 */
+	public function test_item_rollback_with_omissions_returns_warning_message(): void {
+		// ARRANGE: An updated item whose previous author is no longer available.
+		$author_id = $this->factory()->user->create();
+		wp_delete_user( $author_id );
+		$session_id = $this->repository->create_session(
+			'https://source.example.com',
+			'single'
+		);
+		$post_id    = $this->factory()->post->create();
+		$item_id    = $this->repository->log_import_action(
+			$session_id,
+			2,
+			'Imported Post',
+			'updated',
+			$post_id,
+			null,
+			array(
+				'previous_content' => 'Old content.',
+				'previous_author'  => $author_id,
+				'action'           => 'updated_existing',
+			)
+		);
+		$this->repository->complete_session( $session_id );
+		$_POST = array(
+			'nonce'   => wp_create_nonce( 'safe_publish_ajax_nonce' ),
+			'item_id' => $item_id,
+		);
+
+		// ACT: Dispatch the item rollback.
+		$this->dispatch_ajax_expecting_die( 'safe_publish_rollback_item' );
+
+		// ASSERT: The response distinguishes the successful partial restore.
+		$response = json_decode( $this->_last_response, true );
+		$this->assertIsArray( $response );
+		$this->assertTrue( $response['success'] );
+		$this->assertSame(
+			'Post restored with some values retained. Review the Audit Log for details.',
+			$response['data']['message']
+		);
+		$this->assertCount( 1, $response['data']['omissions'] );
+	}
+
+	/**
 	 * Verifies that replaying a rolled-back item fires rollback_performed
 	 * with failed_count=1 and outcome=failed, rather than reporting a
 	 * restore that never happened.

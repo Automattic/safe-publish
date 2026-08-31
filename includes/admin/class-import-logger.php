@@ -34,24 +34,35 @@ class Import_Logger extends Logger {
 	}
 
 	/**
-	 * Logs a successful single-item rollback.
+	 * Logs a successful single-item rollback, including any omissions.
 	 *
-	 * @param int $item_id    Item that was marked rolled back.
-	 * @param int $session_id Parent session of the item.
-	 * @param int $post_id    Local WP post the item rolled back.
+	 * @param int   $item_id    Item that was marked rolled back.
+	 * @param int   $session_id Parent session of the item.
+	 * @param int   $post_id    Local WP post the item rolled back.
+	 * @param array $omissions Optional. References omitted from the rollback.
 	 */
 	public function item_rolled_back(
 		int $item_id,
 		int $session_id,
-		int $post_id
+		int $post_id,
+		array $omissions = array()
 	): void {
-		$this->log_event(
-			Log_Events::ITEM_ROLLED_BACK,
-			array(
-				'item_id'    => $item_id,
-				'session_id' => $session_id,
-				'post_id'    => $post_id,
-			)
+		$data = array(
+			'item_id'    => $item_id,
+			'session_id' => $session_id,
+			'post_id'    => $post_id,
+		);
+
+		if ( array() === $omissions ) {
+			$this->log_event( Log_Events::ITEM_ROLLED_BACK, $data );
+			return;
+		}
+
+		$data['omissions_version'] = 1;
+		$data['omissions']         = $omissions;
+		$this->log_warning(
+			Log_Events::ITEM_ROLLED_BACK_WITH_OMISSIONS,
+			$data
 		);
 	}
 

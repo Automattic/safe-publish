@@ -82,6 +82,9 @@ class Log_Events {
 	const SESSION_DELETED          = 'SESSION_DELETED';
 	const SESSION_DELETE_FAILED    = 'SESSION_DELETE_FAILED';
 
+	// Partial rollback outcomes.
+	const ITEM_ROLLED_BACK_WITH_OMISSIONS = 'ITEM_ROLLED_BACK_WITH_OMISSIONS';
+
 	// Security-relevant settings change events.
 	const CONNECTED_SITE_URL_CHANGED  = 'CONNECTED_SITE_URL_CHANGED';
 	const BASIC_AUTH_USERNAME_CHANGED = 'BASIC_AUTH_USERNAME_CHANGED';

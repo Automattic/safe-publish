@@ -1373,7 +1373,10 @@ class Post_Import_Service {
 			return $this->build_error_result( $fields, $error_message );
 		}
 
-		$previous_content = $this->capture_previous_content( $imported_post );
+		$previous_content = $this->capture_previous_content(
+			$imported_post,
+			$fields['terms']
+		);
 
 		$post_args = array(
 			'ID'             => $imported_post->ID,
@@ -1451,15 +1454,19 @@ class Post_Import_Service {
 	/**
 	 * Captures the previous content of an existing post for item rollback.
 	 *
-	 * Stores the current post fields, featured image, and tracking meta so
-	 * the update can be reverted via item rollback. The returned array is
-	 * used as the `changes` payload of the history log entry for an
+	 * Stores the current post fields, featured image, tracking meta, and term
+	 * assignments so the update can be reverted via item rollback. The returned
+	 * array is used as the `changes` payload of the history log entry for an
 	 * 'updated_existing' action.
 	 *
-	 * @param WP_Post $existing_post Existing WordPress post.
+	 * @param WP_Post      $existing_post Existing WordPress post.
+	 * @param array|object $terms         Terms about to be written.
 	 * @return array Previous content keyed by field name.
 	 */
-	private function capture_previous_content( WP_Post $existing_post ): array {
+	private function capture_previous_content(
+		WP_Post $existing_post,
+		array|object $terms
+	): array {
 		$previous_content = array(
 			'previous_content'        => $existing_post->post_content,
 			'previous_title'          => $existing_post->post_title,
@@ -1469,7 +1476,14 @@ class Post_Import_Service {
 			'previous_ping_status'    => $existing_post->ping_status,
 			'previous_menu_order'     => $existing_post->menu_order,
 			'previous_password'       => $existing_post->post_password,
+			'previous_author'         => (int) $existing_post->post_author,
+			'previous_parent'         => (int) $existing_post->post_parent,
+			'previous_post_type'      => $existing_post->post_type,
 			'previous_featured_image' => get_post_thumbnail_id( $existing_post->ID ),
+			'previous_terms'          => Term_Assignment_State::capture(
+				$existing_post->ID,
+				$terms
+			),
 			'previous_meta'           => array(),
 			'action'                  => 'updated_existing',
 		);
@@ -2765,18 +2779,7 @@ class Post_Import_Service {
 			);
 		}
 
-		foreach ( (array) $terms as $taxonomy => $_ ) {
-			$taxonomy = sanitize_key( (string) $taxonomy );
-			$existing = wp_get_object_terms(
-				$post_id,
-				$taxonomy,
-				array( 'fields' => 'ids' )
-			);
-
-			if ( ! is_wp_error( $existing ) ) {
-				$snapshot['terms'][ $taxonomy ] = $existing;
-			}
-		}
+		$snapshot['terms'] = Term_Assignment_State::capture( $post_id, $terms );
 
 		return $snapshot;
 	}
@@ -2817,9 +2820,7 @@ class Post_Import_Service {
 			}
 		}
 
-		foreach ( $snapshot['terms'] as $taxonomy => $term_ids ) {
-			wp_set_object_terms( $post_id, $term_ids, $taxonomy );
-		}
+		Term_Assignment_State::restore( $post_id, $snapshot['terms'] );
 	}
 
 	/**
