@@ -113,6 +113,7 @@ final class Import_Actions_Ajax_Handler {
 				'deleted_count'  => $result['deleted_count'],
 				'restored_count' => $result['restored_count'],
 				'failed_count'   => $result['failed_count'],
+				'omission_count' => $result['omission_count'],
 			)
 		);
 	}
@@ -168,9 +169,15 @@ final class Import_Actions_Ajax_Handler {
 			)
 		);
 
-		$messages = array(
+		$omissions = $result['omissions'] ?? array();
+		$messages  = array(
 			'deleted'  => __( 'Post permanently deleted.', 'safe-publish' ),
-			'restored' => __( 'Post restored to its previous version.', 'safe-publish' ),
+			'restored' => array() === $omissions
+				? __( 'Post restored to its previous version.', 'safe-publish' )
+				: __(
+					'Post restored with some values retained. Review the Audit Log for details.',
+					'safe-publish'
+				),
 		);
 
 		$result['message'] = $messages[ $result['action'] ] ?? $result['action'];

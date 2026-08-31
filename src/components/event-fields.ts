@@ -77,6 +77,7 @@ const EVENT_LABELS: Record< string, string > = {
 	DISPATCH_RESPONSE_BAD_STATUS: __( 'Dispatch response: bad status', 'safe-publish' ),
 	SESSION_ROLLED_BACK: __( 'Session rolled back', 'safe-publish' ),
 	ITEM_ROLLED_BACK: __( 'Item rolled back', 'safe-publish' ),
+	ITEM_ROLLED_BACK_WITH_OMISSIONS: __( 'Item rolled back with omissions', 'safe-publish' ),
 	SESSION_ALREADY_ROLLED_BACK: __( 'Session already rolled back', 'safe-publish' ),
 	ITEM_ALREADY_ROLLED_BACK: __( 'Item already rolled back', 'safe-publish' ),
 	SESSION_ROLLBACK_FAILED: __( 'Session rollback failed', 'safe-publish' ),
