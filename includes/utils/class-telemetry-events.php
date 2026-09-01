@@ -52,12 +52,10 @@ class Telemetry_Events {
 	const SESSION_TYPE_BULK   = 'bulk';
 
 	// rollback_performed -> scope enum.
-	const ROLLBACK_SCOPE_SESSION = 'session';
-	const ROLLBACK_SCOPE_ITEM    = 'item';
+	const ROLLBACK_SCOPE_ITEM = 'item';
 
 	// rollback_performed -> outcome enum.
 	const ROLLBACK_OUTCOME_SUCCESS = 'success';
-	const ROLLBACK_OUTCOME_PARTIAL = 'partial';
 	const ROLLBACK_OUTCOME_FAILED  = 'failed';
 
 	// import_item_failed -> error_code enum fallback when the raw audit
@@ -202,35 +200,5 @@ class Telemetry_Events {
 	 */
 	public static function is_media_error_code( string $code ): bool {
 		return in_array( $code, self::MEDIA_ERROR_CODES, true );
-	}
-
-	/**
-	 * Derives the rollback outcome from the deleted, restored, and failed
-	 * counts. Success when no failures and at least one row changed; failed
-	 * when nothing changed and at least one row failed; partial otherwise
-	 * (mixed result or no-op rollback).
-	 *
-	 * @param int $deleted_count  Number of new posts removed by the rollback.
-	 * @param int $restored_count Number of updated posts reverted to their
-	 *                            previous version.
-	 * @param int $failed_count   Number of items that couldn't be rolled back.
-	 * @return string One of the ROLLBACK_OUTCOME_* constants.
-	 */
-	public static function rollback_outcome(
-		int $deleted_count,
-		int $restored_count,
-		int $failed_count
-	): string {
-		$changed = $deleted_count + $restored_count;
-
-		if ( 0 === $failed_count && $changed > 0 ) {
-			return self::ROLLBACK_OUTCOME_SUCCESS;
-		}
-
-		if ( 0 === $changed && $failed_count > 0 ) {
-			return self::ROLLBACK_OUTCOME_FAILED;
-		}
-
-		return self::ROLLBACK_OUTCOME_PARTIAL;
 	}
 }

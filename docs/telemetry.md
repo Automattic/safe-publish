@@ -23,7 +23,7 @@ All events carry the global properties set in `Plugin::init()` — `plugin_versi
 | `single_import_completed` | End of single-import AJAX (`ajax_create_draft`) | `outcome` (`new`\|`updated`), `warning_count` | Live (registered in Pendo) |
 | `bulk_import_completed` | End of bulk-import AJAX (`ajax_bulk_import`) | `batch_size`, `successful`, `failed`, `has_failures` | Live in code, awaiting first receipt |
 | `import_item_failed` | Per-item error in `Post_Import_Service` | `error_code` (bounded enum), `session_type` (`single`\|`bulk`), `media_failure_count` (only for media errors) | Live in code, awaiting first receipt |
-| `rollback_performed` | Both rollback handlers, success and failure | `scope` (`session`\|`item`), `deleted_count`, `restored_count`, `failed_count`, `outcome` (`success`\|`partial`\|`failed`) | Live in code, awaiting first receipt |
+| `rollback_performed` | Item rollback handler, success and failure | `scope` (`item`), `deleted_count`, `restored_count`, `failed_count`, `outcome` (`success`\|`failed`) | Live in code, awaiting first receipt |
 | `connection_test_completed` | End of test-connection AJAX (`ajax_test_connection`) | `outcome` (`authorized`\|`unauthorized`\|`blocked`\|`unreachable`) | **New — this change** |
 | `sync_mode_configured` | Sync-mode option first set or changed | `previous_mode`, `new_mode` (bounded enums), `is_first_configuration` (bool) | **New — this change** |
 

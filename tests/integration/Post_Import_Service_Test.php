@@ -22,6 +22,7 @@ use Safe_Publish\Content\Content_Media_Processor;
 use Safe_Publish\Content\Shortcode_ID_Rewriter;
 use Safe_Publish\Media\Media_Importer;
 use Safe_Publish\Tests\Integration\Source_Posts_API\Source_Posts_API_Test_Base;
+use Safe_Publish\Utils\Import_Items_Table;
 use Safe_Publish\Utils\Options;
 use Safe_Publish\Utils\Telemetry_Service;
 use WP_Error;
@@ -1671,7 +1672,7 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 		);
 
 		// ASSERT: Two item rows were written, both with status 'error'.
-		$items = $this->repository->get_session_items( $session_id );
+		$items = $this->get_session_items_for_test( $session_id );
 
 		$this->assertCount(
 			2,
@@ -2311,11 +2312,9 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 
 		// ASSERT: Import fails and the item row carries no warnings.
 		$this->assertFalse( $result['success'] );
-		$items = $this->repository->get_session_items_by_status(
-			$session_id,
-			array( 'error' )
-		);
+		$items = $this->get_session_items_for_test( $session_id );
 		$this->assertCount( 1, $items );
+		$this->assertSame( 'error', $items[0]['status'] );
 		$this->assertNull( $items[0]['warnings'] );
 	}
 
@@ -2372,11 +2371,9 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 			(int) get_post( $result['post_id'] )->post_author
 		);
 
-		$items = $this->repository->get_session_items_by_status(
-			$session_id,
-			array( 'success' )
-		);
+		$items = $this->get_session_items_for_test( $session_id );
 		$this->assertCount( 1, $items );
+		$this->assertSame( 'success', $items[0]['status'] );
 		$this->assertNull( $items[0]['warnings'] );
 	}
 
@@ -2446,11 +2443,9 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 		);
 
 		// ASSERT: Warning is persisted on the item row, encoded as JSON.
-		$items = $this->repository->get_session_items_by_status(
-			$session_id,
-			array( 'success' )
-		);
+		$items = $this->get_session_items_for_test( $session_id );
 		$this->assertCount( 1, $items );
+		$this->assertSame( 'success', $items[0]['status'] );
 		$persisted = json_decode( (string) $items[0]['warnings'], true );
 		$this->assertSame( $result['warnings'], $persisted );
 	}
@@ -3498,14 +3493,17 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 	}
 
 	/**
-	 * Verifies that rolling back a bulk-reimported post restores its previous
-	 * title, content, and excerpt.
+	 * Verifies that rolling back a bulk-reimported post restores the state the
+	 * update replaced.
 	 *
 	 * The bulk update path captures the pre-update state alongside the single
 	 * update path, so rollback is non-destructive in both flows.
 	 */
 	public function test_bulk_reimport_rollback_restores_previous_post_fields(): void {
 		// ARRANGE: Initial import seeds the post in the destination.
+		register_taxonomy( 'sp_rollback_topic', array( 'post', 'page' ) );
+		register_taxonomy( 'sp_rollback_empty', array( 'post', 'page' ) );
+
 		$session_id = $this->repository->create_session(
 			'https://source.example.com',
 			'bulk'
@@ -3528,16 +3526,55 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 		$first = $this->import_service->import_post( $post_data, $session_id );
 		$this->assertTrue( $first['success'], 'Initial import should succeed.' );
 		$post_id = (int) $first['post_id'];
+		$author  = $this->factory()->user->create();
+		$parent  = $this->factory()->post->create(
+			array( 'post_type' => 'page' )
+		);
+		$term    = wp_insert_term( 'Original Topic', 'sp_rollback_topic' );
 
-		$pre_update_title   = get_post_field( 'post_title', $post_id );
-		$pre_update_content = get_post_field( 'post_content', $post_id );
-		$pre_update_excerpt = get_post_field( 'post_excerpt', $post_id );
+		$this->assertIsInt( $author );
+		$this->assertIsInt( $parent );
+		$this->assertIsArray( $term );
+
+		wp_update_post(
+			array(
+				'ID'          => $post_id,
+				'post_author' => $author,
+				'post_parent' => $parent,
+				'post_type'   => 'page',
+			)
+		);
+		wp_set_object_terms(
+			$post_id,
+			array( (int) $term['term_id'] ),
+			'sp_rollback_topic'
+		);
+
+		$previous       = get_post( $post_id );
+		$previous_terms = array( (int) $term['term_id'] );
+		$this->assertNotNull( $previous );
 
 		// ARRANGE: Re-importing with new values exercises the bulk update path.
 		$this->mock_post_overrides = array(
-			'title'   => 'Updated Title',
-			'content' => '<p>Updated content.</p>',
-			'excerpt' => 'Updated excerpt.',
+			'title'              => 'Updated Title',
+			'content'            => '<p>Updated content.</p>',
+			'excerpt'            => 'Updated excerpt.',
+			'safe_publish_terms' => array(
+				'sp_rollback_topic' => array(
+					array(
+						'id'   => 9602,
+						'name' => 'Updated Topic',
+						'slug' => 'updated-topic',
+					),
+				),
+				'sp_rollback_empty' => array(
+					array(
+						'id'   => 9603,
+						'name' => 'New Topic',
+						'slug' => 'new-topic',
+					),
+				),
+			),
 		);
 
 		// ACT: Re-import the same source post.
@@ -3547,10 +3584,19 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 			$second['existing'],
 			'Re-import should flag the post as existing.'
 		);
-		$this->assertSame(
-			'Updated Title',
-			get_post_field( 'post_title', $post_id ),
-			'Pre-rollback sanity: post must reflect the updated values.'
+		$updated = get_post( $post_id );
+		$this->assertNotNull( $updated );
+		$this->assertSame( 'Updated Title', $updated->post_title );
+		$this->assertSame( 'post', $updated->post_type );
+		$this->assertSame( 0, (int) $updated->post_parent );
+		$this->assertNotSame( $author, (int) $updated->post_author );
+		$this->assertNotSame(
+			$previous_terms,
+			wp_get_object_terms(
+				$post_id,
+				'sp_rollback_topic',
+				array( 'fields' => 'ids' )
+			)
 		);
 
 		// ACT: Roll back the most recent item logged for this post.
@@ -3561,23 +3607,31 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 		// ASSERT: Rollback restored the post instead of deleting it.
 		$this->assertIsArray( $result );
 		$this->assertSame( 'restored', $result['action'] );
-		$this->assertNotNull(
-			get_post( $post_id ),
-			'Rollback must not delete the post on the bulk update path.'
-		);
+		$restored = get_post( $post_id );
+		$this->assertNotNull( $restored );
 
 		// ASSERT: Post fields match the pre-update state.
+		$this->assertSame( $previous->post_title, $restored->post_title );
+		$this->assertSame( $previous->post_content, $restored->post_content );
+		$this->assertSame( $previous->post_excerpt, $restored->post_excerpt );
+		$this->assertSame( $author, (int) $restored->post_author );
+		$this->assertSame( $parent, (int) $restored->post_parent );
+		$this->assertSame( 'page', $restored->post_type );
 		$this->assertSame(
-			$pre_update_title,
-			get_post_field( 'post_title', $post_id )
+			$previous_terms,
+			wp_get_object_terms(
+				$post_id,
+				'sp_rollback_topic',
+				array( 'fields' => 'ids' )
+			)
 		);
 		$this->assertSame(
-			$pre_update_content,
-			get_post_field( 'post_content', $post_id )
-		);
-		$this->assertSame(
-			$pre_update_excerpt,
-			get_post_field( 'post_excerpt', $post_id )
+			array(),
+			wp_get_object_terms(
+				$post_id,
+				'sp_rollback_empty',
+				array( 'fields' => 'ids' )
+			)
 		);
 	}
 
@@ -3946,6 +4000,31 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 			$meta['custom_field'],
 			get_post_meta( $post_id, 'custom_field', true )
 		);
+	}
+
+	/**
+	 * Retrieves fields asserted from every item in a test session.
+	 *
+	 * @param int $session_id Session ID.
+	 * @return list<array{source_post_id: ?string, status: string, warnings: ?string}> Item rows.
+	 */
+	private function get_session_items_for_test( int $session_id ): array {
+		global $wpdb;
+
+		$table = Import_Items_Table::table_name();
+
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$items = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT source_post_id, status, warnings FROM `{$table}`"
+					. ' WHERE session_id = %d ORDER BY id ASC',
+				$session_id
+			),
+			ARRAY_A
+		);
+		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+
+		return is_array( $items ) ? $items : array();
 	}
 
 	/**

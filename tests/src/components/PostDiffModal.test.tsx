@@ -2,7 +2,7 @@
  * Tests for PostDiffModal refresh and error rendering.
  */
 import { afterEach, describe, expect, it, vi, type Mock } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import apiFetch from '@wordpress/api-fetch';
 
 import PostDiffModal from '@/components/PostDiffModal';
@@ -315,9 +315,11 @@ describe( 'PostDiffModal keyboard focus', () => {
 		).toBeInTheDocument();
 
 		// ASSERT: The action stays live, so the operator can resubmit.
-		expect( getByRole( 'button', { name: 'Update' } ) ).not.toHaveAttribute(
-			'aria-disabled'
-		);
+		await waitFor( () => {
+			expect(
+				getByRole( 'button', { name: 'Update' } )
+			).not.toHaveAttribute( 'aria-disabled' );
+		} );
 	} );
 } );
 

@@ -1,6 +1,6 @@
 <?php
 /**
- * Integration tests for session rollback functionality
+ * Integration tests for rollback functionality
  *
  * @package Safe_Publish
  */
@@ -48,64 +48,6 @@ class Session_Rollback_Test extends Integration_Test_Case {
 
 		Audit_Log_Table::create_table();
 		Audit_Log_Table::clear( 'import' );
-	}
-
-	/**
-	 * Verifies that rolling back a complete session deletes imported posts.
-	 */
-	public function test_rollback_session_deletes_imported_posts(): void {
-		// ARRANGE: Create session and import posts.
-		$session_id = $this->repository->create_session( 'https://example.com', 'bulk' );
-
-		// Create actual WordPress posts.
-		$post_id_1 = $this->factory()->post->create( array( 'post_title' => 'Imported Post 1' ) );
-		$post_id_2 = $this->factory()->post->create( array( 'post_title' => 'Imported Post 2' ) );
-
-		// Log the imports.
-		$item_id_1 = $this->repository->log_import_action(
-			$session_id,
-			1,
-			'Imported Post 1',
-			'success',
-			$post_id_1
-		);
-
-		$item_id_2 = $this->repository->log_import_action(
-			$session_id,
-			2,
-			'Imported Post 2',
-			'success',
-			$post_id_2
-		);
-
-		$this->repository->complete_session( $session_id );
-
-		// ASSERT: Verify posts exist.
-		$this->assertNotNull( get_post( $post_id_1 ) );
-		$this->assertNotNull( get_post( $post_id_2 ) );
-
-		// ACT: Rollback the session.
-		$result = $this->rollback_service->rollback_session( $session_id );
-
-		// ASSERT: Posts were deleted with no failures.
-		$this->assertIsArray( $result );
-		$this->assertSame( 2, $result['deleted_count'] );
-		$this->assertSame( 0, $result['failed_count'] );
-
-		// ASSERT: Verify posts are deleted.
-		$this->assertNull( get_post( $post_id_1 ) );
-		$this->assertNull( get_post( $post_id_2 ) );
-
-		// ASSERT: Verify session marked as rolled back.
-		$session = $this->repository->get_session( $session_id );
-		$this->assertSame( 'rolled_back', $session['status'] );
-
-		// ASSERT: Each item row is flagged so the per-item rolled_back state
-		// stays consistent with the item-level rollback path.
-		$item_1 = $this->repository->get_item( $item_id_1 );
-		$item_2 = $this->repository->get_item( $item_id_2 );
-		$this->assertSame( 1, (int) $item_1['rolled_back'] );
-		$this->assertSame( 1, (int) $item_2['rolled_back'] );
 	}
 
 	/**
@@ -327,32 +269,6 @@ class Session_Rollback_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Verifies that a session rollback deletes the plugin-imported media each
-	 * rolled-back post owns.
-	 */
-	public function test_rollback_session_deletes_owned_imported_media(): void {
-		// ARRANGE: Two imported posts, each owning a plugin-imported
-		// attachment.
-		$session_id = $this->repository->create_session( 'https://example.com', 'bulk' );
-		$post_1     = $this->factory()->post->create( array( 'post_title' => 'Post 1' ) );
-		$post_2     = $this->factory()->post->create( array( 'post_title' => 'Post 2' ) );
-		$media_1    = $this->seed_imported_attachment( $post_1 );
-		$media_2    = $this->seed_imported_attachment( $post_2 );
-		$this->repository->log_import_action( $session_id, 1, 'Post 1', 'success', $post_1 );
-		$this->repository->log_import_action( $session_id, 2, 'Post 2', 'success', $post_2 );
-		$this->repository->complete_session( $session_id );
-
-		// ACT: Roll back the whole session.
-		$result = $this->rollback_service->rollback_session( $session_id );
-
-		// ASSERT: Both posts and both owned attachments are gone.
-		$this->assertIsArray( $result );
-		$this->assertSame( 2, $result['deleted_count'] );
-		$this->assertNull( get_post( $media_1 ) );
-		$this->assertNull( get_post( $media_2 ) );
-	}
-
-	/**
 	 * Verifies that restoring an updated post to its previous version keeps its
 	 * media, since a restore reverts content rather than removing the post.
 	 */
@@ -390,6 +306,361 @@ class Session_Rollback_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that rollback rejects malformed references before changing the
+	 * post.
+	 */
+	public function test_restore_previous_version_refuses_malformed_references(): void {
+		// ARRANGE: Build representative malformed snapshot values.
+		$cases = array(
+			'malformed terms'          => array(
+				array(
+					'previous_terms' => array( 'category' => 'invalid' ),
+				),
+				'invalid_term_assignment_snapshot',
+			),
+			'malformed term ID'        => array(
+				array( 'previous_terms' => array( 'category' => array( '12' ) ) ),
+				'invalid_term_assignment_snapshot',
+			),
+			'malformed author'         => array(
+				array( 'previous_author' => '12' ),
+				'invalid_rollback_snapshot',
+			),
+			'malformed parent'         => array(
+				array( 'previous_parent' => -1 ),
+				'invalid_rollback_snapshot',
+			),
+			'malformed post type'      => array(
+				array( 'previous_post_type' => array() ),
+				'invalid_rollback_snapshot',
+			),
+			'malformed featured image' => array(
+				array( 'previous_featured_image' => array() ),
+				'invalid_rollback_snapshot',
+			),
+			'negative featured image'  => array(
+				array( 'previous_featured_image' => -1 ),
+				'invalid_rollback_snapshot',
+			),
+		);
+
+		foreach ( $cases as $case_name => [ $changes, $error_code ] ) {
+			$history = $this->create_updated_item( $changes );
+
+			// ACT: Attempt to restore the invalid snapshot.
+			$result = $this->rollback_service->rollback_item( $history['item_id'] );
+
+			// ASSERT: Validation rejects it without changing durable state.
+			$this->assertInstanceOf( WP_Error::class, $result, $case_name );
+			$this->assertSame(
+				$error_code,
+				$result->get_error_code(),
+				$case_name
+			);
+			$this->assertSame(
+				'Current content.',
+				get_post_field( 'post_content', $history['post_id'] ),
+				$case_name
+			);
+			$item = $this->repository->get_item( $history['item_id'] );
+			$this->assertSame( 0, (int) $item['rolled_back'], $case_name );
+		}
+	}
+
+	/**
+	 * Verifies that unavailable references are retained and recorded as
+	 * omissions while available state is restored.
+	 */
+	public function test_restore_previous_version_records_unavailable_references_as_omissions(): void {
+		// ARRANGE: A snapshot containing unavailable references alongside one
+		// fully restorable taxonomy.
+		register_taxonomy( 'sp_atomic_taxonomy', 'post' );
+
+		try {
+			$deleted_author = $this->factory()->user->create();
+			$deleted_parent = $this->factory()->post->create();
+			$previous_image = $this->factory()->attachment->create(
+				array( 'post_mime_type' => 'application/pdf' )
+			);
+			$deleted_term   = wp_insert_term( 'Deleted Term', 'sp_atomic_taxonomy' );
+			$current_term   = wp_insert_term( 'Current Term', 'sp_atomic_taxonomy' );
+			$this->assertIsArray( $deleted_term );
+			$this->assertIsArray( $current_term );
+			wp_delete_user( $deleted_author );
+			wp_delete_post( $deleted_parent, true );
+			wp_delete_term( (int) $deleted_term['term_id'], 'sp_atomic_taxonomy' );
+			register_taxonomy( '123', 'post' );
+			$previous_term = wp_insert_term( 'Previous Term', '123' );
+			$current_other = wp_insert_term( 'Current Other', '123' );
+			$this->assertIsArray( $previous_term );
+			$this->assertIsArray( $current_other );
+
+			$history        = $this->create_updated_item(
+				array(
+					'previous_terms'          => array(
+						'sp_missing_taxonomy' => array(),
+						'sp_atomic_taxonomy'  => array( (int) $deleted_term['term_id'] ),
+						'123'                 => array( (int) $previous_term['term_id'] ),
+					),
+					'previous_author'         => $deleted_author,
+					'previous_parent'         => $deleted_parent,
+					'previous_post_type'      => 'sp_missing_type',
+					'previous_featured_image' => $previous_image,
+				)
+			);
+			$current_author = $this->factory()->user->create();
+			$current_parent = $this->factory()->post->create();
+			$current_image  = $this->factory()->attachment->create();
+			$this->assertIsInt( $current_author );
+			$this->assertIsInt( $current_parent );
+			wp_update_post(
+				array(
+					'ID'          => $history['post_id'],
+					'post_author' => $current_author,
+					'post_parent' => $current_parent,
+				)
+			);
+			update_post_meta( $history['post_id'], '_thumbnail_id', $current_image );
+			wp_set_object_terms(
+				$history['post_id'],
+				array( (int) $current_term['term_id'] ),
+				'sp_atomic_taxonomy'
+			);
+			wp_set_object_terms(
+				$history['post_id'],
+				array( (int) $current_other['term_id'] ),
+				'123'
+			);
+
+			// ACT: Restore every available part of the item.
+			$result = $this->rollback_service->rollback_item( $history['item_id'] );
+
+			// ASSERT: The rollback succeeds, retaining each unavailable value and
+			// restoring the complete available taxonomy.
+			$this->assertIsArray( $result );
+			$this->assertSame( 'restored', $result['action'] );
+			$this->assertCount( 6, $result['omissions'] );
+			$events = Audit_Log_Table::get_events(
+				array(
+					'channel'    => 'import',
+					'event_type' => 'ITEM_ROLLED_BACK_WITH_OMISSIONS',
+				)
+			);
+			$this->assertCount( 1, $events );
+			$omissions = $events[0]['data']['omissions'];
+			$this->assertSame(
+				array(
+					'term_assignments',
+					'term_assignments',
+					'author',
+					'parent',
+					'post_type',
+					'featured_image',
+				),
+				array_column( $omissions, 'field' )
+			);
+			$this->assertSame( 'sp_missing_taxonomy', $omissions[0]['taxonomy'] );
+			$this->assertSame(
+				array( (int) $deleted_term['term_id'] ),
+				$omissions[1]['term_ids']
+			);
+			$this->assertSame( $deleted_author, $omissions[2]['id'] );
+			$this->assertSame( $deleted_parent, $omissions[3]['id'] );
+			$this->assertSame( 'sp_missing_type', $omissions[4]['slug'] );
+			$this->assertSame( $previous_image, $omissions[5]['id'] );
+			$this->assertSame(
+				array(
+					'taxonomy_unavailable',
+					'term_unavailable',
+					'reference_unavailable',
+					'reference_unavailable',
+					'reference_unavailable',
+					'reference_unavailable',
+				),
+				array_column( $omissions, 'reason' )
+			);
+			$post = get_post( $history['post_id'] );
+			$this->assertSame( 'Previous content.', $post->post_content );
+			$this->assertSame( $current_author, (int) $post->post_author );
+			$this->assertSame( $current_parent, (int) $post->post_parent );
+			$this->assertSame( 'post', $post->post_type );
+			$this->assertSame(
+				$current_image,
+				(int) get_post_meta( $history['post_id'], '_thumbnail_id', true )
+			);
+			$this->assertSame(
+				array( (int) $current_term['term_id'] ),
+				wp_get_object_terms(
+					$history['post_id'],
+					'sp_atomic_taxonomy',
+					array( 'fields' => 'ids' )
+				)
+			);
+			$this->assertSame(
+				array( (int) $previous_term['term_id'] ),
+				wp_get_object_terms(
+					$history['post_id'],
+					'123',
+					array( 'fields' => 'ids' )
+				)
+			);
+			$item = $this->repository->get_item( $history['item_id'] );
+			$this->assertSame( 1, (int) $item['rolled_back'] );
+
+			// ASSERT: The durable audit event identifies the affected item.
+			$this->assertSame( 'warning', $events[0]['level'] );
+			$this->assertSame( $history['item_id'], $events[0]['data']['item_id'] );
+			$this->assertSame( $history['session_id'], $events[0]['data']['session_id'] );
+			$this->assertSame( $history['post_id'], $events[0]['data']['post_id'] );
+			$this->assertSame( 1, $events[0]['data']['omissions_version'] );
+		} finally {
+			unregister_taxonomy( 'sp_atomic_taxonomy' );
+			unregister_taxonomy( '123' );
+		}
+	}
+
+	/**
+	 * Verifies that a legacy update without a previous-content snapshot keeps
+	 * its deletion fallback.
+	 */
+	public function test_legacy_update_without_snapshot_deletes_the_post(): void {
+		// ARRANGE: A legacy updated row has no durable snapshot to restore.
+		$session_id = $this->repository->create_session(
+			'https://example.com',
+			'bulk'
+		);
+		$post_id    = $this->factory()->post->create();
+		$item_id    = $this->repository->log_import_action(
+			$session_id,
+			1,
+			'Updated',
+			'updated',
+			$post_id
+		);
+
+		// ACT: Roll back the legacy update.
+		$result = $this->rollback_service->rollback_item( $item_id );
+
+		// ASSERT: Existing fallback behavior deletes the post.
+		$this->assertIsArray( $result );
+		$this->assertSame( 'deleted', $result['action'] );
+		$this->assertNull( get_post( $post_id ) );
+	}
+
+	/**
+	 * Verifies that a term restore failure is reported and remains retryable.
+	 */
+	public function test_restore_previous_version_reports_term_restore_failure(): void {
+		// ARRANGE: A valid term is deleted after preflight, while the post still
+		// has its imported term assignment and a later taxonomy can restore.
+		register_taxonomy( 'sp_rollback_topic', 'post' );
+		register_taxonomy( 'sp_later_taxonomy', 'post' );
+		$term           = wp_insert_term( 'Previous Topic', 'sp_rollback_topic' );
+		$current_term   = wp_insert_term( 'Current Topic', 'sp_rollback_topic' );
+		$previous_later = wp_insert_term( 'Previous Later', 'sp_later_taxonomy' );
+		$current_later  = wp_insert_term( 'Current Later', 'sp_later_taxonomy' );
+
+		$this->assertIsArray( $term );
+		$this->assertIsArray( $current_term );
+		$this->assertIsArray( $previous_later );
+		$this->assertIsArray( $current_later );
+		$history = $this->create_updated_item(
+			array(
+				'previous_terms'          => array(
+					'sp_rollback_topic' => array( (int) $term['term_id'] ),
+					'sp_later_taxonomy' => array( (int) $previous_later['term_id'] ),
+				),
+				'previous_meta'           => array( 'rollback_meta' => 'Previous metadata.' ),
+				'previous_featured_image' => 0,
+			)
+		);
+		update_post_meta( $history['post_id'], 'rollback_meta', 'Imported metadata.' );
+		update_post_meta( $history['post_id'], '_thumbnail_id', 12345 );
+		wp_set_object_terms(
+			$history['post_id'],
+			array( (int) $current_term['term_id'] ),
+			'sp_rollback_topic'
+		);
+		wp_set_object_terms(
+			$history['post_id'],
+			array( (int) $current_later['term_id'] ),
+			'sp_later_taxonomy'
+		);
+		$delete_term = static function () use ( $term ): void {
+			wp_delete_term( (int) $term['term_id'], 'sp_rollback_topic' );
+		};
+		add_action( 'save_post', $delete_term );
+
+		try {
+			// ACT: Attempt to restore the previous version.
+			$result = $this->rollback_service->rollback_item( $history['item_id'] );
+
+			// ASSERT: The runtime failure is reported and not recorded as success.
+			$this->assertInstanceOf( WP_Error::class, $result );
+			$this->assertSame( 'terms_restore_failed', $result->get_error_code() );
+			$this->assertSame(
+				'Previous content.',
+				get_post_field( 'post_content', $history['post_id'] )
+			);
+			$this->assertSame(
+				'Previous metadata.',
+				get_post_meta( $history['post_id'], 'rollback_meta', true )
+			);
+			$this->assertSame(
+				'',
+				get_post_meta( $history['post_id'], '_thumbnail_id', true )
+			);
+			$item = $this->repository->get_item( $history['item_id'] );
+			$this->assertSame( 0, (int) $item['rolled_back'] );
+			$this->assertSame(
+				array( (int) $current_term['term_id'] ),
+				wp_get_object_terms(
+					$history['post_id'],
+					'sp_rollback_topic',
+					array( 'fields' => 'ids' )
+				)
+			);
+			$this->assertSame(
+				array( (int) $previous_later['term_id'] ),
+				wp_get_object_terms(
+					$history['post_id'],
+					'sp_later_taxonomy',
+					array( 'fields' => 'ids' )
+				)
+			);
+		} finally {
+			remove_action( 'save_post', $delete_term );
+		}
+	}
+
+	/**
+	 * Creates an updated post and its rollback history item.
+	 *
+	 * @param array $changes Additional previous state.
+	 * @return array{session_id: int, post_id: int, item_id: int} Created IDs.
+	 */
+	private function create_updated_item( array $changes ): array {
+		$session_id = $this->repository->create_session(
+			'https://example.com',
+			'bulk'
+		);
+		$post_id    = $this->factory()->post->create(
+			array( 'post_content' => 'Current content.' )
+		);
+		$item_id    = $this->repository->log_import_action(
+			$session_id,
+			1,
+			'Updated',
+			'updated',
+			$post_id,
+			null,
+			array( 'previous_content' => 'Previous content.' ) + $changes
+		);
+
+		return compact( 'session_id', 'post_id', 'item_id' );
+	}
+
+	/**
 	 * Creates a plugin-imported attachment parented to a post.
 	 *
 	 * @param int $parent_id Owning post ID.
@@ -424,21 +695,6 @@ class Session_Rollback_Test extends Integration_Test_Case {
 		);
 
 		return $attachment_id;
-	}
-
-	/**
-	 * Verifies that rollback with nonexistent session returns error.
-	 */
-	public function test_rollback_nonexistent_session_returns_error(): void {
-		// ARRANGE: Use nonexistent session ID.
-		$fake_session_id = 999999;
-
-		// ACT: Attempt rollback.
-		$result = $this->rollback_service->rollback_session( $fake_session_id );
-
-		// ASSERT: Returns WP_Error.
-		$this->assertInstanceOf( WP_Error::class, $result );
-		$this->assertSame( 'session_not_found', $result->get_error_code() );
 	}
 
 	/**
@@ -586,64 +842,6 @@ class Session_Rollback_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Verifies that repeating a session rollback skips the items an earlier
-	 * run already undid.
-	 */
-	public function test_rollback_session_skips_already_rolled_back_items(): void {
-		// ARRANGE: A session holding one new import and one update, rolled
-		// back once, after which newer content landed on the surviving post.
-		$session_id = $this->repository->create_session( 'https://example.com', 'bulk' );
-		$created_id = $this->factory()->post->create( array( 'post_title' => 'Created' ) );
-		$updated_id = $this->factory()->post->create(
-			array(
-				'post_title'   => 'Updated',
-				'post_content' => 'Imported content.',
-			)
-		);
-		$this->repository->log_import_action(
-			$session_id,
-			1,
-			'Created',
-			'success',
-			$created_id
-		);
-		$this->repository->log_import_action(
-			$session_id,
-			2,
-			'Updated',
-			'updated',
-			$updated_id,
-			null,
-			array(
-				'previous_content' => 'Old content.',
-				'action'           => 'updated_existing',
-			)
-		);
-		$this->repository->complete_session( $session_id );
-		$this->rollback_service->rollback_session( $session_id );
-
-		$newer = 'Content written after the rollback.';
-		$this->factory()->post->update_object(
-			$updated_id,
-			array( 'post_content' => $newer )
-		);
-
-		// ACT: Roll the same session back a second time.
-		$result = $this->rollback_service->rollback_session( $session_id );
-
-		// ASSERT: Every item was skipped, so nothing changed and nothing failed.
-		$this->assertIsArray( $result );
-		$this->assertSame( 0, $result['deleted_count'] );
-		$this->assertSame( 0, $result['restored_count'] );
-		$this->assertSame( 0, $result['failed_count'] );
-
-		// ASSERT: The newer content survived.
-		$post = get_post( $updated_id );
-		$this->assertNotNull( $post );
-		$this->assertSame( $newer, $post->post_content );
-	}
-
-	/**
 	 * Verifies that the replay guard leaves sequential rollback intact, so
 	 * each rollback still walks back one import operation.
 	 */
@@ -701,342 +899,6 @@ class Session_Rollback_Test extends Integration_Test_Case {
 		$this->assertIsArray( $create_result );
 		$this->assertSame( 'deleted', $create_result['action'] );
 		$this->assertNull( get_post( $post_id ) );
-	}
-
-	/**
-	 * Verifies that rollback only affects successful/updated imports.
-	 */
-	public function test_rollback_ignores_failed_imports(): void {
-		// ARRANGE: Create session with success and failed imports.
-		$session_id = $this->repository->create_session( 'https://example.com', 'bulk' );
-
-		$post_id = $this->factory()->post->create( array( 'post_title' => 'Success' ) );
-
-		// Success item.
-		$this->repository->log_import_action(
-			$session_id,
-			1,
-			'Success',
-			'success',
-			$post_id
-		);
-
-		// Failed item (no post created).
-		$this->repository->log_import_action(
-			$session_id,
-			2,
-			'Failed',
-			'error',
-			null,
-			'Import failed'
-		);
-
-		$this->repository->complete_session( $session_id );
-
-		// ACT: Rollback session.
-		$result = $this->rollback_service->rollback_session( $session_id );
-
-		// ASSERT: Only the successful import was rolled back; the failed one
-		// was ignored.
-		$this->assertIsArray( $result );
-		$this->assertSame( 1, $result['deleted_count'] );
-		$this->assertSame( 0, $result['restored_count'] );
-		$this->assertSame( 0, $result['failed_count'] );
-
-		// ASSERT: The successfully imported post was deleted.
-		$this->assertNull( get_post( $post_id ) );
-
-		// ASSERT: Session is marked as rolled back.
-		$session = $this->repository->get_session( $session_id );
-		$this->assertSame( 'rolled_back', $session['status'] );
-	}
-
-	/**
-	 * Verifies that partial rollback tracks failed count and
-	 * does not mark session as rolled back.
-	 */
-	public function test_partial_rollback_tracks_failures(): void {
-		// ARRANGE: Create session with two posts, then delete one
-		// before rollback to simulate a failure.
-		$session_id = $this->repository->create_session(
-			'https://example.com',
-			'bulk'
-		);
-
-		$post_id_1 = $this->factory()->post->create(
-			array( 'post_title' => 'Survives' )
-		);
-		$post_id_2 = $this->factory()->post->create(
-			array( 'post_title' => 'Already Gone' )
-		);
-
-		$this->repository->log_import_action(
-			$session_id,
-			1,
-			'Survives',
-			'success',
-			$post_id_1
-		);
-
-		$this->repository->log_import_action(
-			$session_id,
-			2,
-			'Already Gone',
-			'success',
-			$post_id_2
-		);
-
-		$this->repository->complete_session( $session_id );
-
-		// ACT: Delete one post before rollback to cause a failure.
-		wp_delete_post( $post_id_2, true );
-		$result = $this->rollback_service->rollback_session(
-			$session_id
-		);
-
-		// ASSERT: One succeeded, one failed.
-		$this->assertIsArray( $result );
-		$this->assertSame( 1, $result['deleted_count'] );
-		$this->assertSame( 0, $result['restored_count'] );
-		$this->assertSame( 1, $result['failed_count'] );
-
-		// ASSERT: Session is NOT marked as rolled back.
-		$session = $this->repository->get_session( $session_id );
-		$this->assertSame( 'completed', $session['status'] );
-	}
-
-	/**
-	 * Verifies that a successful session rollback emits a SESSION_ROLLED_BACK
-	 * audit event with the session ID.
-	 */
-	public function test_rollback_session_emits_audit_event(): void {
-		// ARRANGE: Create session with a single imported post.
-		$session_id = $this->repository->create_session(
-			'https://example.com',
-			'bulk'
-		);
-
-		$post_id = $this->factory()->post->create(
-			array( 'post_title' => 'Imported Post' )
-		);
-
-		$this->repository->log_import_action(
-			$session_id,
-			1,
-			'Imported Post',
-			'success',
-			$post_id
-		);
-
-		$this->repository->complete_session( $session_id );
-
-		// ACT: Roll back the session.
-		$this->rollback_service->rollback_session( $session_id );
-
-		// ASSERT: One SESSION_ROLLED_BACK event was emitted with the session ID
-		// in its payload.
-		$events = Audit_Log_Table::get_events(
-			array(
-				'channel'    => 'import',
-				'event_type' => 'SESSION_ROLLED_BACK',
-			)
-		);
-		$this->assertCount( 1, $events );
-		$this->assertSame( 'info', $events[0]['level'] );
-		$this->assertSame( $session_id, $events[0]['data']['session_id'] );
-	}
-
-	/**
-	 * Verifies that marking an already-rolled-back session emits a
-	 * SESSION_ALREADY_ROLLED_BACK event instead of SESSION_ROLLED_BACK.
-	 */
-	public function test_mark_session_rolled_back_emits_already_rolled_back_when_no_row_changed(): void {
-		// ARRANGE: Session that is already in the rolled_back state.
-		$session_id = $this->repository->create_session(
-			'https://example.com',
-			'bulk'
-		);
-		$this->repository->mark_session_rolled_back( $session_id );
-		Audit_Log_Table::clear( 'import' );
-
-		// ACT: Mark the session as rolled back again.
-		$this->repository->mark_session_rolled_back( $session_id );
-
-		// ASSERT: A SESSION_ALREADY_ROLLED_BACK event was emitted, not a
-		// SESSION_ROLLED_BACK event.
-		$already_rolled_back_events = Audit_Log_Table::get_events(
-			array(
-				'channel'    => 'import',
-				'event_type' => 'SESSION_ALREADY_ROLLED_BACK',
-			)
-		);
-		$this->assertCount( 1, $already_rolled_back_events );
-		$this->assertSame( 'info', $already_rolled_back_events[0]['level'] );
-		$this->assertSame(
-			$session_id,
-			$already_rolled_back_events[0]['data']['session_id']
-		);
-
-		$success_events = Audit_Log_Table::get_events(
-			array(
-				'channel'    => 'import',
-				'event_type' => 'SESSION_ROLLED_BACK',
-			)
-		);
-		$this->assertCount( 0, $success_events );
-	}
-
-	/**
-	 * Verifies that a session rollback emits an ITEM_ROLLED_BACK audit event
-	 * for every success/updated item it flags, excludes error items, and still
-	 * fires the session-level event.
-	 */
-	public function test_mark_session_rolled_back_emits_item_event_per_flagged_item(): void {
-		// ARRANGE: A session with two success items and one error item.
-		$session_id = $this->repository->create_session(
-			'https://example.com',
-			'bulk'
-		);
-		$post_id_1  = $this->factory()->post->create(
-			array( 'post_title' => 'Imported Post 1' )
-		);
-		$post_id_2  = $this->factory()->post->create(
-			array( 'post_title' => 'Imported Post 2' )
-		);
-		$item_id_1  = $this->repository->log_import_action(
-			$session_id,
-			1,
-			'Imported Post 1',
-			'success',
-			$post_id_1
-		);
-		$item_id_2  = $this->repository->log_import_action(
-			$session_id,
-			2,
-			'Imported Post 2',
-			'success',
-			$post_id_2
-		);
-		$this->repository->log_import_action(
-			$session_id,
-			3,
-			'Failed Post',
-			'error',
-			null,
-			'Import failed'
-		);
-		$this->repository->complete_session( $session_id );
-
-		// ACT: Roll back the whole session.
-		$this->repository->mark_session_rolled_back( $session_id );
-
-		// ASSERT: One ITEM_ROLLED_BACK event per flagged item (two success
-		// items, not the error one), each carrying the session ID and the
-		// item's own ID and post ID. Order is not asserted because same-second
-		// events share a timestamp.
-		$events = Audit_Log_Table::get_events(
-			array(
-				'channel'    => 'import',
-				'event_type' => 'ITEM_ROLLED_BACK',
-			)
-		);
-		$this->assertCount( 2, $events );
-
-		$post_by_item = array();
-		foreach ( $events as $event ) {
-			$this->assertSame( 'info', $event['level'] );
-			$this->assertSame( $session_id, $event['data']['session_id'] );
-			$post_by_item[ $event['data']['item_id'] ] = $event['data']['post_id'];
-		}
-		$this->assertArrayHasKey( $item_id_1, $post_by_item );
-		$this->assertArrayHasKey( $item_id_2, $post_by_item );
-		$this->assertSame( $post_id_1, $post_by_item[ $item_id_1 ] );
-		$this->assertSame( $post_id_2, $post_by_item[ $item_id_2 ] );
-
-		// ASSERT: Every flagged item was newly flagged, so none emit the
-		// already-rolled-back variant.
-		$already = Audit_Log_Table::get_events(
-			array(
-				'channel'    => 'import',
-				'event_type' => 'ITEM_ALREADY_ROLLED_BACK',
-			)
-		);
-		$this->assertCount( 0, $already );
-
-		// ASSERT: The session-level event still fires alongside the per-item
-		// events.
-		$session_events = Audit_Log_Table::get_events(
-			array(
-				'channel'    => 'import',
-				'event_type' => 'SESSION_ROLLED_BACK',
-			)
-		);
-		$this->assertCount( 1, $session_events );
-		$this->assertSame(
-			$session_id,
-			$session_events[0]['data']['session_id']
-		);
-	}
-
-	/**
-	 * Verifies that a session rollback emits ITEM_ALREADY_ROLLED_BACK for an
-	 * item a prior rollback already flagged, mirroring the item-level path.
-	 */
-	public function test_mark_session_rolled_back_emits_item_already_rolled_back_for_preflagged_item(): void {
-		// ARRANGE: A session whose single success item is already flagged by a
-		// prior item-level rollback; clear the log so only the session
-		// rollback's events remain.
-		$session_id = $this->repository->create_session(
-			'https://example.com',
-			'bulk'
-		);
-		$post_id    = $this->factory()->post->create(
-			array( 'post_title' => 'Imported Post' )
-		);
-		$item_id    = $this->repository->log_import_action(
-			$session_id,
-			1,
-			'Imported Post',
-			'success',
-			$post_id
-		);
-		$this->repository->mark_item_rolled_back( $item_id );
-		Audit_Log_Table::clear( 'import' );
-
-		// ACT: Roll back the whole session.
-		$this->repository->mark_session_rolled_back( $session_id );
-
-		// ASSERT: The already-flagged item emits ITEM_ALREADY_ROLLED_BACK with
-		// its IDs, not ITEM_ROLLED_BACK.
-		$already = Audit_Log_Table::get_events(
-			array(
-				'channel'    => 'import',
-				'event_type' => 'ITEM_ALREADY_ROLLED_BACK',
-			)
-		);
-		$this->assertCount( 1, $already );
-		$this->assertSame( 'info', $already[0]['level'] );
-		$this->assertSame( $item_id, $already[0]['data']['item_id'] );
-		$this->assertSame( $session_id, $already[0]['data']['session_id'] );
-		$this->assertSame( $post_id, $already[0]['data']['post_id'] );
-
-		$rolled_back = Audit_Log_Table::get_events(
-			array(
-				'channel'    => 'import',
-				'event_type' => 'ITEM_ROLLED_BACK',
-			)
-		);
-		$this->assertCount( 0, $rolled_back );
-
-		// ASSERT: The session row still flips fresh, so the session-level event
-		// is SESSION_ROLLED_BACK.
-		$session_events = Audit_Log_Table::get_events(
-			array(
-				'channel'    => 'import',
-				'event_type' => 'SESSION_ROLLED_BACK',
-			)
-		);
-		$this->assertCount( 1, $session_events );
 	}
 
 	/**
@@ -1130,127 +992,6 @@ class Session_Rollback_Test extends Integration_Test_Case {
 			)
 		);
 		$this->assertCount( 0, $success_events );
-	}
-
-	/**
-	 * Verifies that a failed session rollback (SQL-layer failure) emits a
-	 * SESSION_ROLLBACK_FAILED audit event with the wpdb error captured.
-	 */
-	public function test_mark_session_rolled_back_emits_failed_when_update_errors(): void {
-		global $wpdb;
-
-		// ARRANGE: Create a session, then force the next UPDATE on the
-		// imports table to fail at the SQL layer by rewriting it to invalid
-		// SQL via the 'query' filter. try/finally guarantees filter removal.
-		$session_id      = $this->repository->create_session( 'https://example.com', 'bulk' );
-		$imports_table   = Imports_Table::table_name();
-		$filter_callback = function ( string $query ) use ( $imports_table ): string {
-			if ( 0 === strpos( $query, "UPDATE `{$imports_table}`" ) ) {
-				return 'UPDATE safe_publish_nonexistent_table_for_test SET x = 1';
-			}
-			return $query;
-		};
-		add_filter( 'query', $filter_callback );
-		$wpdb->suppress_errors( true );
-
-		try {
-			// ACT: Roll back the session.
-			$this->repository->mark_session_rolled_back( $session_id );
-
-			// ASSERT: A SESSION_ROLLBACK_FAILED error event was emitted with
-			// the session ID and a non-empty wpdb_error string.
-			$events = Audit_Log_Table::get_events(
-				array(
-					'channel'    => 'import',
-					'event_type' => 'SESSION_ROLLBACK_FAILED',
-				)
-			);
-			$this->assertCount( 1, $events );
-			$this->assertSame( 'error', $events[0]['level'] );
-			$this->assertSame( $session_id, $events[0]['data']['session_id'] );
-			$this->assertNotEmpty( $events[0]['data']['wpdb_error'] );
-
-			// ASSERT: No success event was recorded.
-			$success_events = Audit_Log_Table::get_events(
-				array(
-					'channel'    => 'import',
-					'event_type' => 'SESSION_ROLLED_BACK',
-				)
-			);
-			$this->assertCount( 0, $success_events );
-		} finally {
-			remove_filter( 'query', $filter_callback );
-			$wpdb->suppress_errors( false );
-		}
-	}
-
-	/**
-	 * Verifies that a failed bulk items UPDATE inside
-	 * mark_session_rolled_back() emits SESSION_ROLLBACK_FAILED and leaves
-	 * the session row untouched so a retry can heal the partial rollback.
-	 */
-	public function test_mark_session_rolled_back_emits_failed_when_items_update_errors(): void {
-		global $wpdb;
-
-		// ARRANGE: Create a session with a success item, then force the bulk
-		// UPDATE on the items table to fail at the SQL layer by rewriting it
-		// via the 'query' filter. try/finally guarantees filter removal.
-		$session_id = $this->repository->create_session(
-			'https://example.com',
-			'bulk'
-		);
-		$this->repository->log_import_action(
-			$session_id,
-			1,
-			'Imported Post',
-			'success',
-			$this->factory()->post->create()
-		);
-		$items_table     = Import_Items_Table::table_name();
-		$filter_callback = function ( string $query ) use ( $items_table ): string {
-			if ( 0 === strpos( $query, "UPDATE `{$items_table}`" ) ) {
-				return 'UPDATE safe_publish_nonexistent_table_for_test SET x = 1';
-			}
-			return $query;
-		};
-		add_filter( 'query', $filter_callback );
-		$wpdb->suppress_errors( true );
-
-		try {
-			// ACT: Roll back the session; the items UPDATE fails first.
-			$this->repository->mark_session_rolled_back( $session_id );
-
-			// ASSERT: A SESSION_ROLLBACK_FAILED error event was emitted with
-			// the session ID and a non-empty wpdb_error string.
-			$events = Audit_Log_Table::get_events(
-				array(
-					'channel'    => 'import',
-					'event_type' => 'SESSION_ROLLBACK_FAILED',
-				)
-			);
-			$this->assertCount( 1, $events );
-			$this->assertSame( 'error', $events[0]['level'] );
-			$this->assertSame( $session_id, $events[0]['data']['session_id'] );
-			$this->assertNotEmpty( $events[0]['data']['wpdb_error'] );
-
-			// ASSERT: The session row was not flipped — the early return
-			// must run before the session UPDATE so a retry can heal the
-			// partial rollback.
-			$session = $this->repository->get_session( $session_id );
-			$this->assertSame( 'in_progress', $session['status'] );
-
-			// ASSERT: No success event was recorded.
-			$success_events = Audit_Log_Table::get_events(
-				array(
-					'channel'    => 'import',
-					'event_type' => 'SESSION_ROLLED_BACK',
-				)
-			);
-			$this->assertCount( 0, $success_events );
-		} finally {
-			remove_filter( 'query', $filter_callback );
-			$wpdb->suppress_errors( false );
-		}
 	}
 
 	/**
