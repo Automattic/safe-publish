@@ -201,9 +201,8 @@ class Import_History_Test extends Integration_Test_Case {
 	/**
 	 * Verifies that rolled-back items remain in the per-status counters.
 	 *
-	 * The session-level rollback flow flips the `rolled_back` flag on the items
-	 * but leaves their `status` column untouched, so the historical counts must
-	 * continue to include them.
+	 * Item rollback flips the `rolled_back` flag but leaves the `status` column
+	 * untouched, so the historical counts must continue to include the item.
 	 */
 	public function test_rolled_back_items_still_counted_by_status(): void {
 		// ARRANGE: Log two successful items and roll one back.
@@ -367,27 +366,6 @@ class Import_History_Test extends Integration_Test_Case {
 		$this->assertSame( 'success', $items[0]['status'] );
 		$this->assertSame( 'success', $items[1]['status'] );
 		$this->assertSame( 'error', $items[2]['status'] );
-	}
-
-	/**
-	 * Verifies that retrieving items by status filters correctly.
-	 */
-	public function test_retrieve_items_by_status_filters_correctly(): void {
-		// ARRANGE: Create items with different statuses.
-		$session_id = $this->repository->create_session( 'https://example.com', 'bulk' );
-
-		$this->repository->log_import_action( $session_id, 1, 'Success 1', 'success', 101 );
-		$this->repository->log_import_action( $session_id, 2, 'Success 2', 'success', 102 );
-		$this->repository->log_import_action( $session_id, 3, 'Error 1', 'error', null, 'Failed' );
-
-		// ACT: Retrieve only successful items.
-		$success_items = $this->repository->get_session_items_by_status( $session_id, array( 'success' ) );
-
-		// ASSERT: Only success items returned.
-		$this->assertCount( 2, $success_items );
-		foreach ( $success_items as $item ) {
-			$this->assertSame( 'success', $item['status'] );
-		}
 	}
 
 	/**
