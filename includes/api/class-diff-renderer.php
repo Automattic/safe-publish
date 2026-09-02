@@ -860,11 +860,15 @@ final class Diff_Renderer {
 				$records
 			);
 
-			return $this->generate_simple_diff(
+			$html = $this->generate_simple_diff(
 				$this->build_terms_text( $local ),
 				$this->build_terms_text( $records ),
 				$title_left,
 				$title_right
+			);
+
+			return $html . $this->build_term_notes_html(
+				$this->unregistered_taxonomy_notes( $records )
 			);
 		}
 
