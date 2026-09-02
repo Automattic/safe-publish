@@ -439,8 +439,8 @@ final class Diff_Renderer {
 		$diffs['title'] = $this->generate_simple_diff(
 			$current['title'] ?? '',
 			$incoming['title'] ?? '',
-			__( 'Current', 'safe-publish' ),
-			__( 'Incoming', 'safe-publish' )
+			_x( 'Current', 'title diff column header', 'safe-publish' ),
+			_x( 'Incoming', 'title diff column header', 'safe-publish' )
 		);
 
 		// Excerpt diff (with normalization).
@@ -449,8 +449,8 @@ final class Diff_Renderer {
 		$diffs['excerpt'] = $this->generate_simple_diff(
 			$current_excerpt,
 			$incoming_excerpt,
-			__( 'Current', 'safe-publish' ),
-			__( 'Incoming', 'safe-publish' )
+			_x( 'Current', 'excerpt diff column header', 'safe-publish' ),
+			_x( 'Incoming', 'excerpt diff column header', 'safe-publish' )
 		);
 
 		// Taxonomies diff.
@@ -462,8 +462,8 @@ final class Diff_Renderer {
 		$diffs['meta']      = $this->generate_simple_diff(
 			$current_meta_text,
 			$incoming_meta_text,
-			__( 'Current', 'safe-publish' ),
-			__( 'Incoming', 'safe-publish' )
+			_x( 'Current', 'meta/custom fields diff column header', 'safe-publish' ),
+			_x( 'Incoming', 'meta/custom fields diff column header', 'safe-publish' )
 		);
 
 		return $diffs;
@@ -842,8 +842,16 @@ final class Diff_Renderer {
 	 * @return string Diff HTML, or '' when no changes.
 	 */
 	private function generate_terms_diff( array $current, array $incoming ): string {
-		$title_left  = __( 'Current', 'safe-publish' );
-		$title_right = __( 'Incoming', 'safe-publish' );
+		$title_left  = _x(
+			'Current',
+			'taxonomies diff column header',
+			'safe-publish'
+		);
+		$title_right = _x(
+			'Incoming',
+			'taxonomies diff column header',
+			'safe-publish'
+		);
 		$records     = $incoming['terms'] ?? array();
 
 		if ( true !== ( $incoming['has_term_fields'] ?? false ) ) {

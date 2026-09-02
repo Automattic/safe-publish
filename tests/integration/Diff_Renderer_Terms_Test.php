@@ -90,22 +90,49 @@ class Diff_Renderer_Terms_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Verifies that the taxonomy diff uses concise column headers.
+	 * Verifies that the taxonomy diff uses contextual column headers.
 	 */
-	public function test_taxonomy_diff_uses_concise_column_headers(): void {
+	public function test_taxonomy_diff_uses_contextual_column_headers(): void {
 		// ARRANGE: An imported term whose description changes on the source.
 		$this->import_terms(
 			array( $this->record( 101, 'News', 'news', 0, 'Morning desk' ) )
 		);
+		$translate = static function (
+			string $translation,
+			string $text,
+			string $context,
+			string $domain
+		): string {
+			if (
+				'safe-publish' !== $domain ||
+				'taxonomies diff column header' !== $context
+			) {
+				return $translation;
+			}
 
-		// ACT: Render the resulting taxonomy diff.
-		$html = $this->render_taxonomies(
-			array( $this->record( 101, 'News', 'news', 0, 'Evening desk' ) )
-		);
+			return match ( $text ) {
+				'Current'  => 'Current taxonomies',
+				'Incoming' => 'Incoming taxonomies',
+				default    => $translation,
+			};
+		};
+		add_filter( 'gettext_with_context', $translate, 10, 4 );
+
+		// ACT: Render the resulting taxonomy diff with translated headers.
+		try {
+			$html = $this->render_taxonomies(
+				array( $this->record( 101, 'News', 'news', 0, 'Evening desk' ) )
+			);
+		} finally {
+			remove_filter( 'gettext_with_context', $translate, 10 );
+		}
 		preg_match_all( '/<th\b[^>]*>(.*?)<\/th>/s', $html, $matches );
 
-		// ASSERT: The columns drop the taxonomy word the heading already carries.
-		$this->assertSame( array( 'Current', 'Incoming' ), $matches[1] );
+		// ASSERT: The taxonomy context selects its distinct translations.
+		$this->assertSame(
+			array( 'Current taxonomies', 'Incoming taxonomies' ),
+			$matches[1]
+		);
 	}
 
 	/**

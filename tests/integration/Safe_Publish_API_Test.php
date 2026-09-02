@@ -429,9 +429,9 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Verifies that the title, excerpt, and meta diffs use concise headers.
+	 * Verifies that title, excerpt, and meta use contextual column headers.
 	 */
-	public function test_non_content_diffs_use_concise_column_headers(): void {
+	public function test_non_content_diffs_use_contextual_column_headers(): void {
 		// ARRANGE: A source response differing in title, excerpt, and meta.
 		// phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
 		$mock_http_callable = function ( $_url, $_action, $_credentials ) {
@@ -451,26 +451,57 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 		$request = new WP_REST_Request( 'POST', '/safe-publish/v1/diff-preview' );
 		$request->set_param( 'postId', self::SOURCE_POST_ID );
 		$request->set_param( 'postType', 'post' );
+		$translate = static function (
+			string $translation,
+			string $text,
+			string $context,
+			string $domain
+		): string {
+			if ( 'safe-publish' !== $domain ) {
+				return $translation;
+			}
 
-		// ACT: Render the diff.
-		$result = ( new Diff_Renderer() )->render_diff(
-			$request,
-			$mock_http_callable,
-			array()
-		);
+			$translations = array(
+				'title diff column header:Current'    => 'Current title',
+				'title diff column header:Incoming'   => 'Incoming title',
+				'excerpt diff column header:Current'  => 'Current excerpt',
+				'excerpt diff column header:Incoming' => 'Incoming excerpt',
+				'meta/custom fields diff column header:Current' => 'Current fields',
+				'meta/custom fields diff column header:Incoming' => 'Incoming fields',
+			);
 
-		// ASSERT: Each section carries exactly the two concise headers.
+			return $translations[ "{$context}:{$text}" ] ?? $translation;
+		};
+		add_filter( 'gettext_with_context', $translate, 10, 4 );
+
+		// ACT: Render the diff with context-specific translations.
+		try {
+			$result = ( new Diff_Renderer() )->render_diff(
+				$request,
+				$mock_http_callable,
+				array()
+			);
+		} finally {
+			remove_filter( 'gettext_with_context', $translate, 10 );
+		}
+
+		// ASSERT: Each section receives its own translated headers.
 		$this->assertIsArray( $result );
-		foreach ( array( 'title', 'excerpt', 'meta' ) as $section ) {
+		$expected_headers = array(
+			'title'   => array( 'Current title', 'Incoming title' ),
+			'excerpt' => array( 'Current excerpt', 'Incoming excerpt' ),
+			'meta'    => array( 'Current fields', 'Incoming fields' ),
+		);
+		foreach ( $expected_headers as $section => $expected ) {
 			preg_match_all(
 				'/<th\b[^>]*>(.*?)<\/th>/s',
 				$result['nonContentDiffs'][ $section ],
 				$matches
 			);
 			$this->assertSame(
-				array( 'Current', 'Incoming' ),
+				$expected,
 				$matches[1],
-				"The {$section} diff should use concise column headers."
+				"The {$section} diff should use contextual column headers."
 			);
 		}
 	}
