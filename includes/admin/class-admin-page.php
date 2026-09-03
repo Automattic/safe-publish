@@ -87,14 +87,6 @@ final class Admin_Page {
 
 		$source_site_url = get_option( Options::OPTION_CONNECTED_SITE_URL, '' );
 
-		$initial_state  = isset( $_GET['state'] ) // phpcs:ignore WordPress.Security.NonceVerification.Recommended
-			? sanitize_key( (string) $_GET['state'] ) // phpcs:ignore WordPress.Security.NonceVerification.Recommended,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized,WordPress.Security.ValidatedSanitizedInput.MissingUnslash
-			: 'all';
-		$allowed_states = array( 'all', 'available', 'up-to-date', 'outdated' );
-		if ( ! in_array( $initial_state, $allowed_states, true ) ) {
-			$initial_state = 'all';
-		}
-
 		$repository            = new History_Repository();
 		$attention_issues      = new Attention_Issues_Repository();
 		$connected_url         = Options::get_connected_site_url_with_path();
@@ -112,7 +104,6 @@ final class Admin_Page {
 				'sourceSiteUrl'       => $source_site_url,
 				'homeUrl'             => home_url(),
 				'containerId'         => 'safe-publish-posts-container',
-				'initialState'        => $initial_state,
 				'needsAttentionCount' => $needs_attention_count,
 			)
 		);
