@@ -18,9 +18,7 @@ use WP_Error;
 
 /**
  * Verifies that safe_publish_list_posts scopes every state to the connected
- * source: The catalog annotation, the local listing, and the focused-state
- * chip each resolve a numeric source post id against that source's imports
- * only, so an id also imported from a previously connected site neither
+ * source. An id also imported from a previously connected site neither
  * disappears from Available nor routes its row to the other site's post.
  */
 class Posts_Listing_Scoping_Ajax_Test extends WP_Ajax_UnitTestCase {
@@ -236,25 +234,52 @@ class Posts_Listing_Scoping_Ajax_Test extends WP_Ajax_UnitTestCase {
 	}
 
 	/**
-	 * Verifies that a focus deep-link for an id imported only under another
-	 * source resolves to available.
+	 * Verifies that the removed focus receiver no longer changes the listing.
 	 */
-	public function test_focus_deep_link_ignores_another_sources_import(): void {
-		// ARRANGE: The id is imported only under the other source.
-		$this->catalog_ids = array( self::COLLIDING_ID );
+	public function test_obsolete_focus_input_is_ignored(): void {
+		// ARRANGE: The focus id would previously resolve to Available.
 		$this->import_under( self::OTHER_SOURCE, self::COLLIDING_ID );
 
-		// ACT: Request the listing focused on that source id.
+		// ACT: Send the obsolete input with an Up to date listing request.
 		$response = $this->list_posts(
-			'all',
+			'up-to-date',
 			array( 'focus_source_id' => (string) self::COLLIDING_ID )
 		);
 
-		// ASSERT: The focused chip reports available.
-		$this->assertSame( 'available', $response['data']['focused_state'] );
+		// ASSERT: The request state is unchanged and no focus metadata is emitted.
+		$this->assertSame( 'up-to-date', $response['data']['state'] );
+		$this->assertArrayNotHasKey( 'focused_state', $response['data'] );
+		$this->assertArrayNotHasKey( 'focused_source_post_id', $response['data'] );
+	}
+
+	/**
+	 * Verifies that the removed session receiver no longer filters the listing.
+	 */
+	public function test_obsolete_session_input_is_ignored(): void {
+		// ARRANGE: Two imports under separate sessions for the connected source.
+		$session = $this->history->create_session( self::SOURCE, 'single' );
+		$post_id = $this->factory()->post->create();
+		$this->assertIsInt( $session );
+		$this->assertIsInt( $post_id );
+		$this->history->log_import_action(
+			$session,
+			980,
+			'Imported 980',
+			'success',
+			$post_id
+		);
+		$this->import_under( self::SOURCE, 981 );
+
+		// ACT: Send the obsolete session input with a local listing request.
+		$response = $this->list_posts(
+			'up-to-date',
+			array( 'session_id' => (string) $session )
+		);
+
+		// ASSERT: Both sessions remain visible.
 		$this->assertSame(
-			self::COLLIDING_ID,
-			$response['data']['focused_source_post_id']
+			array( 981, 980 ),
+			array_column( $response['data']['items'], 'source_post_id' )
 		);
 	}
 

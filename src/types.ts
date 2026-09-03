@@ -87,10 +87,6 @@ export interface UnifiedPostRow {
 /**
  * Envelope returned by safe_publish_list_posts.
  *
- * `focused_state` and `focused_source_post_id` echo the focus_source_id input
- * when the endpoint resolved it; the frontend uses them to swap the active
- * chip + highlight the focused row in the rendered list.
- *
  * `needs_attention_count` is populated only when the request set
  * with_needs_attention_count=1.
  */
@@ -98,8 +94,6 @@ export interface PostsResponse {
 	items: UnifiedPostRow[];
 	has_more: boolean;
 	state: ChipState;
-	focused_state?: LocalState;
-	focused_source_post_id?: number;
 	needs_attention_count?: number;
 }
 
@@ -477,14 +471,13 @@ export interface PostsDataViewProps {
 /**
  * Admin data passed from PHP via wp_add_inline_script.
  *
- * @property {string}    ajaxurl               WordPress AJAX URL.
- * @property {string}    nonce                 Security nonce for AJAX requests.
- * @property {string}    sourceSiteUrl         Source site URL.
- * @property {string}    settingsUrl           URL to the plugin settings page.
- * @property {string}    homeUrl               Destination home URL for slug detection.
- * @property {string}    containerId           Container element ID.
- * @property {ChipState} [initialState]        Chip state from ?state=... on load.
- * @property {number}    [needsAttentionCount] Failures + open degradations at render.
+ * @property {string} ajaxurl               WordPress AJAX URL.
+ * @property {string} nonce                 Security nonce for AJAX requests.
+ * @property {string} sourceSiteUrl         Source site URL.
+ * @property {string} settingsUrl           URL to the plugin settings page.
+ * @property {string} homeUrl               Destination home URL for slug detection.
+ * @property {string} containerId           Container element ID.
+ * @property {number} [needsAttentionCount] Failures + open degradations at render.
  */
 export interface AdminData {
 	ajaxurl: string;
@@ -493,7 +486,6 @@ export interface AdminData {
 	settingsUrl: string;
 	homeUrl?: string;
 	containerId: string;
-	initialState?: ChipState;
 	needsAttentionCount?: number;
 	knownChannels?: string[];
 	knownLevels?: string[];
