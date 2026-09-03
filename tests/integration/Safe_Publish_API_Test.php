@@ -222,16 +222,14 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 				return new WP_Error( 'http_request_failed', $media_error_message );
 			}
 
-			return array(
-				'response' => array( 'code' => 200 ),
-				'body'     => wp_json_encode(
-					array(
-						'title'          => array( 'raw' => 'Source Title' ),
-						'content'        => array( 'raw' => '<p>Source content.</p>' ),
-						'excerpt'        => array( 'raw' => 'Source excerpt.' ),
-						'featured_media' => $incoming_featured_id,
-					)
-				),
+			return self::mock_diff_response(
+				(string) $url,
+				array(
+					'title'          => array( 'raw' => 'Source Title' ),
+					'content'        => array( 'raw' => '<p>Source content.</p>' ),
+					'excerpt'        => array( 'raw' => 'Source excerpt.' ),
+					'featured_media' => $incoming_featured_id,
+				)
 			);
 		};
 
@@ -338,28 +336,26 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 	public function test_diff_renderer_generates_diff_structure_successfully(): void {
 		// ARRANGE: Mock HTTP callable that returns WordPress REST API response.
 		// phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
-		$mock_http_callable = function ( $_url, $_action, $_credentials ) {
-			return array(
-				'response' => array( 'code' => 200 ),
-				'body'     => wp_json_encode(
-					array(
-						'title'     => array( 'raw' => 'Updated External Title' ),
-						'content'   => array( 'raw' => '<p>Updated source content.</p>' ),
-						'excerpt'   => array( 'raw' => 'Updated source excerpt.' ),
-						'meta'      => array( 'custom_meta' => 'meta_value' ),
-						'_embedded' => array(
-							'wp:term' => array(
+		$mock_http_callable = function ( $url, $_action, $_credentials ) {
+			return self::mock_diff_response(
+				(string) $url,
+				array(
+					'title'     => array( 'raw' => 'Updated External Title' ),
+					'content'   => array( 'raw' => '<p>Updated source content.</p>' ),
+					'excerpt'   => array( 'raw' => 'Updated source excerpt.' ),
+					'meta'      => array( 'custom_meta' => 'meta_value' ),
+					'_embedded' => array(
+						'wp:term' => array(
+							array(
 								array(
-									array(
-										'taxonomy' => 'category',
-										'name'     => 'External Category',
-										'slug'     => 'source-category',
-									),
+									'taxonomy' => 'category',
+									'name'     => 'External Category',
+									'slug'     => 'source-category',
 								),
 							),
 						),
-					)
-				),
+					),
+				)
 			);
 		};
 
@@ -434,17 +430,15 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 	public function test_non_content_diffs_use_contextual_column_headers(): void {
 		// ARRANGE: A source response differing in title, excerpt, and meta.
 		// phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
-		$mock_http_callable = function ( $_url, $_action, $_credentials ) {
-			return array(
-				'response' => array( 'code' => 200 ),
-				'body'     => wp_json_encode(
-					array(
-						'title'   => array( 'raw' => 'Updated External Title' ),
-						'content' => array( 'raw' => '<p>Updated source content.</p>' ),
-						'excerpt' => array( 'raw' => 'Updated source excerpt.' ),
-						'meta'    => array( 'custom_meta' => 'meta_value' ),
-					)
-				),
+		$mock_http_callable = function ( $url, $_action, $_credentials ) {
+			return self::mock_diff_response(
+				(string) $url,
+				array(
+					'title'   => array( 'raw' => 'Updated External Title' ),
+					'content' => array( 'raw' => '<p>Updated source content.</p>' ),
+					'excerpt' => array( 'raw' => 'Updated source excerpt.' ),
+					'meta'    => array( 'custom_meta' => 'meta_value' ),
+				)
 			);
 		};
 
@@ -532,16 +526,14 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 
 		// Source returns the same raw value.
 		// phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
-		$mock_http_callable = static function ( $_url, $_action, $_credentials ) {
-			return array(
-				'response' => array( 'code' => 200 ),
-				'body'     => wp_json_encode(
-					array(
-						'title'   => array( 'raw' => 'Heading -- Subheading' ),
-						'content' => array( 'raw' => 'Body' ),
-						'excerpt' => array( 'raw' => 'Excerpt' ),
-					)
-				),
+		$mock_http_callable = static function ( $url, $_action, $_credentials ) {
+			return self::mock_diff_response(
+				(string) $url,
+				array(
+					'title'   => array( 'raw' => 'Heading -- Subheading' ),
+					'content' => array( 'raw' => 'Body' ),
+					'excerpt' => array( 'raw' => 'Excerpt' ),
+				)
 			);
 		};
 
@@ -1267,17 +1259,16 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 		// complete after the permission callback grants access.
 		wp_set_current_user( $this->admin_user_id );
 
-		$stub_source_fetch = static fn() => array(
-			'response' => array( 'code' => 200 ),
-			'body'     => wp_json_encode(
+		$stub_source_fetch = static fn( $_preempt, $_args, string $url ) =>
+			self::mock_diff_response(
+				$url,
 				array(
 					'title'   => array( 'raw' => 'Source Title' ),
 					'content' => array( 'raw' => '<p>Source content.</p>' ),
 					'excerpt' => array( 'raw' => 'Source excerpt.' ),
 				)
-			),
-		);
-		add_filter( 'pre_http_request', $stub_source_fetch );
+			);
+		add_filter( 'pre_http_request', $stub_source_fetch, 10, 3 );
 
 		$request = new WP_REST_Request( 'POST', '/safe-publish/v1/diff-preview' );
 		$request->set_param( 'postId', self::SOURCE_POST_ID );
@@ -1342,17 +1333,16 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 		);
 		wp_set_current_user( $this->admin_user_id );
 
-		$stub_source_fetch = static fn() => array(
-			'response' => array( 'code' => 200 ),
-			'body'     => wp_json_encode(
+		$stub_source_fetch = static fn( $_preempt, $_args, string $url ) =>
+			self::mock_diff_response(
+				$url,
 				array(
 					'title'   => array( 'raw' => 'Source Title' ),
 					'content' => array( 'raw' => '<p>Source content.</p>' ),
 					'excerpt' => array( 'raw' => 'Source excerpt.' ),
 				)
-			),
-		);
-		add_filter( 'pre_http_request', $stub_source_fetch );
+			);
+		add_filter( 'pre_http_request', $stub_source_fetch, 10, 3 );
 
 		$request = new WP_REST_Request( 'POST', '/safe-publish/v1/diff-preview' );
 		$request->set_param( 'postId', self::SOURCE_POST_ID );
@@ -1418,19 +1408,17 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 
 		// phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
 		$mock_http_callable = static function (
-			$_url,
+			$url,
 			$_action,
 			$_credentials
 		) use ( $content_with_padding ) {
-			return array(
-				'response' => array( 'code' => 200 ),
-				'body'     => wp_json_encode(
-					array(
-						'title'   => array( 'raw' => 'Original Title' ),
-						'content' => array( 'raw' => $content_with_padding ),
-						'excerpt' => array( 'raw' => 'Original excerpt.' ),
-					)
-				),
+			return self::mock_diff_response(
+				(string) $url,
+				array(
+					'title'   => array( 'raw' => 'Original Title' ),
+					'content' => array( 'raw' => $content_with_padding ),
+					'excerpt' => array( 'raw' => 'Original excerpt.' ),
+				)
 			);
 		};
 
@@ -1485,19 +1473,17 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 
 		// phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
 		$mock_http_callable = static function (
-			$_url,
+			$url,
 			$_action,
 			$_credentials
 		) use ( $source_content ) {
-			return array(
-				'response' => array( 'code' => 200 ),
-				'body'     => wp_json_encode(
-					array(
-						'title'   => array( 'raw' => 'Original Title' ),
-						'content' => array( 'raw' => $source_content ),
-						'excerpt' => array( 'raw' => 'Original excerpt.' ),
-					)
-				),
+			return self::mock_diff_response(
+				(string) $url,
+				array(
+					'title'   => array( 'raw' => 'Original Title' ),
+					'content' => array( 'raw' => $source_content ),
+					'excerpt' => array( 'raw' => 'Original excerpt.' ),
+				)
 			);
 		};
 
@@ -1528,6 +1514,27 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 			'',
 			$result['contentDiffHtml'],
 			'A whitespace-only difference should not render as a change.'
+		);
+	}
+
+	/**
+	 * Builds a current catalog response or the requested post response.
+	 *
+	 * @param string $url       Requested source URL.
+	 * @param array  $post_data Source post response data.
+	 * @return array Mock HTTP response.
+	 */
+	private static function mock_diff_response(
+		string $url,
+		array $post_data
+	): array {
+		if ( str_contains( $url, '/catalog/post-types' ) ) {
+			return \_safe_publish_test_catalog_response();
+		}
+
+		return array(
+			'response' => array( 'code' => 200 ),
+			'body'     => (string) wp_json_encode( $post_data ),
 		);
 	}
 

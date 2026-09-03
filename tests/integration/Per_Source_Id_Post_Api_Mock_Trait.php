@@ -85,6 +85,10 @@ trait Per_Source_Id_Post_Api_Mock_Trait {
 			return $preempt;
 		}
 
+		if ( str_contains( $url, '/catalog/post-types' ) ) {
+			return \_safe_publish_test_catalog_response();
+		}
+
 		// Exclude /media/ so Per_Source_Id_Media_Api_Mock_Trait can serve
 		// featured-media metadata requests without colliding here.
 		if ( ! preg_match(

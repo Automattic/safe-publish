@@ -287,6 +287,10 @@ class Basic_Auth_Outbound_Test extends Integration_Test_Case {
 			);
 		}
 
+		if ( str_contains( $url, '/catalog/post-types' ) ) {
+			return \_safe_publish_test_catalog_response();
+		}
+
 		// Single-post endpoint used by fetch_fresh_post(): Return a post object.
 		if ( preg_match( '#/wp-json/wp/v2/posts/\d+#', $url ) ) {
 			$current_user = wp_get_current_user();

@@ -22,7 +22,8 @@ trait Mock_Post_API_Trait {
 	 *
 	 * Keys: title, featured_media, content, excerpt, meta, terms, slug,
 	 *       comment_status, ping_status, menu_order, password, parent,
-	 *       safe_publish_author, safe_publish_terms, acf, type, omit_excerpt.
+	 *       safe_publish_author, safe_publish_terms, acf, type, omit_title,
+	 *       omit_excerpt.
 	 * Terms: array keyed by taxonomy slug with arrays of term names as values,
 	 *        emitted as the embedded wp:term payload.
 	 * safe_publish_author: array {email, login, display_name}.
@@ -45,7 +46,6 @@ trait Mock_Post_API_Trait {
 	protected function build_mock_post_response(): array {
 		$body = array(
 			'id'             => 1,
-			'title'          => array( 'raw' => $this->mock_post_overrides['title'] ?? 'Test Post' ),
 			'featured_media' => $this->mock_post_overrides['featured_media'] ?? 0,
 			'content'        => array( 'raw' => $this->mock_post_overrides['content'] ?? '<p>Test content.</p>' ),
 			'link'           => 'https://source.example.com/test-post',
@@ -57,6 +57,12 @@ trait Mock_Post_API_Trait {
 			'parent'         => $this->mock_post_overrides['parent'] ?? 0,
 			'meta'           => $this->mock_post_overrides['meta'] ?? array(),
 		);
+
+		if ( true !== ( $this->mock_post_overrides['omit_title'] ?? false ) ) {
+			$body['title'] = array(
+				'raw' => $this->mock_post_overrides['title'] ?? 'Test Post',
+			);
+		}
 
 		if ( true !== ( $this->mock_post_overrides['omit_excerpt'] ?? false ) ) {
 			$body['excerpt'] = array(

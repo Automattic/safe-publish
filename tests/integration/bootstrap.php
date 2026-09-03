@@ -103,6 +103,39 @@ tests_add_filter(
 	5
 );
 
+/**
+ * Returns current post-type metadata for integration source mocks.
+ *
+ * @return array Mock HTTP response.
+ */
+function _safe_publish_test_catalog_response(): array {
+	$types   = array(
+		'post'          => 'posts',
+		'page'          => 'pages',
+		'wp_block'      => 'blocks',
+		'wp_navigation' => 'navigation',
+	);
+	$entries = array();
+	foreach ( $types as $slug => $rest_base ) {
+		$entries[] = array(
+			'slug'       => $slug,
+			'rest_base'  => $rest_base,
+			'raw_fields' => 'post' === $slug
+				? array( 'title', 'content', 'excerpt' )
+				: array( 'title', 'content' ),
+		);
+	}
+
+	return array(
+		'response' => array(
+			'code'    => 200,
+			'message' => 'OK',
+		),
+		'body'     => (string) wp_json_encode( $entries ),
+		'headers'  => array(),
+	);
+}
+
 // Block any outbound HTTP requests not explicitly handled by a test's own
 // pre_http_request mock. Runs last (priority 999) so individual test mocks
 // at lower priorities have the opportunity to intercept first.
