@@ -1436,7 +1436,7 @@ class Post_Import_Service {
 		$this->rewrite_nav_cross_refs( $fields, $post_id, $post_type );
 		$this->record_attention_issues( $fields, $post_id );
 
-		$this->log_import_if_session(
+		$history_result = $this->log_import_if_session(
 			$session_id,
 			$fields['source_post_id'],
 			$fields['title'],
@@ -1447,6 +1447,10 @@ class Post_Import_Service {
 			$fields['warnings'],
 			$source_modified_gmt
 		);
+
+		if ( is_wp_error( $history_result ) ) {
+			$fields['warnings'][] = array( 'type' => 'history_write_failed' );
+		}
 
 		return $this->build_success_result( $fields, $post_id, true );
 	}
@@ -3094,6 +3098,7 @@ class Post_Import_Service {
 	 * @param array       $warnings            Non-fatal warnings raised during import.
 	 * @param string|null $source_modified_gmt Source post's modified_gmt at import time;
 	 *                                         null when the fetch failed before reading it.
+	 * @return int|WP_Error|null Item ID, write error, or null without a session.
 	 */
 	private function log_import_if_session(
 		?int $session_id,
@@ -3105,12 +3110,12 @@ class Post_Import_Service {
 		array $changes,
 		array $warnings = array(),
 		?string $source_modified_gmt = null
-	): void {
+	): int|WP_Error|null {
 		if ( null === $session_id ) {
-			return;
+			return null;
 		}
 
-		$this->repository->log_import_action(
+		$result = $this->repository->log_import_action(
 			$session_id,
 			$source_post_id,
 			$title,
@@ -3125,6 +3130,8 @@ class Post_Import_Service {
 		if ( 'error' === $status ) {
 			$this->emit_item_failed_telemetry( $session_id, $changes );
 		}
+
+		return $result;
 	}
 
 	/**
