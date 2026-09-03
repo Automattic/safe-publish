@@ -378,6 +378,13 @@ export interface TermFieldConflictWarning {
 }
 
 /**
+ * Surfaced when an update succeeds but its rollback history cannot be saved.
+ */
+export interface HistoryWriteFailedWarning {
+	type: 'history_write_failed';
+}
+
+/**
  * Discriminated union of all import warning types.
  */
 export type Warning =
@@ -388,7 +395,8 @@ export type Warning =
 	| UnmappedShortcodeReferenceWarning
 	| UnmappedGalleryReferenceWarning
 	| UnregisteredTaxonomyWarning
-	| TermFieldConflictWarning;
+	| TermFieldConflictWarning
+	| HistoryWriteFailedWarning;
 
 /**
  * Response from create draft post operation.

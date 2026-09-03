@@ -421,6 +421,11 @@ export function renderWarningMessage( warning: Warning ): string {
 				);
 		case 'term_field_conflict':
 			return renderTermConflictMessage( warning.term, warning.reason );
+		case 'history_write_failed':
+			return __(
+				'The post was updated, but its rollback history could not be saved. This update cannot be rolled back from Safe Publish.',
+				'safe-publish'
+			);
 		default: {
 			const _exhaustive: never = warning;
 			return String( _exhaustive );
@@ -457,6 +462,8 @@ export function renderWarningShortLabel( warning: Warning ): string {
 			return __( 'unregistered taxonomy', 'safe-publish' );
 		case 'term_field_conflict':
 			return __( 'term not reconciled', 'safe-publish' );
+		case 'history_write_failed':
+			return __( 'rollback history unavailable', 'safe-publish' );
 		default: {
 			const _exhaustive: never = warning;
 			return String( _exhaustive );
