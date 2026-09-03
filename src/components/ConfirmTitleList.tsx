@@ -10,7 +10,7 @@ import {
 	__experimentalVStack as VStack,
 } from '@wordpress/components';
 import { useId } from '@wordpress/element';
-import { __, sprintf } from '@wordpress/i18n';
+import { _n, sprintf } from '@wordpress/i18n';
 
 import { MAX_VISIBLE_MODAL_TITLES } from '../constants';
 
@@ -64,7 +64,12 @@ export default function ConfirmTitleList( {
 					<li className="safe-publish-confirm-titles__more">
 						{ sprintf(
 							/* translators: %d is the number of further affected posts */
-							__( '…and %d more', 'safe-publish' ),
+							_n(
+								'…and %d more',
+								'…and %d more',
+								hidden,
+								'safe-publish'
+							),
 							hidden
 						) }
 					</li>
