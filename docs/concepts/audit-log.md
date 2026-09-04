@@ -1,6 +1,6 @@
 # Audit Log
 
-The Audit Log admin page lists events recorded across every plugin channel. It reads the `{$wpdb->prefix}safe_publish_audit_log` table and is available in all environments to users with the `manage_options` capability.
+The Audit Log admin page lists events recorded across every plugin channel. It reads the `{$wpdb->prefix}safe_publish_audit_log` table and is available in all environments to users with the capability returned by `Safe_Publish\Auth\Permissions::manage_capability()`. The capability defaults to `manage_options` and is filterable with `safe_publish_manage_capability`.
 
 Filter the view by channel, level (`info`, `warning`, `error`), event substring, and date range.
 

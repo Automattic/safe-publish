@@ -9,6 +9,8 @@ declare(strict_types=1);
 
 namespace Safe_Publish\Admin;
 
+use Safe_Publish\Auth\Permissions;
+
 use Safe_Publish\API\Source_Posts_API;
 use Safe_Publish\API\Meta_Terms_Manager;
 use Safe_Publish\API\HTTP_Client;
@@ -782,8 +784,8 @@ class Post_Import_Service {
 			return new WP_Error( 'post_type_not_registered', $message );
 		}
 
-		// Admins can create any registered post type.
-		if ( current_user_can( 'manage_options' ) ) {
+		// Management-capability holders can create any registered post type.
+		if ( current_user_can( Permissions::manage_capability() ) ) {
 			return $post_type;
 		}
 

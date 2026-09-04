@@ -9,6 +9,8 @@ declare(strict_types=1);
 
 namespace Safe_Publish\Admin;
 
+use Safe_Publish\Auth\Permissions;
+
 // Prevent direct access.
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
@@ -97,7 +99,10 @@ final class Post_Import_Notice {
 	 */
 	public function render_notice(): void {
 		$user_id = get_current_user_id();
-		if ( 0 === $user_id || ! current_user_can( 'manage_options' ) ) {
+		if (
+			0 === $user_id
+			|| ! current_user_can( Permissions::manage_capability() )
+		) {
 			return;
 		}
 
