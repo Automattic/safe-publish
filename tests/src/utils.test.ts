@@ -21,6 +21,7 @@ import {
 import type {
 	AttentionIssue,
 	AuthorFallbackWarning,
+	HistoryWriteFailedWarning,
 	NavRefRewriteFailedWarning,
 	ParentOrphanedWarning,
 	UnmappedBlockReferenceWarning,
@@ -482,6 +483,18 @@ describe( 'renderWarningMessage', () => {
 		expect( message ).toContain( 'kept its current name' );
 		expect( message ).toContain( 'Rename or remove that term' );
 	} );
+
+	it( 'should explain that a failed history write prevents rollback', () => {
+		// ARRANGE: An update completed without a rollback history row.
+		const warning: HistoryWriteFailedWarning = {
+			type: 'history_write_failed',
+		};
+		// ACT: Render the warning.
+		const message = renderWarningMessage( warning );
+		// ASSERT: The result explains both the successful update and limitation.
+		expect( message ).toContain( 'post was updated' );
+		expect( message ).toContain( 'cannot be rolled back' );
+	} );
 } );
 
 describe( 'renderWarningShortLabel', () => {
@@ -603,6 +616,17 @@ describe( 'renderWarningShortLabel', () => {
 		const label = renderWarningShortLabel( warning );
 		// ASSERT: Short label is the comma-joinable string used in the bulk modal.
 		expect( label ).toBe( 'term not reconciled' );
+	} );
+
+	it( 'should return the short label for history_write_failed', () => {
+		// ARRANGE: An update completed without a rollback history row.
+		const warning: HistoryWriteFailedWarning = {
+			type: 'history_write_failed',
+		};
+		// ACT: Render the short label.
+		const label = renderWarningShortLabel( warning );
+		// ASSERT: The label identifies the missing rollback history.
+		expect( label ).toBe( 'rollback history unavailable' );
 	} );
 } );
 

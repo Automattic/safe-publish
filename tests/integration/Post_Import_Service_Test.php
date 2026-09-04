@@ -1042,6 +1042,98 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 	}
 
 	/**
+	 * Verifies that failed update-history writes surface for single and bulk
+	 * imports.
+	 *
+	 * @dataProvider history_write_failure_session_type_provider
+	 *
+	 * @param string $session_type Import session type under test.
+	 */
+	public function test_update_warns_when_history_write_fails(
+		string $session_type
+	): void {
+		global $wpdb;
+
+		// ARRANGE: An existing imported post and a session whose item INSERT
+		// will fail.
+		$post_id = self::factory()->post->create(
+			array(
+				'post_title'   => 'Existing title',
+				'post_content' => '<p>Existing content.</p>',
+			)
+		);
+		update_post_meta( $post_id, Options::META_SOURCE_POST_ID, 9402 );
+		update_post_meta(
+			$post_id,
+			Options::META_SOURCE_SITE_URL,
+			'https://source.example.com'
+		);
+
+		$session_id                = $this->repository->create_session(
+			'https://source.example.com',
+			$session_type
+		);
+		$this->mock_post_overrides = array(
+			'title'   => 'Updated title',
+			'content' => '<p>Updated content.</p>',
+		);
+
+		$items_table     = Import_Items_Table::table_name();
+		$filter_callback = static function ( string $query ) use ( $items_table ): string {
+			if ( 0 === strpos( $query, "INSERT INTO `{$items_table}`" ) ) {
+				return 'INSERT INTO safe_publish_nonexistent_table_for_test VALUES (1)';
+			}
+
+			return $query;
+		};
+		add_filter( 'query', $filter_callback );
+		$wpdb->suppress_errors( true );
+
+		try {
+			// ACT: Update through the shared single/bulk import service path.
+			$result = $this->import_service->import_post(
+				array(
+					'id'        => 9402,
+					'title'     => 'Queued title',
+					'link'      => 'https://source.example.com/history-write-failure',
+					'post_type' => 'posts',
+				),
+				$session_id
+			);
+		} finally {
+			remove_filter( 'query', $filter_callback );
+			$wpdb->suppress_errors( false );
+		}
+
+		// ASSERT: The update succeeds but explicitly reports that rollback is
+		// unavailable.
+		$this->assertTrue( $result['success'] );
+		$this->assertTrue( $result['existing'] );
+		$this->assertSame(
+			array( array( 'type' => 'history_write_failed' ) ),
+			$result['warnings']
+		);
+		$this->assertSame( array(), $this->repository->get_session_items( $session_id ) );
+
+		$updated_post = get_post( $post_id );
+		$this->assertInstanceOf( WP_Post::class, $updated_post );
+		$this->assertSame( 'Updated title', $updated_post->post_title );
+		$this->assertSame( '<p>Updated content.</p>', $updated_post->post_content );
+	}
+
+	/**
+	 * Provides every controller session type using the shared import service.
+	 *
+	 * @return array<string, array{string}> Session type cases.
+	 */
+	public function history_write_failure_session_type_provider(): array {
+		return array(
+			'single import' => array( 'single' ),
+			'bulk import'   => array( 'bulk' ),
+		);
+	}
+
+	/**
 	 * Verifies that the update path stores a backslash-bearing source identity
 	 * intact, so a later re-import still resolves the same post instead of
 	 * creating a duplicate.
