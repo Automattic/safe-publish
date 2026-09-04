@@ -99,9 +99,9 @@ An inline `<img>` carries two attachment-ID references alongside its URL — the
 
 After media processing, all remaining source-domain URLs in the content are replaced with the destination site URL. This catches URLs outside media elements, such as normal links, block comment attributes, and text references.
 
-### Content and Excerpt Sanitization
+### Content and Excerpt Filtering
 
-By default, no sanitization is applied to the post content or excerpt; both fields are preserved verbatim, matching WordPress core importer behavior. The optional `safe_publish_import_kses` filter enables a safety check that aborts the import if `wp_kses` would modify either field, rather than silently stripping HTML.
+Post content and excerpts pass through WordPress' normal save filters for the acting user. After saving, Safe Publish compares both persisted fields with the requested values. If either differs, the import reports an error instead of claiming success. A failed new import is removed, while a failed update attempts to restore its previous version through the same WordPress filters. If WordPress prevents new-post or attachment cleanup, the error identifies the items that remain so an administrator can remove them manually.
 
 ### Performance
 

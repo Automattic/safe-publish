@@ -73,15 +73,13 @@ Empty post content is valid and does not by itself block an import.
 - Verify the post type is enabled in REST API.
 - Try re-saving the post on the source site.
 
-### 4. Content Sanitization
+### 4. Content Filtering
 
 **What happens:**
 
-By default, content is not sanitized during import — WordPress core save-time filters (including kses) are suppressed to preserve content fidelity. This matches WordPress core importer behavior and is appropriate because the source site is already authenticated via HMAC.
+Content passes through WordPress' normal save-time filters, including kses when the acting user lacks `unfiltered_html`. Safe Publish compares the requested content and excerpt with the persisted values. If a filter changes either field, the import fails with a descriptive error instead of reporting success.
 
-Kses sanitization can be opted into via the [`safe_publish_import_kses`](../extending/hooks.md#safe_publish_import_kses) filter. When enabled, content is checked against the allowed HTML tags before persisting. If sanitization would modify the content, the import fails with a descriptive error.
-
-**Common failures (when kses is enabled):**
+**Common failures:**
 
 - Content contains HTML tags or attributes outside the allowlist.
 - Inline scripts or event handlers present.
@@ -90,7 +88,7 @@ Kses sanitization can be opted into via the [`safe_publish_import_kses`](../exte
 
 - Edit the post in the block editor and remove disallowed elements.
 - Remove any custom HTML that contains scripts or event handlers.
-- Customize the allowlist via the [`safe_publish_import_kses_allowed_html`](../extending/hooks.md#safe_publish_import_kses_allowed_html) filter.
+- Ask a user with permission to save the content to retry the import.
 
 ### 5. Media Validation
 

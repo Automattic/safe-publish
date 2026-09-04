@@ -795,6 +795,141 @@ class Session_Rollback_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that rollback reports content filtered by WordPress.
+	 */
+	public function test_restore_previous_version_reports_filtered_content(): void {
+		// ARRANGE: Store an unfiltered snapshot, then act as a filtered user.
+		$content    = '<!-- wp:html --><iframe src="https://example.com/embed">'
+			. '</iframe><!-- /wp:html -->';
+		$session_id = $this->repository->create_session(
+			'https://example.com',
+			'bulk'
+		);
+		$post_id    = $this->factory()->post->create(
+			array(
+				'post_title'   => 'Updated',
+				'post_content' => 'Imported content.',
+			)
+		);
+		$item_id    = $this->repository->log_import_action(
+			$session_id,
+			1,
+			'Updated',
+			'updated',
+			$post_id,
+			null,
+			array(
+				'previous_content' => $content,
+				'action'           => 'updated_existing',
+			)
+		);
+		$author_id  = self::factory()->user->create(
+			array( 'role' => 'author' )
+		);
+		wp_set_current_user( $author_id );
+
+		// ACT: Restore content WordPress does not allow this user to save.
+		$result = $this->rollback_service->rollback_item( $item_id );
+
+		// ASSERT: The filtered persistence is reported and remains unrecorded.
+		$this->assertInstanceOf( WP_Error::class, $result );
+		$this->assertSame( 'content_filtered', $result->get_error_code() );
+		$this->assertStringContainsString(
+			'The post contains WordPress\' filtered version',
+			$result->get_error_message()
+		);
+		$this->assertSame(
+			'<!-- wp:html --><!-- /wp:html -->',
+			get_post( $post_id )->post_content
+		);
+		$this->assertSame(
+			0,
+			(int) $this->repository->get_item( $item_id )['rolled_back']
+		);
+	}
+
+	/**
+	 * Verifies that a filtered user can restore unaffected content.
+	 */
+	public function test_filtered_user_restores_unaffected_content(): void {
+		// ARRANGE: An update snapshot contains only markup WordPress allows.
+		$session_id = $this->repository->create_session(
+			'https://example.com',
+			'bulk'
+		);
+		$post_id    = self::factory()->post->create(
+			array( 'post_content' => 'Imported content.' )
+		);
+		$item_id    = $this->repository->log_import_action(
+			$session_id,
+			2,
+			'Allowed rollback',
+			'updated',
+			$post_id,
+			null,
+			array(
+				'previous_content' => '<p>Allowed content.</p>',
+				'action'           => 'updated_existing',
+			)
+		);
+		$author_id  = self::factory()->user->create(
+			array( 'role' => 'author' )
+		);
+		wp_set_current_user( $author_id );
+
+		// ACT: Restore through the author's save filters.
+		$result = $this->rollback_service->rollback_item( $item_id );
+
+		// ASSERT: The unchanged restore succeeds and is recorded.
+		$this->assertIsArray( $result );
+		$this->assertSame( 'restored', $result['action'] );
+		$this->assertSame(
+			'<p>Allowed content.</p>',
+			get_post( $post_id )->post_content
+		);
+		$this->assertSame(
+			1,
+			(int) $this->repository->get_item( $item_id )['rolled_back']
+		);
+	}
+
+	/**
+	 * Verifies that an unfiltered user can restore raw HTML unchanged.
+	 */
+	public function test_unfiltered_user_restores_raw_content(): void {
+		// ARRANGE: An administrator restores a snapshot containing an iframe.
+		$content    = '<!-- wp:html --><iframe src="https://example.com/embed">'
+			. '</iframe><!-- /wp:html -->';
+		$session_id = $this->repository->create_session(
+			'https://example.com',
+			'bulk'
+		);
+		$post_id    = self::factory()->post->create(
+			array( 'post_content' => 'Imported content.' )
+		);
+		$item_id    = $this->repository->log_import_action(
+			$session_id,
+			3,
+			'Raw rollback',
+			'updated',
+			$post_id,
+			null,
+			array(
+				'previous_content' => $content,
+				'action'           => 'updated_existing',
+			)
+		);
+
+		// ACT: Restore as the administrator from the base test setup.
+		$result = $this->rollback_service->rollback_item( $item_id );
+
+		// ASSERT: The raw snapshot is restored byte for byte.
+		$this->assertIsArray( $result );
+		$this->assertSame( 'restored', $result['action'] );
+		$this->assertSame( $content, get_post( $post_id )->post_content );
+	}
+
+	/**
 	 * Verifies that replaying a rolled-back item is refused and leaves the
 	 * post's current content untouched.
 	 */
