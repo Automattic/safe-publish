@@ -57,9 +57,9 @@ register_post_type( 'book', [
 
 Safe Publish includes supported `title`, `content`, and `excerpt` raw fields in its authenticated post-type catalog. The source derives them from each REST controller's item schema. `WP_REST_Posts_Controller` provides this automatically.
 
-If a post type uses a custom `rest_controller_class`, its author must provide a standard WordPress item schema. Each supported field must contain a `properties.raw` definition. Safe Publish rejects a response field that lacks a valid raw value. An individual field omitted from both the catalog metadata and response is treated as unsupported, so the controller author is responsible for declaring every supported raw field.
+If a post type uses a custom `rest_controller_class`, its author must provide a standard WordPress item schema. Each supported field must contain a `properties.raw` definition. Safe Publish rejects a response field that lacks a valid raw value. When valid catalog metadata declares `content` or `excerpt` unsupported, that field may be absent from the response. A title with a string `raw` value must always be present, but that string may be empty for an untitled post. The controller author is responsible for declaring every supported raw field.
 
-Destinations fall back to the response shape when an older source omits catalog field metadata or a valid catalog cannot be retrieved temporarily. Present malformed fields are rejected, while absent fields are treated as unsupported. If a newer source includes malformed field metadata in an otherwise valid catalog entry, Safe Publish conservatively requires all three raw values.
+The destination requires a successful authenticated catalog response and a valid `raw_fields` list for the requested post type before it accepts fresh post data. Source plugin versions that do not publish `raw_fields` are incompatible and must be updated before importing or updating. Malformed catalog metadata is rejected as invalid. A failed catalog request is reported separately as temporary and can be retried. Safe Publish never infers support from the post response or a requested custom slug.
 
 ### Custom Post Meta
 

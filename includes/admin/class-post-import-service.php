@@ -2441,9 +2441,14 @@ class Post_Import_Service {
 			);
 
 			if ( is_wp_error( $fresh_result ) ) {
-				// Preserve the size-limit code; mask other fetch failures.
+				// Preserve errors whose type is actionable by the caller; mask
+				// other fetch failures under the stable UI code.
 				$error_code = $fresh_result->get_error_code();
-				if ( HTTP_Client::ERROR_RESPONSE_TOO_LARGE === $error_code ) {
+				if (
+					HTTP_Client::ERROR_RESPONSE_TOO_LARGE === $error_code
+					|| str_starts_with( $error_code, 'fresh_content_catalog_' )
+					|| 'fresh_content_post_type_unresolved' === $error_code
+				) {
 					return $fresh_result;
 				}
 

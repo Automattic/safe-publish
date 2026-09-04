@@ -1238,6 +1238,51 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 	}
 
 	/**
+	 * Verifies that an absent fresh title cannot overwrite an existing post.
+	 */
+	public function test_reimport_rejects_absent_fresh_title(): void {
+		// ARRANGE: Import a post with non-empty destination fields.
+		$session_id = $this->repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+		$post_data  = array(
+			'id'        => 9502,
+			'title'     => 'Snapshot Title',
+			'content'   => '<p>Snapshot content.</p>',
+			'link'      => 'https://source.example.com/empty-fresh-title',
+			'post_type' => 'posts',
+		);
+		$first      = $this->import_service->import_post(
+			$post_data,
+			$session_id
+		);
+		$this->assertTrue( $first['success'] );
+
+		$this->mock_post_overrides = array(
+			'omit_title' => true,
+			'content'    => '<p>Replacement content.</p>',
+		);
+
+		// ACT: Re-import after the fresh source response omits the title.
+		$second = $this->import_service->import_post(
+			$post_data,
+			$session_id
+		);
+
+		// ASSERT: Validation fails before any destination field is overwritten.
+		$this->assertFalse( $second['success'] );
+		$this->assertStringContainsString(
+			'missing required raw values for supported fields: title',
+			$second['error']
+		);
+		$post = get_post( $first['post_id'] );
+		$this->assertInstanceOf( WP_Post::class, $post );
+		$this->assertSame( 'Test Post', $post->post_title );
+		$this->assertSame( '<p>Test content.</p>', $post->post_content );
+	}
+
+	/**
 	 * Verifies that the update path preserves the existing post status instead
 	 * of resetting it to 'draft', so re-imports never silently unpublish live
 	 * posts.

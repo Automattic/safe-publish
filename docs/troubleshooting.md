@@ -201,8 +201,9 @@ add_filter(
 
 1. Verify the HMAC shared secret and connected-site URLs on both sites.
 2. Confirm the request reaches the source with authenticated `context=edit` access.
-3. Check that the source REST response includes a `raw` value for each field its post type supports. For example, a type supporting title, editor, and excerpt must include `title.raw`, `content.raw`, and `excerpt.raw`. Fields the type does not support may be absent.
-4. If the post type uses a custom REST controller, ask its author to provide a standard WordPress item schema. Each supported title, content, or excerpt field must declare a `raw` property. Safe Publish publishes those fields in its authenticated post-type catalog and treats a field omitted from both the catalog metadata and response as unsupported.
+3. Check that the source REST response includes a string `title.raw` value and a `raw` value for each other field its post type supports. The title string may be empty for an untitled post. Unsupported content and excerpt fields may be absent when valid catalog metadata declares them unsupported.
+4. If the post type uses a custom REST controller, ask its author to provide a standard WordPress item schema. Each supported title, content, or excerpt field must declare a `raw` property. Safe Publish publishes those fields in its authenticated post-type catalog. An absent content or excerpt field is accepted as unsupported only when valid catalog metadata declares it unsupported.
+5. Confirm both sites run a current Safe Publish version that publishes `raw_fields` catalog metadata. A successful catalog response without that property is incompatible and requires a source upgrade. Malformed field metadata is invalid. A catalog request that fails is temporary and should be retried; the destination does not infer fields or custom REST bases from the post response.
 
 #### "Post type not listed in catalog" error
 

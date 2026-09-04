@@ -774,6 +774,9 @@ class Media_Importer {
 			array( $this->http_client, 'make_request' ),
 			$auth_credentials
 		);
+		if ( is_wp_error( $rest_base ) ) {
+			return array();
+		}
 
 		$url = trailingslashit( $source_site_url )
 			. 'wp-json/wp/v2/' . $rest_base . '/' . $source_post_id;

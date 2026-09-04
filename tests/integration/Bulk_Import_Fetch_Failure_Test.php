@@ -9,7 +9,10 @@ declare(strict_types=1);
 
 namespace Safe_Publish\Tests\Integration;
 
+use Safe_Publish\Utils\Options;
 use WP_Ajax_UnitTestCase;
+use WP_Error;
+use WP_Post;
 
 /**
  * Bulk Import Fetch Failure Test.
@@ -27,6 +30,11 @@ class Bulk_Import_Fetch_Failure_Test extends WP_Ajax_UnitTestCase {
 	 * Source ID whose REST body omits the raw edit-context fields.
 	 */
 	private const RAW_MISSING_SOURCE_ID = 4242;
+
+	/**
+	 * Source ID whose REST body has an absent field with unknown support.
+	 */
+	private const INFERRED_MISSING_SOURCE_ID = 4243;
 
 	/**
 	 * Source ID whose endpoint returns an HTTP error.
@@ -60,6 +68,24 @@ class Bulk_Import_Fetch_Failure_Test extends WP_Ajax_UnitTestCase {
 	 */
 	#[\Override]
 	protected function mock_body_for_source_id( int $source_id ): ?array {
+		if ( self::INFERRED_MISSING_SOURCE_ID === $source_id ) {
+			$user = wp_get_current_user();
+
+			return array(
+				'id'                  => $source_id,
+				'type'                => 'page',
+				'title'               => array( 'raw' => 'Source title' ),
+				'content'             => array( 'raw' => '<p>Source content.</p>' ),
+				'link'                => 'https://source.example.com/post-' . $source_id,
+				'meta'                => array(),
+				'safe_publish_author' => array(
+					'email'        => $user->user_email,
+					'login'        => $user->user_login,
+					'display_name' => $user->display_name,
+				),
+			);
+		}
+
 		if ( self::RAW_MISSING_SOURCE_ID !== $source_id ) {
 			return null;
 		}
@@ -72,6 +98,71 @@ class Bulk_Import_Fetch_Failure_Test extends WP_Ajax_UnitTestCase {
 			'link'    => 'https://source.example.com/post-' . $source_id,
 			'meta'    => array(),
 		);
+	}
+
+	/**
+	 * Verifies that bulk update rejects unavailable catalog metadata without
+	 * overwriting destination content.
+	 */
+	public function test_bulk_update_rejects_unavailable_catalog(): void {
+		// ARRANGE: An imported page has non-empty destination fields, while its
+		// source response omits excerpt and its catalog is unavailable.
+		$post_id         = self::factory()->post->create(
+			array(
+				'post_type'    => 'page',
+				'post_title'   => 'Destination title',
+				'post_content' => '<p>Destination content.</p>',
+				'post_excerpt' => 'Destination excerpt',
+				'meta_input'   => array(
+					Options::META_SOURCE_POST_ID  =>
+						self::INFERRED_MISSING_SOURCE_ID,
+					Options::META_SOURCE_SITE_URL =>
+						'https://source.example.com',
+				),
+			)
+		);
+		$catalog_failure = static function (
+			false|array|WP_Error $preempt,
+			array $_args,
+			string $url
+		): false|array|WP_Error {
+			if ( ! str_contains( $url, '/catalog/post-types' ) ) {
+				return $preempt;
+			}
+
+			return new WP_Error( 'transport_down', 'Catalog unavailable.' );
+		};
+		add_filter( 'pre_http_request', $catalog_failure, 0, 3 );
+
+		try {
+			// ACT: Dispatch the bulk update.
+			$data = $this->dispatch_bulk_import(
+				array(
+					array(
+						'id'        => self::INFERRED_MISSING_SOURCE_ID,
+						'title'     => 'Snapshot title',
+						'link'      => 'https://source.example.com/post-'
+							. self::INFERRED_MISSING_SOURCE_ID,
+						'post_type' => 'pages',
+					),
+				)
+			);
+		} finally {
+			remove_filter( 'pre_http_request', $catalog_failure, 0 );
+		}
+
+		// ASSERT: The item fails and every destination field remains intact.
+		$this->assertSame( 0, $data['successful'] );
+		$this->assertSame( 1, $data['failed'] );
+		$this->assertStringContainsString(
+			'catalog could not be retrieved',
+			$data['results'][0]['error']
+		);
+		$post = get_post( $post_id );
+		$this->assertInstanceOf( WP_Post::class, $post );
+		$this->assertSame( 'Destination title', $post->post_title );
+		$this->assertSame( '<p>Destination content.</p>', $post->post_content );
+		$this->assertSame( 'Destination excerpt', $post->post_excerpt );
 	}
 
 	/**

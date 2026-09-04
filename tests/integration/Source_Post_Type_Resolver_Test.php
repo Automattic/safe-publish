@@ -94,8 +94,9 @@ class Source_Post_Type_Resolver_Test extends Integration_Test_Case {
 		$make_request = $this->recording_types_callable(
 			array(
 				array(
-					'slug'      => 'movie',
-					'rest_base' => 'movies',
+					'slug'       => 'movie',
+					'rest_base'  => 'movies',
+					'raw_fields' => array( 'title', 'content', 'excerpt' ),
 				),
 			),
 			$calls
@@ -122,8 +123,9 @@ class Source_Post_Type_Resolver_Test extends Integration_Test_Case {
 		$make_request = $this->recording_types_callable(
 			array(
 				array(
-					'slug'      => 'movie',
-					'rest_base' => 'movies',
+					'slug'       => 'movie',
+					'rest_base'  => 'movies',
+					'raw_fields' => array( 'title', 'content', 'excerpt' ),
 				),
 			),
 			$calls
@@ -217,7 +219,7 @@ class Source_Post_Type_Resolver_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Verifies that a catalog from an older source has no field metadata.
+	 * Verifies that legacy metadata is rejected even when all raw values exist.
 	 */
 	public function test_legacy_catalog_omits_raw_fields(): void {
 		// ARRANGE: The catalog entry predates raw_fields.
@@ -232,30 +234,36 @@ class Source_Post_Type_Resolver_Test extends Integration_Test_Case {
 			$calls
 		);
 
-		// ACT: Resolve post data with every raw field absent.
+		// ACT: Resolve complete post data that could previously bypass catalog.
 		$result = Source_Post_Type_Resolver::resolve_post_data(
 			'post',
-			array( 'type' => 'post' ),
+			array(
+				'type'    => 'post',
+				'title'   => array( 'raw' => 'Title' ),
+				'content' => array( 'raw' => 'Content' ),
+				'excerpt' => array( 'raw' => 'Excerpt' ),
+			),
 			self::SOURCE_URL,
 			$make_request,
 			array()
 		);
 
-		// ASSERT: Absence selects response-shape compatibility behavior.
-		$this->assertIsArray( $result );
+		// ASSERT: The current-source contract cannot be bypassed by response
+		// shape.
+		$this->assertInstanceOf( WP_Error::class, $result );
 		$this->assertSame(
-			array(
-				'title'   => '',
-				'content' => '',
-				'excerpt' => '',
-			),
-			$result['raw_values']
+			'fresh_content_catalog_incompatible',
+			$result->get_error_code()
 		);
+		$this->assertStringContainsString(
+			'incompatible version',
+			$result->get_error_message()
+		);
+		$this->assertSame( 1, $calls );
 	}
 
 	/**
-	 * Verifies that invalid current raw_fields metadata fails conservatively
-	 * without losing the REST-base mapping.
+	 * Verifies that malformed current raw_fields metadata fails explicitly.
 	 */
 	public function test_invalid_raw_fields_property_fails_conservatively(): void {
 		// ARRANGE: Valid type metadata carries an invalid field name.
@@ -271,7 +279,7 @@ class Source_Post_Type_Resolver_Test extends Integration_Test_Case {
 			$calls
 		);
 
-		// ACT: Resolve routing and post data missing one core raw field.
+		// ACT: Resolve routing and post data against invalid metadata.
 		$rest_base = Source_Post_Type_Resolver::resolve_rest_base(
 			'movie',
 			self::SOURCE_URL,
@@ -290,20 +298,22 @@ class Source_Post_Type_Resolver_Test extends Integration_Test_Case {
 			array()
 		);
 
-		// ASSERT: Routing remains valid, but invalid metadata cannot weaken
-		// field validation.
-		$this->assertSame( 'movies', $rest_base );
+		// ASSERT: Invalid metadata blocks both routing and post validation.
+		$this->assertInstanceOf( WP_Error::class, $rest_base );
+		$this->assertSame(
+			'fresh_content_catalog_invalid',
+			$rest_base->get_error_code()
+		);
 		$this->assertInstanceOf( WP_Error::class, $result );
 		$this->assertSame(
-			'fresh_content_raw_fields_missing',
+			'fresh_content_catalog_invalid',
 			$result->get_error_code()
 		);
 		$this->assertSame( 1, $calls );
 	}
 
 	/**
-	 * Verifies that an unreachable source falls back to slug passthrough rather
-	 * than failing.
+	 * Verifies that an unreachable catalog returns a retryable typed error.
 	 */
 	public function test_unreachable_source_falls_back_to_slug(): void {
 		// ARRANGE: Callable returns a transport error.
@@ -320,13 +330,17 @@ class Source_Post_Type_Resolver_Test extends Integration_Test_Case {
 			array()
 		);
 
-		// ASSERT: Falls back to the slug.
-		$this->assertSame( 'movie', $rest_base );
+		// ASSERT: Route resolution fails distinctly as temporary.
+		$this->assertInstanceOf( WP_Error::class, $rest_base );
+		$this->assertSame(
+			'fresh_content_catalog_unavailable',
+			$rest_base->get_error_code()
+		);
+		$this->assertTrue( $rest_base->get_error_data()['retryable'] );
 	}
 
 	/**
-	 * Verifies that a REST error envelope is treated as a failure and falls
-	 * back to slug passthrough.
+	 * Verifies that an HTTP catalog failure returns a retryable typed error.
 	 */
 	public function test_error_envelope_falls_back_to_slug(): void {
 		// ARRANGE: Callable returns a REST error envelope body.
@@ -348,8 +362,12 @@ class Source_Post_Type_Resolver_Test extends Integration_Test_Case {
 			array()
 		);
 
-		// ASSERT: Falls back to the slug.
-		$this->assertSame( 'movie', $rest_base );
+		// ASSERT: The HTTP failure is temporary, not version incompatibility.
+		$this->assertInstanceOf( WP_Error::class, $rest_base );
+		$this->assertSame(
+			'fresh_content_catalog_unavailable',
+			$rest_base->get_error_code()
+		);
 	}
 
 	/**
@@ -368,15 +386,20 @@ class Source_Post_Type_Resolver_Test extends Integration_Test_Case {
 				'body'     => (string) wp_json_encode(
 					array(
 						array(
-							'slug'      => 'movie',
-							'rest_base' => 'movies',
+							'slug'       => 'movie',
+							'rest_base'  => 'movies',
+							'raw_fields' => array(
+								'title',
+								'content',
+								'excerpt',
+							),
 						),
 					)
 				),
 			);
 		};
 
-		// ACT: First resolution fails (passthrough), second succeeds.
+		// ACT: First resolution fails temporarily, second succeeds.
 		$first  = Source_Post_Type_Resolver::resolve_rest_base(
 			'movie',
 			self::SOURCE_URL,
@@ -391,10 +414,10 @@ class Source_Post_Type_Resolver_Test extends Integration_Test_Case {
 		);
 
 		// ASSERT: The failure was retried rather than cached.
+		$this->assertInstanceOf( WP_Error::class, $first );
 		$this->assertSame(
-			'movie',
-			$first,
-			'A failed fetch should fall back to the slug.'
+			'fresh_content_catalog_unavailable',
+			$first->get_error_code()
 		);
 		$this->assertSame(
 			'movies',
@@ -405,7 +428,7 @@ class Source_Post_Type_Resolver_Test extends Integration_Test_Case {
 
 	/**
 	 * Verifies that a 200 response whose body is a JSON object rather than a
-	 * list is treated as a failure and not memoized, so a later call retries.
+	 * list is a definitive invalid-metadata error and is memoized.
 	 */
 	public function test_non_list_body_is_not_memoized(): void {
 		// ARRANGE: First response is a JSON object, second is a valid list.
@@ -433,7 +456,7 @@ class Source_Post_Type_Resolver_Test extends Integration_Test_Case {
 			);
 		};
 
-		// ACT: First resolution sees the object body, second the list.
+		// ACT: Both resolutions use the invalid first response.
 		$first  = Source_Post_Type_Resolver::resolve_rest_base(
 			'movie',
 			self::SOURCE_URL,
@@ -447,17 +470,14 @@ class Source_Post_Type_Resolver_Test extends Integration_Test_Case {
 			array()
 		);
 
-		// ASSERT: The object body was not memoized; the retry resolved it.
+		// ASSERT: Invalid successful metadata is not treated as transient.
+		$this->assertInstanceOf( WP_Error::class, $first );
+		$this->assertInstanceOf( WP_Error::class, $second );
 		$this->assertSame(
-			'movie',
-			$first,
-			'A non-list body should fall back to the slug.'
+			'fresh_content_catalog_invalid',
+			$first->get_error_code()
 		);
-		$this->assertSame(
-			'movies',
-			$second,
-			'A non-list body must not be memoized.'
-		);
+		$this->assertSame( 1, $attempt );
 	}
 
 	/**
@@ -477,8 +497,9 @@ class Source_Post_Type_Resolver_Test extends Integration_Test_Case {
 		$make_request = $this->recording_types_callable(
 			array(
 				array(
-					'slug'      => 'movie',
-					'rest_base' => $unsafe_rest_base,
+					'slug'       => 'movie',
+					'rest_base'  => $unsafe_rest_base,
+					'raw_fields' => array( 'title', 'content', 'excerpt' ),
 				),
 			),
 			$calls
@@ -492,8 +513,12 @@ class Source_Post_Type_Resolver_Test extends Integration_Test_Case {
 			array()
 		);
 
-		// ASSERT: The unsafe value is dropped, falling back to the slug.
-		$this->assertSame( 'movie', $rest_base );
+		// ASSERT: The unsafe value cannot fall back to the requested slug.
+		$this->assertInstanceOf( WP_Error::class, $rest_base );
+		$this->assertSame(
+			'fresh_content_post_type_unresolved',
+			$rest_base->get_error_code()
+		);
 	}
 
 	/**

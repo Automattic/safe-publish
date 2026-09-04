@@ -1562,7 +1562,11 @@ class Diff_Renderer_Terms_Test extends Integration_Test_Case {
 		);
 
 		// phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
-		$make_request = static function ( $_url, $_action, $_credentials ) use ( $response ) {
+		$make_request = static function ( $url, $_action, $_credentials ) use ( $response ) {
+			if ( str_contains( $url, '/catalog/post-types' ) ) {
+				return \_safe_publish_test_catalog_response();
+			}
+
 			return array(
 				'response' => array( 'code' => 200 ),
 				'body'     => (string) wp_json_encode( $response ),

@@ -120,7 +120,13 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 		array $_args,
 		string $url
 	): false|array|WP_Error {
-		if ( false !== $preempt || ! preg_match( '#/wp-json/wp/v2/posts/\d+#', $url ) ) {
+		if ( false !== $preempt ) {
+			return $preempt;
+		}
+		if ( str_contains( $url, '/catalog/post-types' ) ) {
+			return \_safe_publish_test_catalog_response();
+		}
+		if ( ! preg_match( '#/wp-json/wp/v2/posts/\d+#', $url ) ) {
 			return $preempt;
 		}
 
