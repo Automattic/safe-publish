@@ -658,13 +658,23 @@ class Media_Importer {
 	 *
 	 * Called when an import is aborted after partial media downloads, to avoid
 	 * leaving orphaned attachments in the media library.
+	 *
+	 * @return int[] IDs of attachments WordPress did not delete.
 	 */
-	public function delete_newly_created_attachments(): void {
+	public function delete_newly_created_attachments(): array {
+		$surviving_ids = array();
+
 		foreach ( $this->newly_created_attachment_ids as $attachment_id ) {
 			wp_delete_attachment( $attachment_id, true );
+
+			if ( null !== get_post( $attachment_id ) ) {
+				$surviving_ids[] = $attachment_id;
+			}
 		}
 
 		$this->newly_created_attachment_ids = array();
+
+		return $surviving_ids;
 	}
 
 	/**

@@ -182,4 +182,33 @@ class Media_Importer_Filter_Cleanup_Test extends WP_UnitTestCase {
 			remove_filter( 'big_image_size_threshold', '__return_false' );
 		}
 	}
+
+	/**
+	 * Verifies that cleanup reports a newly imported attachment deletion veto.
+	 */
+	public function test_cleanup_reports_attachment_that_survives_deletion(): void {
+		// ARRANGE: Sideload an image, then make WordPress veto its deletion.
+		$this->add_image_byte_response_mock();
+		$importer      = new Media_Importer( new HTTP_Client() );
+		$attachment_id = $importer->import_source_media_as_attachment(
+			self::SOURCE_URL . '/wp-content/uploads/2025/01/cleanup.jpg',
+			self::SOURCE_URL
+		);
+		$this->remove_image_byte_response_mock();
+		$this->assertIsInt( $attachment_id );
+		$veto_delete = static fn(): bool => false;
+		add_filter( 'pre_delete_attachment', $veto_delete );
+
+		try {
+			// ACT: Clean up the attachment created during this import run.
+			$surviving_ids = $importer->delete_newly_created_attachments();
+		} finally {
+			remove_filter( 'pre_delete_attachment', $veto_delete );
+		}
+
+		// ASSERT: The contract identifies the attachment that still exists.
+		$this->assertSame( array( $attachment_id ), $surviving_ids );
+		$this->assertNotNull( get_post( $attachment_id ) );
+		wp_delete_attachment( $attachment_id, true );
+	}
 }
