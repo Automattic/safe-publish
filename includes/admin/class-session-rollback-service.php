@@ -389,6 +389,16 @@ final class Session_Rollback_Service {
 			);
 		}
 
+		$content_error = Post_Content_Integrity::verify(
+			$post_id,
+			$restore_data,
+			Post_Content_Integrity::OPERATION_ROLLBACK
+		);
+
+		if ( null !== $content_error ) {
+			return $content_error;
+		}
+
 		$terms_error = null;
 
 		if ( isset( $changes['previous_terms'] ) && is_array( $changes['previous_terms'] ) ) {

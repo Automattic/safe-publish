@@ -40,8 +40,6 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 class Post_Import_Service {
 
-	use Sanitizes_Content;
-
 	/**
 	 * Object-cache group for per-source-post import locks.
 	 *
@@ -711,6 +709,13 @@ class Post_Import_Service {
 			$result[ HTTP_Client::ERROR_DATA_SOURCE_ERROR ] =
 				$error_data[ HTTP_Client::ERROR_DATA_SOURCE_ERROR ];
 		}
+		if ( is_array( $error_data ) ) {
+			foreach ( array( 'post_id', 'media_ids', 'original_error_code' ) as $key ) {
+				if ( isset( $error_data[ $key ] ) ) {
+					$result[ $key ] = $error_data[ $key ];
+				}
+			}
+		}
 
 		return $result;
 	}
@@ -858,8 +863,7 @@ class Post_Import_Service {
 	 * Processes raw post content by importing media and fixing URLs.
 	 *
 	 * Media URLs resolve against the configured connected source site. Returns
-	 * a WP_Error if content processing fails or if kses is enabled and
-	 * sanitization would modify the content.
+	 * a WP_Error if content processing fails.
 	 *
 	 * @param string                                $content              Raw post content.
 	 * @param array<int,int>                        $session_id_map       Bulk batch source => destination post IDs.
@@ -878,7 +882,7 @@ class Post_Import_Service {
 		$source_site_url = $this->get_connected_source_url();
 
 		if ( '' === $source_site_url ) {
-			return $this->sanitize_field( $content, self::FIELD_CONTENT );
+			return $content;
 		}
 
 		$processed = $this->content_processor->process_content(
@@ -899,7 +903,7 @@ class Post_Import_Service {
 			return $processed;
 		}
 
-		return $this->sanitize_field( $processed, self::FIELD_CONTENT );
+		return $processed;
 	}
 
 	/**
@@ -1415,10 +1419,15 @@ class Post_Import_Service {
 		$this->resolve_term_conflict_issues( $term_report );
 
 		if ( is_wp_error( $post_id ) ) {
-			$error_data = $post_id->get_error_data();
-			$action     = is_array( $error_data ) && isset( $error_data['action'] )
+			$error_data      = $post_id->get_error_data();
+			$action          = is_array( $error_data ) && isset( $error_data['action'] )
 				? $error_data['action']
 				: 'post_update_failed';
+			$failure_changes = array( 'action' => $action );
+
+			if ( is_array( $error_data ) && isset( $error_data['media_ids'] ) ) {
+				$failure_changes['media_ids'] = $error_data['media_ids'];
+			}
 
 			$this->log_import_if_session(
 				$session_id,
@@ -1427,7 +1436,7 @@ class Post_Import_Service {
 				'error',
 				$imported_post->ID,
 				$post_id->get_error_message(),
-				array( 'action' => $action )
+				$failure_changes
 			);
 
 			return $this->build_error_result( $fields, $post_id );
@@ -1623,19 +1632,27 @@ class Post_Import_Service {
 		$this->resolve_term_conflict_issues( $term_report );
 
 		if ( is_wp_error( $post_id ) ) {
-			$error_data = $post_id->get_error_data();
-			$action     = is_array( $error_data ) && isset( $error_data['action'] )
+			$error_data      = $post_id->get_error_data();
+			$action          = is_array( $error_data ) && isset( $error_data['action'] )
 				? $error_data['action']
 				: 'post_create_failed';
+			$failure_post_id = is_array( $error_data ) && isset( $error_data['post_id'] )
+				? absint( $error_data['post_id'] )
+				: 0;
+			$failure_changes = array( 'action' => $action );
+
+			if ( is_array( $error_data ) && isset( $error_data['media_ids'] ) ) {
+				$failure_changes['media_ids'] = $error_data['media_ids'];
+			}
 
 			$this->log_import_if_session(
 				$session_id,
 				$fields['source_post_id'],
 				$fields['title'],
 				'error',
-				null,
+				$failure_post_id > 0 ? $failure_post_id : null,
 				$post_id->get_error_message(),
-				array( 'action' => $action )
+				$failure_changes
 			);
 
 			return $this->build_error_result( $fields, $post_id );
@@ -2533,20 +2550,7 @@ class Post_Import_Service {
 			$fields['post_parent_id'] = (int) $resolved_parent;
 		}
 
-		$sanitized_excerpt = $this->sanitize_field(
-			$fresh_result['excerpt'],
-			self::FIELD_EXCERPT
-		);
-
-		if ( is_wp_error( $sanitized_excerpt ) ) {
-			return new WP_Error(
-				'excerpt_sanitization_failed',
-				$sanitized_excerpt->get_error_message(),
-				array( 'fields' => $fields )
-			);
-		}
-
-		$fields['excerpt'] = $sanitized_excerpt;
+		$fields['excerpt'] = $fresh_result['excerpt'];
 
 		$processed_content = $this->process_post_content(
 			$fresh_result['content'] ?? '',
@@ -2641,21 +2645,48 @@ class Post_Import_Service {
 			$terms
 		);
 
-		$this->content_processor->disable_content_filters();
 		// Core unslashes as it saves.
-		$result = wp_update_post( wp_slash( $post_args ) );
-		$this->content_processor->restore_content_filters();
+		$result = wp_update_post( wp_slash( $post_args ), true );
 
 		if ( is_wp_error( $result ) ) {
-			return $result;
+			$cleanup_error = $this->cleanup_failed_update_media();
+
+			return null === $cleanup_error
+				? $result
+				: $this->build_compensation_error( $result, $cleanup_error );
 		}
 
 		if ( 0 === $result ) {
-			return new WP_Error(
+			$update_error  = new WP_Error(
 				'post_update_failed',
 				__( 'Failed to update post.', 'safe-publish' ),
 				array( 'action' => 'post_update_failed' )
 			);
+			$cleanup_error = $this->cleanup_failed_update_media();
+
+			return null === $cleanup_error
+				? $update_error
+				: $this->build_compensation_error(
+					$update_error,
+					$cleanup_error
+				);
+		}
+
+		$content_error = Post_Content_Integrity::verify(
+			$post_id,
+			$post_args,
+			Post_Content_Integrity::OPERATION_IMPORT
+		);
+
+		if ( null !== $content_error ) {
+			$rollback_error = $this->rollback_failed_update( $post_id, $snapshot );
+
+			return null === $rollback_error
+				? $content_error
+				: $this->build_compensation_error(
+					$content_error,
+					$rollback_error
+				);
 		}
 
 		update_post_meta(
@@ -2686,7 +2717,14 @@ class Post_Import_Service {
 		);
 
 		if ( is_wp_error( $meta_result ) ) {
-			$this->rollback_failed_update( $post_id, $snapshot );
+			$rollback_error = $this->rollback_failed_update( $post_id, $snapshot );
+
+			if ( null !== $rollback_error ) {
+				return $this->build_compensation_error(
+					$meta_result,
+					$rollback_error
+				);
+			}
 
 			return new WP_Error(
 				'meta_update_failed',
@@ -2703,7 +2741,14 @@ class Post_Import_Service {
 		);
 
 		if ( is_wp_error( $terms_result ) ) {
-			$this->rollback_failed_update( $post_id, $snapshot );
+			$rollback_error = $this->rollback_failed_update( $post_id, $snapshot );
+
+			if ( null !== $rollback_error ) {
+				return $this->build_compensation_error(
+					$terms_result,
+					$rollback_error
+				);
+			}
 
 			return new WP_Error(
 				'terms_update_failed',
@@ -2795,14 +2840,33 @@ class Post_Import_Service {
 	 *
 	 * @param int   $post_id  Post ID.
 	 * @param array $snapshot Snapshot from capture_pre_update_state().
+	 * @return WP_Error|null Error when the post fields were not fully restored.
 	 */
 	private function restore_pre_update_state(
 		int $post_id,
 		array $snapshot
-	): void {
+	): ?WP_Error {
 		// The snapshot holds raw database reads, so it needs re-slashing on the
 		// way back in.
-		wp_update_post( wp_slash( $snapshot['post_fields'] ) );
+		$result = wp_update_post( wp_slash( $snapshot['post_fields'] ), true );
+
+		if ( is_wp_error( $result ) ) {
+			$content_error = new WP_Error(
+				'content_restore_failed',
+				sprintf(
+					/* translators: %s: WordPress error message. */
+					__( 'Failed to restore the previous post: %s', 'safe-publish' ),
+					$result->get_error_message()
+				),
+				array( 'action' => 'content_restore_failed' )
+			);
+		} else {
+			$content_error = Post_Content_Integrity::verify(
+				$post_id,
+				$snapshot['post_fields'],
+				Post_Content_Integrity::OPERATION_ROLLBACK
+			);
+		}
 
 		foreach ( $snapshot['tracking_meta'] as $key => $value ) {
 			if ( '' === $value ) {
@@ -2827,6 +2891,8 @@ class Post_Import_Service {
 		}
 
 		Term_Assignment_State::restore( $post_id, $snapshot['terms'] );
+
+		return $content_error;
 	}
 
 	/**
@@ -2835,13 +2901,100 @@ class Post_Import_Service {
 	 *
 	 * @param int   $post_id  Post ID.
 	 * @param array $snapshot Snapshot from capture_pre_update_state().
+	 * @return WP_Error|null Error when the post fields were not fully restored.
 	 */
 	private function rollback_failed_update(
 		int $post_id,
 		array $snapshot
-	): void {
-		$this->restore_pre_update_state( $post_id, $snapshot );
-		$this->content_processor->delete_newly_created_media();
+	): ?WP_Error {
+		$restore_error = $this->restore_pre_update_state( $post_id, $snapshot );
+
+		return $this->cleanup_failed_update_media( $restore_error );
+	}
+
+	/**
+	 * Deletes update media and combines survivors with a restoration failure.
+	 *
+	 * @param WP_Error|null $restore_error Existing restoration failure, if any.
+	 * @return WP_Error|null Restoration or cleanup failure.
+	 */
+	private function cleanup_failed_update_media(
+		?WP_Error $restore_error = null
+	): ?WP_Error {
+		$media_ids = $this->content_processor->delete_newly_created_media();
+
+		if ( array() === $media_ids ) {
+			return $restore_error;
+		}
+
+		$cleanup_message = sprintf(
+			/* translators: %s: Comma-separated attachment IDs. */
+			__(
+				'Imported media cleanup was incomplete. Remove attachment IDs %s manually.',
+				'safe-publish'
+			),
+			implode( ', ', $media_ids )
+		);
+
+		if ( null === $restore_error ) {
+			return new WP_Error(
+				'content_cleanup_failed',
+				$cleanup_message,
+				array(
+					'action'    => 'content_cleanup_failed',
+					'media_ids' => $media_ids,
+				)
+			);
+		}
+
+		return new WP_Error(
+			'content_restore_failed',
+			$restore_error->get_error_message() . ' ' . $cleanup_message,
+			array(
+				'action'              => 'content_restore_failed',
+				'original_error_code' => $restore_error->get_error_code(),
+				'media_ids'           => $media_ids,
+			)
+		);
+	}
+
+	/**
+	 * Builds an error when an update failure could not be fully compensated.
+	 *
+	 * @param WP_Error $original_error Original update failure.
+	 * @param WP_Error $rollback_error Compensation failure.
+	 * @return WP_Error Combined failure.
+	 */
+	private function build_compensation_error(
+		WP_Error $original_error,
+		WP_Error $rollback_error
+	): WP_Error {
+		$rollback_data = $rollback_error->get_error_data();
+		$error_data    = array(
+			'action'              => is_array( $rollback_data )
+				&& isset( $rollback_data['action'] )
+					? $rollback_data['action']
+					: $rollback_error->get_error_code(),
+			'original_error_code' => $original_error->get_error_code(),
+		);
+
+		if ( is_array( $rollback_data ) && isset( $rollback_data['media_ids'] ) ) {
+			$error_data['media_ids'] = $rollback_data['media_ids'];
+		}
+
+		return new WP_Error(
+			$rollback_error->get_error_code(),
+			sprintf(
+				/* translators: 1: Original failure. 2: Compensation failure. */
+				__(
+					'%1$s The failed update could not be fully reversed: %2$s',
+					'safe-publish'
+				),
+				$original_error->get_error_message(),
+				$rollback_error->get_error_message()
+			),
+			$error_data
+		);
 	}
 
 	/**
@@ -2884,12 +3037,31 @@ class Post_Import_Service {
 		array &$skipped_taxonomies = array(),
 		Term_Reconcile_Report $term_report = new Term_Reconcile_Report()
 	): int|WP_Error {
-		$this->content_processor->disable_content_filters();
-		$post_id = wp_insert_post( wp_slash( $post_args ) );
-		$this->content_processor->restore_content_filters();
+		$post_id = wp_insert_post( wp_slash( $post_args ), true );
 
 		if ( is_wp_error( $post_id ) ) {
 			return $post_id;
+		}
+
+		$content_error = Post_Content_Integrity::verify(
+			$post_id,
+			$post_args,
+			Post_Content_Integrity::OPERATION_IMPORT
+		);
+
+		if ( null !== $content_error ) {
+			wp_delete_post( $post_id, true );
+			$surviving_media_ids =
+				$this->content_processor->delete_newly_created_media();
+			$surviving_post_id   = null !== get_post( $post_id ) ? $post_id : null;
+
+			return null === $surviving_post_id && array() === $surviving_media_ids
+				? $content_error
+				: $this->build_new_import_cleanup_error(
+					$content_error,
+					$surviving_post_id,
+					$surviving_media_ids
+				);
 		}
 
 		$source_post_id = absint(
@@ -2984,6 +3156,57 @@ class Post_Import_Service {
 		);
 
 		return $post_id;
+	}
+
+	/**
+	 * Reports content filtering plus any new-import items cleanup could not remove.
+	 *
+	 * @param WP_Error $content_error       Original persisted-content mismatch.
+	 * @param int|null $surviving_post_id   Post ID when the mapped post remains.
+	 * @param int[]    $surviving_media_ids Attachment IDs that remain.
+	 * @return WP_Error Combined cleanup failure.
+	 */
+	private function build_new_import_cleanup_error(
+		WP_Error $content_error,
+		?int $surviving_post_id,
+		array $surviving_media_ids
+	): WP_Error {
+		$survivors = array();
+
+		if ( null !== $surviving_post_id ) {
+			$survivors[] = sprintf(
+				/* translators: %d: Post ID. */
+				__( 'post ID %d', 'safe-publish' ),
+				$surviving_post_id
+			);
+		}
+
+		if ( array() !== $surviving_media_ids ) {
+			$survivors[] = sprintf(
+				/* translators: %s: Comma-separated attachment IDs. */
+				__( 'attachment IDs %s', 'safe-publish' ),
+				implode( ', ', $surviving_media_ids )
+			);
+		}
+
+		return new WP_Error(
+			'content_cleanup_failed',
+			sprintf(
+				/* translators: 1: Original failure. 2: Surviving post/media IDs. */
+				__(
+					'%1$s Cleanup was incomplete. Remove the remaining %2$s manually before retrying.',
+					'safe-publish'
+				),
+				$content_error->get_error_message(),
+				implode( ', ', $survivors )
+			),
+			array(
+				'action'              => 'content_cleanup_failed',
+				'original_error_code' => $content_error->get_error_code(),
+				'post_id'             => $surviving_post_id,
+				'media_ids'           => $surviving_media_ids,
+			)
+		);
 	}
 
 	/**

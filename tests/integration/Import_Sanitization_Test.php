@@ -1,9 +1,8 @@
 <?php
 /**
- * Import sanitization integration tests
+ * Import content filtering integration tests
  *
- * Tests the Sanitizes_Content trait behavior (kses filtering, content
- * preservation, error messages, and custom allowed tags) exercised through
+ * Tests WordPress save filtering and persisted-content verification through
  * the import workflow.
  *
  * @package Safe_Publish
@@ -29,10 +28,11 @@ use Safe_Publish\Utils\Telemetry_Service;
 use WP_Error;
 
 /**
- * Import Sanitization Test Class.
+ * Import Content Filtering Test Class.
  */
 class Import_Sanitization_Test extends Integration_Test_Case {
 
+	use Image_Byte_Mock_Trait;
 	use Mock_Post_API_Trait;
 
 	/**
@@ -116,10 +116,9 @@ class Import_Sanitization_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Verifies that bulk import preserves content with script tags when kses is
-	 * disabled (default).
+	 * Verifies that bulk import preserves content for an unfiltered user.
 	 */
-	public function test_bulk_import_preserves_content_by_default(): void {
+	public function test_bulk_import_preserves_content_for_unfiltered_user(): void {
 		// ARRANGE: Content with a script tag that kses would strip.
 		$session_id = $this->repository->create_session(
 			'https://source.example.com',
@@ -162,10 +161,9 @@ class Import_Sanitization_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Verifies that bulk import preserves excerpts with script tags when kses
-	 * is disabled (default).
+	 * Verifies that bulk import preserves excerpts for an unfiltered user.
 	 */
-	public function test_bulk_import_preserves_excerpt_by_default(): void {
+	public function test_bulk_import_preserves_excerpt_for_unfiltered_user(): void {
 		// ARRANGE: Excerpt with a script tag that kses would strip.
 		$session_id = $this->repository->create_session(
 			'https://source.example.com',
@@ -208,11 +206,9 @@ class Import_Sanitization_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Verifies that the capability-based default applies wp_kses for a caller
-	 * that does not hold unfiltered_html, aborting the import when the
-	 * source content contains HTML kses strips.
+	 * Verifies that a filtered new import fails without leaving a local post.
 	 */
-	public function test_kses_runs_by_default_for_caller_without_unfiltered_html(): void {
+	public function test_filtered_new_import_fails_without_leaving_a_post(): void {
 		// ARRANGE: An author (no `unfiltered_html` by default on single-site)
 		// imports content containing a script tag. The base test case sets up
 		// an administrator by default; switch to a user without the capability.
@@ -245,31 +241,196 @@ class Import_Sanitization_Test extends Integration_Test_Case {
 			'content' => $content,
 		);
 
-		// ACT: Import without setting the safe_publish_import_kses filter so
-		// the capability-based default decides.
+		// ACT: Import as the acting user WordPress applies kses to.
 		$result = $this->import_service->import_post(
 			$post_data,
 			$session_id
 		);
 
-		// ASSERT: kses ran and aborted the import with a descriptive error.
+		// ASSERT: The filtered write is reported and its new post is removed.
 		$this->assertFalse( $result['success'] );
 		$this->assertStringContainsString(
-			'modified by sanitization',
+			'WordPress filtered the requested post content',
 			$result['error']
 		);
+		$this->assertNull(
+			$this->import_service->find_imported_post(
+				8060,
+				'https://source.example.com'
+			)
+		);
+
+		$items = $this->repository->get_session_items( $session_id );
+		$this->assertCount( 1, $items );
+		$this->assertSame( 'error', $items[0]['status'] );
+		$this->assertSame( 0, (int) $items[0]['post_id'] );
+	}
+
+	/**
+	 * Verifies that a vetoed filtered-import cleanup reports the surviving post.
+	 */
+	public function test_filtered_new_import_reports_vetoed_cleanup(): void {
+		// ARRANGE: Filter the imported content and veto deletion of its new post.
+		$author_id = self::factory()->user->create(
+			array( 'role' => 'author' )
+		);
+		wp_set_current_user( $author_id );
+		$content                   = '<p><img src="https://source.example.com/'
+			. 'wp-content/uploads/2025/01/cleanup.jpg"></p>'
+			. '<script>alert("xss")</script>';
+		$session_id                = $this->repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+		$post_data                 = array(
+			'id'             => 8064,
+			'title'          => 'Vetoed Cleanup',
+			'content'        => $content,
+			'link'           => 'https://source.example.com/vetoed-cleanup',
+			'featured_media' => 0,
+			'post_type'      => 'posts',
+			'excerpt'        => '',
+			'meta'           => array(),
+			'terms'          => array(),
+		);
+		$this->mock_post_overrides = array( 'content' => $content );
+		$veto_delete               = static fn(): bool => false;
+		add_filter( 'pre_delete_post', $veto_delete );
+		add_filter( 'pre_delete_attachment', $veto_delete );
+		$this->add_image_byte_response_mock();
+
+		try {
+			// ACT: Import while WordPress refuses to delete the filtered draft.
+			$result = $this->import_service->import_post( $post_data, $session_id );
+		} finally {
+			$this->remove_image_byte_response_mock();
+			remove_filter( 'pre_delete_attachment', $veto_delete );
+			remove_filter( 'pre_delete_post', $veto_delete );
+		}
+
+		// ASSERT: The combined failure identifies the still-mapped draft.
+		$this->assertFalse( $result['success'] );
 		$this->assertStringContainsString(
-			'<script>',
+			'WordPress filtered the requested post content',
+			$result['error']
+		);
+		$this->assertStringContainsString( 'Cleanup was incomplete', $result['error'] );
+		$surviving_post = $this->import_service->find_imported_post(
+			8064,
+			'https://source.example.com'
+		);
+		$this->assertNotNull( $surviving_post );
+		$this->assertStringContainsString(
+			'post ID ' . $surviving_post->ID,
+			$result['error']
+		);
+		$this->assertSame( $surviving_post->ID, $result['post_id'] );
+		$this->assertSame( 'content_filtered', $result['original_error_code'] );
+		$this->assertCount( 1, $result['media_ids'] );
+		$this->assertStringContainsString(
+			'attachment IDs ' . $result['media_ids'][0],
+			$result['error']
+		);
+		$this->assertNotNull( get_post( $result['media_ids'][0] ) );
+
+		$items = $this->repository->get_session_items( $session_id );
+		$this->assertCount( 1, $items );
+		$this->assertSame( 'error', $items[0]['status'] );
+		$this->assertSame( $surviving_post->ID, (int) $items[0]['post_id'] );
+		$stored_item = $this->repository->get_item( (int) $items[0]['id'] );
+		$this->assertNotNull( $stored_item );
+		$this->assertSame(
+			'content_cleanup_failed',
+			History_Repository::decode_item_changes(
+				$stored_item['content_changes']
+			)['action']
+		);
+		wp_delete_post( $surviving_post->ID, true );
+		wp_delete_attachment( $result['media_ids'][0], true );
+	}
+
+	/**
+	 * Verifies that a filtered single import reports the persisted mismatch.
+	 */
+	public function test_filtered_single_import_reports_failure(): void {
+		// ARRANGE: A single import is run by a user without unfiltered_html.
+		$author_id = self::factory()->user->create(
+			array( 'role' => 'author' )
+		);
+		wp_set_current_user( $author_id );
+		$session_id                = $this->repository->create_session(
+			'https://source.example.com',
+			'single'
+		);
+		$content                   = '<p>Safe.</p><script>alert("filtered")</script>';
+		$post_data                 = array(
+			'id'             => 8062,
+			'title'          => 'Single Filter Test',
+			'content'        => $content,
+			'link'           => 'https://source.example.com/single-filter-test',
+			'featured_media' => 0,
+			'post_type'      => 'posts',
+			'excerpt'        => '',
+			'meta'           => array(),
+			'terms'          => array(),
+		);
+		$this->mock_post_overrides = array( 'content' => $content );
+
+		// ACT: Import through the service used by the single AJAX action.
+		$result = $this->import_service->import_post( $post_data, $session_id );
+
+		// ASSERT: The single result is a clear failure, not false success.
+		$this->assertFalse( $result['success'] );
+		$this->assertStringContainsString(
+			'WordPress filtered the requested post content',
 			$result['error']
 		);
 	}
 
 	/**
-	 * Verifies that the capability-based default skips wp_kses for any caller
-	 * that holds unfiltered_html, regardless of role, so source HTML kses
-	 * would otherwise strip imports verbatim.
+	 * Verifies that a filtered user can import content WordPress leaves intact.
 	 */
-	public function test_kses_skipped_by_default_for_caller_with_unfiltered_html(): void {
+	public function test_filtered_user_imports_unaffected_content(): void {
+		// ARRANGE: An author imports markup allowed by WordPress.
+		$author_id = self::factory()->user->create(
+			array( 'role' => 'author' )
+		);
+		wp_set_current_user( $author_id );
+		$session_id                = $this->repository->create_session(
+			'https://source.example.com',
+			'single'
+		);
+		$post_data                 = array(
+			'id'             => 8063,
+			'title'          => 'Allowed Content Test',
+			'content'        => '<p>Allowed content.</p>',
+			'link'           => 'https://source.example.com/allowed-content-test',
+			'featured_media' => 0,
+			'post_type'      => 'posts',
+			'excerpt'        => '<em>Allowed excerpt.</em>',
+			'meta'           => array(),
+			'terms'          => array(),
+		);
+		$this->mock_post_overrides = array(
+			'content' => $post_data['content'],
+			'excerpt' => $post_data['excerpt'],
+		);
+
+		// ACT: Import through WordPress' normal save filters.
+		$result = $this->import_service->import_post( $post_data, $session_id );
+
+		// ASSERT: Unchanged content succeeds for the filtered user.
+		$this->assertTrue( $result['success'] );
+		$this->assertSame(
+			$post_data['content'],
+			get_post( $result['post_id'] )->post_content
+		);
+	}
+
+	/**
+	 * Verifies that a caller granted unfiltered_html imports content unchanged.
+	 */
+	public function test_import_succeeds_for_caller_with_unfiltered_html(): void {
 		// ARRANGE: A non-administrator role (author, which does not normally
 		// hold `unfiltered_html`) is granted the capability explicitly. The
 		// capability — not the role — must decide.
@@ -304,8 +465,7 @@ class Import_Sanitization_Test extends Integration_Test_Case {
 			'content' => $content,
 		);
 
-		// ACT: Import without setting the safe_publish_import_kses filter so
-		// the capability-based default decides.
+		// ACT: Import as the explicitly trusted user.
 		$result = $this->import_service->import_post(
 			$post_data,
 			$session_id
@@ -321,7 +481,7 @@ class Import_Sanitization_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Provides stripping scenarios with content and expected error substrings.
+	 * Provides content shapes WordPress filters for an author.
 	 *
 	 * @return array[] Test cases keyed by label.
 	 */
@@ -329,19 +489,16 @@ class Import_Sanitization_Test extends Integration_Test_Case {
 		return array(
 			'stripped tag'               => array(
 				'<p>Text.</p><script>alert("xss")</script>',
-				array( '<script>' ),
 			),
 			'stripped tag with attrs'    => array(
 				'<!-- wp:html -->'
 					. '<iframe src="https://youtube.com/embed/abc"'
 					. ' width="560" height="315"></iframe>'
 					. '<!-- /wp:html -->',
-				array( '<iframe', 'src=' ),
 			),
 			'stripped attr on kept tag'  => array(
 				'<p><img src="http://localhost/img.jpg"'
 					. ' alt="Photo" decoding="async"/></p>',
-				array( '<img', 'decoding=' ),
 			),
 			'multiple stripped elements' => array(
 				'<!-- wp:html -->'
@@ -349,29 +506,25 @@ class Import_Sanitization_Test extends Integration_Test_Case {
 					. '<circle cx="50" cy="50" r="40"/>'
 					. '</svg>'
 					. '<!-- /wp:html -->',
-				array( '<svg', '<circle' ),
 			),
 		);
 	}
 
 	/**
-	 * Verifies that the sanitization error message describes the specific HTML
-	 * that was stripped for different stripping types when kses is enabled via
-	 * filter.
+	 * Verifies that WordPress filtering is detected for several content shapes.
 	 *
 	 * @dataProvider provide_stripping_scenarios
 	 *
-	 * @param string   $content           Content with strippable HTML.
-	 * @param string[] $expected_in_error Substrings that must appear
-	 *                                    in the error message.
+	 * @param string $content Content with strippable HTML.
 	 */
-	public function test_sanitization_error_describes_stripped_html(
-		string $content,
-		array $expected_in_error
+	public function test_import_reports_filtered_content_shapes(
+		string $content
 	): void {
-		// ARRANGE: Enable kses via filter, then import content that kses would
-		// modify.
-		add_filter( 'safe_publish_import_kses', '__return_true' );
+		// ARRANGE: Import content that kses modifies as a filtered user.
+		$author_id = self::factory()->user->create(
+			array( 'role' => 'author' )
+		);
+		wp_set_current_user( $author_id );
 
 		$session_id = $this->repository->create_session(
 			'https://source.example.com',
@@ -400,33 +553,23 @@ class Import_Sanitization_Test extends Integration_Test_Case {
 			$session_id
 		);
 
-		remove_filter( 'safe_publish_import_kses', '__return_true' );
-
-		// ASSERT: Import failed with a descriptive error.
+		// ASSERT: Import failed with a descriptive field-level error.
 		$this->assertFalse( $result['success'] );
 		$this->assertStringContainsString(
-			'modified by sanitization',
+			'WordPress filtered the requested post content',
 			$result['error']
 		);
-
-		foreach ( $expected_in_error as $expected ) {
-			$this->assertStringContainsString(
-				$expected,
-				$result['error'],
-				"Error should mention: $expected"
-			);
-		}
 	}
 
 	/**
-	 * Verifies that bulk import succeeds when kses-enabled sanitization only
-	 * makes cosmetic whitespace changes (no false positives).
+	 * Verifies that save-time formatting changes are reported.
 	 */
-	public function test_bulk_import_succeeds_with_cosmetic_whitespace_changes(): void {
-		// ARRANGE: Enable kses, then import content with inline styles that
-		// kses normalizes (e.g. removes space after semicolons) but does not
-		// meaningfully modify.
-		add_filter( 'safe_publish_import_kses', '__return_true' );
+	public function test_bulk_import_reports_save_time_formatting_changes(): void {
+		// ARRANGE: Import content whose inline style is normalized by kses.
+		$author_id = self::factory()->user->create(
+			array( 'role' => 'author' )
+		);
+		wp_set_current_user( $author_id );
 
 		$session_id = $this->repository->create_session(
 			'https://source.example.com',
@@ -462,19 +605,20 @@ class Import_Sanitization_Test extends Integration_Test_Case {
 			$session_id
 		);
 
-		remove_filter( 'safe_publish_import_kses', '__return_true' );
-
-		// ASSERT: Import succeeded despite cosmetic changes.
-		$this->assertTrue( $result['success'] );
+		// ASSERT: Any persisted difference is reported.
+		$this->assertFalse( $result['success'] );
+		$this->assertStringContainsString( 'post content', $result['error'] );
 	}
 
 	/**
-	 * Verifies that bulk import strips script tags from excerpts when kses is
-	 * enabled via the safe_publish_import_kses filter.
+	 * Verifies that bulk import reports filtered excerpt content.
 	 */
-	public function test_bulk_import_sanitizes_excerpt(): void {
-		// ARRANGE: Enable kses, then import an excerpt with a script tag.
-		add_filter( 'safe_publish_import_kses', '__return_true' );
+	public function test_bulk_import_reports_filtered_excerpt(): void {
+		// ARRANGE: Import an excerpt with a script tag as a filtered user.
+		$author_id = self::factory()->user->create(
+			array( 'role' => 'author' )
+		);
+		wp_set_current_user( $author_id );
 
 		$session_id = $this->repository->create_session(
 			'https://source.example.com',
@@ -506,27 +650,19 @@ class Import_Sanitization_Test extends Integration_Test_Case {
 			$session_id
 		);
 
-		remove_filter( 'safe_publish_import_kses', '__return_true' );
-
-		// ASSERT: Import failed due to excerpt sanitization.
+		// ASSERT: Import failed because the persisted excerpt differs.
 		$this->assertFalse( $result['success'] );
 		$this->assertStringContainsString(
 			'excerpt',
 			$result['error']
 		);
-		$this->assertStringContainsString(
-			'<script>',
-			$result['error']
-		);
 	}
 
 	/**
-	 * Verifies that reimporting a post with kses enabled fails when the updated
-	 * content contains tags that kses would strip.
+	 * Verifies that a filtered update fails and restores the prior post.
 	 */
-	public function test_bulk_reimport_sanitizes_post_content(): void {
-		// ARRANGE: First import clean content, then reimport with a script tag
-		// while kses is enabled.
+	public function test_bulk_reimport_restores_post_after_filtering(): void {
+		// ARRANGE: First import clean content, then use a filtered acting user.
 		$session_id = $this->repository->create_session(
 			'https://source.example.com',
 			'bulk'
@@ -554,8 +690,11 @@ class Import_Sanitization_Test extends Integration_Test_Case {
 		);
 		$this->assertTrue( $first_result['success'] );
 
-		// ACT: Reimport with kses enabled and a script tag.
-		add_filter( 'safe_publish_import_kses', '__return_true' );
+		// ACT: Reimport with a script tag as a filtered user.
+		$author_id = self::factory()->user->create(
+			array( 'role' => 'author' )
+		);
+		wp_set_current_user( $author_id );
 
 		$dirty_content = '<p>Updated.</p>'
 			. '<script>alert("xss")</script>';
@@ -569,45 +708,178 @@ class Import_Sanitization_Test extends Integration_Test_Case {
 			$session_id
 		);
 
-		remove_filter( 'safe_publish_import_kses', '__return_true' );
-
-		// ASSERT: Reimport failed due to sanitization.
+		// ASSERT: Reimport failed and compensation restored the old content.
 		$this->assertFalse( $result['success'] );
 		$this->assertStringContainsString(
-			'modified by sanitization',
+			'WordPress filtered the requested post content',
 			$result['error']
+		);
+		$this->assertSame(
+			'<p>Clean content.</p>',
+			get_post( $first_result['post_id'] )->post_content
 		);
 	}
 
 	/**
-	 * Verifies that the safe_publish_import_kses_allowed_html filter lets
-	 * developers customize which tags are allowed when kses is enabled.
+	 * Verifies that a filtered compensation keeps the original error context.
 	 */
-	public function test_bulk_import_uses_custom_allowed_tags(): void {
-		// ARRANGE: Enable kses and add <iframe> to allowed tags.
-		add_filter( 'safe_publish_import_kses', '__return_true' );
-
-		$allow_iframes = static function ( array $allowed ): array {
-			$allowed['iframe'] = array(
-				'src'    => true,
-				'width'  => true,
-				'height' => true,
-			);
-			return $allowed;
-		};
-		add_filter(
-			'safe_publish_import_kses_allowed_html',
-			$allow_iframes
+	public function test_update_reports_filtered_compensation(): void {
+		// ARRANGE: Import content only an unfiltered user can save.
+		$session_id = $this->repository->create_session(
+			'https://source.example.com',
+			'bulk'
 		);
+		$post_data  = array(
+			'id'             => 8034,
+			'title'          => 'Compensation Test',
+			'content'        => '<p>Initial.</p>',
+			'link'           => 'https://source.example.com/compensation-test',
+			'featured_media' => 0,
+			'post_type'      => 'posts',
+			'excerpt'        => '',
+			'meta'           => array(),
+			'terms'          => array(),
+		);
+		$unsafe     = '<!-- wp:html --><iframe src="https://example.com/embed">'
+			. '</iframe><!-- /wp:html -->';
+
+		$this->mock_post_overrides = array( 'content' => $unsafe );
+		$first_result              = $this->import_service->import_post(
+			$post_data,
+			$session_id
+		);
+		$this->assertTrue( $first_result['success'] );
+
+		$author_id = self::factory()->user->create(
+			array( 'role' => 'author' )
+		);
+		wp_set_current_user( $author_id );
+		$this->mock_post_overrides = array(
+			'content' => '<p>Allowed replacement.</p>',
+			'meta'    => array( 'blocked_key' => 'new value' ),
+		);
+		$block_meta                = static function (
+			mixed $check,
+			int $_object_id,
+			string $meta_key
+		): mixed {
+			return 'blocked_key' === $meta_key ? false : $check;
+		};
+		add_filter( 'update_post_metadata', $block_meta, 10, 3 );
+
+		// ACT: Fail after the update, forcing filtered compensation.
+		$result = $this->import_service->import_post( $post_data, $session_id );
+
+		remove_filter( 'update_post_metadata', $block_meta, 10 );
+
+		// ASSERT: Both failures are clear and the post holds the filtered snapshot.
+		$this->assertFalse( $result['success'] );
+		$this->assertStringContainsString( 'blocked_key', $result['error'] );
+		$this->assertStringContainsString(
+			'failed update could not be fully reversed',
+			$result['error']
+		);
+		$this->assertStringContainsString(
+			'WordPress filtered the restored post content',
+			$result['error']
+		);
+		$this->assertSame(
+			'<!-- wp:html --><!-- /wp:html -->',
+			get_post( $first_result['post_id'] )->post_content
+		);
+	}
+
+	/**
+	 * Verifies that failed-update compensation reports surviving attachments.
+	 */
+	public function test_update_reports_vetoed_attachment_cleanup(): void {
+		// ARRANGE: Import a post, then fail its update after sideloading media.
+		$session_id                = $this->repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+		$post_data                 = array(
+			'id'             => 8035,
+			'title'          => 'Update Media Cleanup',
+			'content'        => '<p>Original.</p>',
+			'link'           => 'https://source.example.com/update-media-cleanup',
+			'featured_media' => 0,
+			'post_type'      => 'posts',
+			'excerpt'        => '',
+			'meta'           => array(),
+			'terms'          => array(),
+		);
+		$this->mock_post_overrides = array( 'content' => '<p>Original.</p>' );
+		$first_result              = $this->import_service->import_post(
+			$post_data,
+			$session_id
+		);
+		$this->assertTrue( $first_result['success'] );
+
+		$this->mock_post_overrides = array(
+			'content' => '<p><img src="https://source.example.com/'
+				. 'wp-content/uploads/2025/01/update-cleanup.jpg"></p>',
+			'meta'    => array( 'blocked_key' => 'new value' ),
+		);
+		$block_meta                = static function (
+			mixed $check,
+			int $_object_id,
+			string $meta_key
+		): mixed {
+			return 'blocked_key' === $meta_key ? false : $check;
+		};
+		$veto_delete               = static fn(): bool => false;
+		add_filter( 'update_post_metadata', $block_meta, 10, 3 );
+		add_filter( 'pre_delete_attachment', $veto_delete );
+		$this->add_image_byte_response_mock();
+
+		try {
+			// ACT: Fail the update while attachment deletion is vetoed.
+			$result = $this->import_service->import_post( $post_data, $session_id );
+		} finally {
+			$this->remove_image_byte_response_mock();
+			remove_filter( 'pre_delete_attachment', $veto_delete );
+			remove_filter( 'update_post_metadata', $block_meta, 10 );
+		}
+
+		// ASSERT: Original and cleanup failures plus recovery IDs are retained.
+		$this->assertFalse( $result['success'] );
+		$this->assertStringContainsString( 'blocked_key', $result['error'] );
+		$this->assertStringContainsString( 'attachment IDs', $result['error'] );
+		$this->assertCount( 1, $result['media_ids'] );
+		$this->assertNotNull( get_post( $result['media_ids'][0] ) );
+		$this->assertSame(
+			'<p>Original.</p>',
+			get_post( $first_result['post_id'] )->post_content
+		);
+
+		$items       = $this->repository->get_session_items( $session_id );
+		$stored_item = $this->repository->get_item(
+			(int) $items[ count( $items ) - 1 ]['id']
+		);
+		$this->assertNotNull( $stored_item );
+		$changes = History_Repository::decode_item_changes(
+			$stored_item['content_changes']
+		);
+		$this->assertSame( 'content_cleanup_failed', $changes['action'] );
+		$this->assertSame( $result['media_ids'], $changes['media_ids'] );
+		wp_delete_attachment( $result['media_ids'][0], true );
+	}
+
+	/**
+	 * Verifies that normal WordPress save filters run and are detected.
+	 */
+	public function test_bulk_import_runs_custom_save_filters(): void {
+		// ARRANGE: A site filter changes otherwise allowed content during save.
+		$filter = static fn( string $content ): string => $content . '<p>Filtered.</p>';
+		add_filter( 'content_save_pre', $filter );
 
 		$session_id = $this->repository->create_session(
 			'https://source.example.com',
 			'bulk'
 		);
 
-		$content = '<p>Watch this:</p>'
-			. '<iframe src="https://youtube.com/embed/abc"'
-			. ' width="560" height="315"></iframe>';
+		$content = '<p>Original.</p>';
 
 		$post_data = array(
 			'id'             => 8033,
@@ -631,19 +903,16 @@ class Import_Sanitization_Test extends Integration_Test_Case {
 			$session_id
 		);
 
-		remove_filter( 'safe_publish_import_kses', '__return_true' );
-		remove_filter(
-			'safe_publish_import_kses_allowed_html',
-			$allow_iframes
-		);
+		remove_filter( 'content_save_pre', $filter );
 
-		// ASSERT: Import succeeded — iframe is in the custom allowlist.
-		$this->assertTrue( $result['success'] );
-
-		$post = get_post( $result['post_id'] );
-		$this->assertStringContainsString(
-			'<iframe',
-			$post->post_content
+		// ASSERT: The save filter ran and the filtered post was removed.
+		$this->assertFalse( $result['success'] );
+		$this->assertStringContainsString( 'post content', $result['error'] );
+		$this->assertNull(
+			$this->import_service->find_imported_post(
+				8033,
+				'https://source.example.com'
+			)
 		);
 	}
 }
