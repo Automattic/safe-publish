@@ -9,6 +9,8 @@ declare(strict_types=1);
 
 namespace Safe_Publish\Admin;
 
+use Safe_Publish\Auth\Permissions;
+
 // Prevent direct access.
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
@@ -28,11 +30,14 @@ trait Verifies_Ajax_Request {
 	 *
 	 * Sends a 403 JSON error response and halts execution when the check fails.
 	 *
-	 * @param string $capability Required capability. Default 'manage_options'.
+	 * @param string|null $capability Required capability. Defaults to the Safe
+	 *                                Publish management capability.
 	 */
 	private function verify_ajax_capability(
-		string $capability = 'manage_options'
+		?string $capability = null
 	): void {
+		$capability ??= Permissions::manage_capability();
+
 		if ( ! current_user_can( $capability ) ) {
 			wp_send_json_error(
 				__( 'Forbidden', 'safe-publish' ),

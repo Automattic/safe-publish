@@ -9,6 +9,8 @@ declare(strict_types=1);
 
 namespace Safe_Publish\Admin;
 
+use Safe_Publish\Auth\Permissions;
+
 // Prevent direct access.
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
@@ -42,7 +44,7 @@ class Admin_Menu_Manager {
 		add_menu_page(
 			__( 'Manage', 'safe-publish' ),
 			__( 'Safe Publish', 'safe-publish' ),
-			'manage_options',
+			Permissions::manage_capability(),
 			'safe-publish',
 			array( $this, 'render_admin_page' ),
 			'dashicons-migrate',
@@ -54,7 +56,7 @@ class Admin_Menu_Manager {
 			'safe-publish',
 			__( 'Manage', 'safe-publish' ),
 			__( 'Manage', 'safe-publish' ),
-			'manage_options',
+			Permissions::manage_capability(),
 			'safe-publish',
 			array( $this, 'render_admin_page' )
 		);
@@ -70,7 +72,7 @@ class Admin_Menu_Manager {
 			'safe-publish',
 			__( 'Safe Publish Settings', 'safe-publish' ),
 			__( 'Settings', 'safe-publish' ),
-			'manage_options',
+			Permissions::manage_capability(),
 			'safe-publish-settings',
 			array( $this, 'render_settings_page' )
 		);
@@ -84,7 +86,7 @@ class Admin_Menu_Manager {
 	 * Renders the main admin page.
 	 */
 	public function render_admin_page(): void {
-		if ( ! current_user_can( 'manage_options' ) ) {
+		if ( ! current_user_can( Permissions::manage_capability() ) ) {
 			wp_die(
 				esc_html__(
 					'You do not have sufficient permissions to access this page.',
@@ -101,7 +103,7 @@ class Admin_Menu_Manager {
 	 * Renders the settings page.
 	 */
 	public function render_settings_page(): void {
-		if ( ! current_user_can( 'manage_options' ) ) {
+		if ( ! current_user_can( Permissions::manage_capability() ) ) {
 			wp_die(
 				esc_html__(
 					'You do not have sufficient permissions to access this page.',

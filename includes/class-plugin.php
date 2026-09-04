@@ -9,6 +9,8 @@ declare(strict_types=1);
 
 namespace Safe_Publish;
 
+use Safe_Publish\Auth\Permissions;
+
 use Safe_Publish\Admin\Admin_Ajax_Controller;
 use Safe_Publish\Admin\Attention_Issues_Repository;
 use Safe_Publish\Admin\Import_Mode_Admin_Handler;
@@ -161,6 +163,12 @@ final class Plugin {
 		);
 
 		add_action( 'admin_init', array( $this, 'register_settings' ) );
+		// WordPress options.php defaults Settings API saves to manage_options;
+		// keep them aligned with the centralized management capability resolver.
+		add_filter(
+			'option_page_capability_' . Options::SETTINGS_GROUP,
+			array( Permissions::class, 'manage_capability' )
+		);
 		add_filter(
 			'vip_pendo_allowed_screens',
 			array( $this, 'register_pendo_screens' )
@@ -408,7 +416,7 @@ final class Plugin {
 		add_menu_page(
 			__( 'Safe Publish', 'safe-publish' ),
 			__( 'Safe Publish', 'safe-publish' ),
-			'manage_options',
+			Permissions::manage_capability(),
 			'safe-publish-settings',
 			array( $this, 'render_settings_only_page' ),
 			'dashicons-migrate',
@@ -420,7 +428,7 @@ final class Plugin {
 	 * Renders the settings page for export-only and unconfigured modes.
 	 */
 	public function render_settings_only_page(): void {
-		if ( ! current_user_can( 'manage_options' ) ) {
+		if ( ! current_user_can( Permissions::manage_capability() ) ) {
 			wp_die(
 				esc_html__(
 					'You do not have sufficient permissions to access this page.',
