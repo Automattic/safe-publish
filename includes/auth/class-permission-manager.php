@@ -312,7 +312,7 @@ class Permission_Manager {
 			'delete_published_pages',
 			'read_private_pages',
 			'manage_categories',
-			'manage_options',
+			Permissions::manage_capability(),
 			'upload_files',
 			'edit_files',
 			'unfiltered_html',

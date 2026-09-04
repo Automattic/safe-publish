@@ -32,6 +32,27 @@ add_action( 'safe_publish_event_logged', function( string $channel, string $even
 
 ## Filters
 
+### `safe_publish_manage_capability`
+
+Filters the capability required for Safe Publish admin screens, AJAX handlers, management operations, and abilities. Default: `manage_options`.
+
+For per-post reads, callers lacking the resolved management capability require the post type's `edit_posts` capability, while `edit_post` is always required for the mapped local post. See the [capability contract](api.md#capability-contract).
+
+**Parameters:**
+
+- `string $capability`: management capability
+
+**Returns:** A non-empty `string`. Invalid values fall back to `manage_options`.
+
+**Example:**
+
+```php
+add_filter(
+    'safe_publish_manage_capability',
+    static fn( string $_capability ): string => 'edit_safe_publish'
+);
+```
+
 ### `safe_publish_request_timeout`
 
 Filter the HTTP request timeout in seconds for REST API requests. Default: `10`.

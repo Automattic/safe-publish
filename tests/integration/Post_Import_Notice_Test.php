@@ -52,8 +52,45 @@ class Post_Import_Notice_Test extends WP_UnitTestCase {
 	 */
 	#[\Override]
 	protected function tearDown(): void {
+		remove_filter(
+			'safe_publish_manage_capability',
+			array( self::class, 'use_edit_posts_capability' )
+		);
 		set_current_screen( 'front' );
 		parent::tearDown();
+	}
+
+	/**
+	 * Verifies that filtering the management capability changes the admin
+	 * screen guard without granting the default capability.
+	 */
+	public function test_filtered_capability_changes_admin_screen_guard(): void {
+		// ARRANGE: A subscriber with edit_posts but not manage_options.
+		$user = wp_get_current_user();
+		$user->set_role( 'subscriber' );
+		$user->add_cap( 'edit_posts' );
+		Post_Import_Notice::record( self::SESSION_ID, 2, 2, 0 );
+		$before_filter = $this->capture_notice();
+
+		// ACT: Make edit_posts the Safe Publish management capability.
+		add_filter(
+			'safe_publish_manage_capability',
+			array( self::class, 'use_edit_posts_capability' )
+		);
+		$after_filter = $this->capture_notice();
+
+		// ASSERT: The same user is denied by default and allowed when filtered.
+		$this->assertSame( '', $before_filter );
+		$this->assertStringContainsString( self::NOTICE_CLASS, $after_filter );
+	}
+
+	/**
+	 * Returns the alternate management capability used by focused tests.
+	 *
+	 * @return string Alternate management capability.
+	 */
+	public static function use_edit_posts_capability(): string {
+		return 'edit_posts';
 	}
 
 	/**

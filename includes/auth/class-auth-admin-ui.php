@@ -39,10 +39,11 @@ class Auth_Admin_UI {
 	/**
 	 * Renders the admin notice about authentication configuration status.
 	 *
-	 * Only displayed to administrators on the dashboard and plugins pages.
+	 * Only displayed to management-capability holders on the dashboard and
+	 * plugins pages.
 	 */
 	public function render_admin_notice(): void {
-		if ( ! current_user_can( 'manage_options' ) ) {
+		if ( ! current_user_can( Permissions::manage_capability() ) ) {
 			return;
 		}
 
@@ -163,7 +164,10 @@ class Auth_Admin_UI {
 	 * @return bool Show advanced plugins value, unchanged.
 	 */
 	public function enhance_mu_plugins_display( bool $show_advanced_plugins, string $type ): bool {
-		if ( 'mustuse' === $type && current_user_can( 'manage_options' ) ) {
+		if (
+			'mustuse' === $type
+			&& current_user_can( Permissions::manage_capability() )
+		) {
 			add_action( 'admin_footer', array( $this, 'add_mu_plugin_styles' ) );
 		}
 

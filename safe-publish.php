@@ -126,7 +126,11 @@ function safe_publish_has_curl_ssl(): bool {
  * Renders the admin notice shown when cURL with SSL is unavailable.
  */
 function safe_publish_curl_required_notice(): void {
-	if ( ! current_user_can( 'manage_options' ) ) {
+	if (
+		! current_user_can(
+			\Safe_Publish\Auth\Permissions::manage_capability()
+		)
+	) {
 		return;
 	}
 

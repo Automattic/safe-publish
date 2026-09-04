@@ -9,6 +9,8 @@ declare(strict_types=1);
 
 namespace Safe_Publish\Admin;
 
+use Safe_Publish\Auth\Permissions;
+
 use Safe_Publish\Utils\Audit_Log_Table;
 use Safe_Publish\Utils\Datetime_Sanitizer;
 
@@ -96,7 +98,7 @@ final class Audit_Log_Page {
 			'safe-publish',
 			__( 'Audit Log', 'safe-publish' ),
 			__( 'Audit Log', 'safe-publish' ),
-			'manage_options',
+			Permissions::manage_capability(),
 			self::PAGE_SLUG,
 			array( $this, 'render' )
 		);
@@ -111,7 +113,7 @@ final class Audit_Log_Page {
 			'safe-publish-settings',
 			__( 'Audit Log', 'safe-publish' ),
 			__( 'Audit Log', 'safe-publish' ),
-			'manage_options',
+			Permissions::manage_capability(),
 			self::PAGE_SLUG,
 			array( $this, 'render' )
 		);
@@ -121,7 +123,7 @@ final class Audit_Log_Page {
 	 * Renders the Audit Log admin page.
 	 */
 	public function render(): void {
-		if ( ! current_user_can( 'manage_options' ) ) {
+		if ( ! current_user_can( Permissions::manage_capability() ) ) {
 			wp_die(
 				esc_html__(
 					'You do not have sufficient permissions to access this page.',

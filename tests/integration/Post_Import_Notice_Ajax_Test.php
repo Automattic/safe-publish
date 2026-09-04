@@ -43,6 +43,18 @@ class Post_Import_Notice_Ajax_Test extends WP_Ajax_UnitTestCase {
 	}
 
 	/**
+	 * Removes the management capability filter between tests.
+	 */
+	#[\Override]
+	protected function tearDown(): void {
+		remove_filter(
+			'safe_publish_manage_capability',
+			array( self::class, 'use_edit_posts_capability' )
+		);
+		parent::tearDown();
+	}
+
+	/**
 	 * Verifies that dismissing clears the current user's recorded batch.
 	 */
 	public function test_dismiss_clears_the_recorded_batch(): void {
@@ -78,6 +90,42 @@ class Post_Import_Notice_Ajax_Test extends WP_Ajax_UnitTestCase {
 	}
 
 	/**
+	 * Verifies that filtering the management capability changes the AJAX guard
+	 * without granting the default capability.
+	 */
+	public function test_filtered_capability_changes_ajax_guard(): void {
+		// ARRANGE: A subscriber with edit_posts and a recorded batch.
+		$this->sign_in( 'subscriber' );
+		wp_get_current_user()->add_cap( 'edit_posts' );
+		Post_Import_Notice::record( 42, 2, 2, 0 );
+		$this->assertFalse( current_user_can( 'manage_options' ) );
+
+		// ACT: Attempt dismissal before and after filtering the capability.
+		$denied_response    = $this->dismiss();
+		$batch_after_denial = $this->recorded_batch();
+		add_filter(
+			'safe_publish_manage_capability',
+			array( self::class, 'use_edit_posts_capability' )
+		);
+		$allowed_response = $this->dismiss();
+
+		// ASSERT: Only the filtered capability allows and clears the batch.
+		$this->assertFalse( $denied_response['success'] );
+		$this->assertIsArray( $batch_after_denial );
+		$this->assertTrue( $allowed_response['success'] );
+		$this->assertFalse( $this->recorded_batch() );
+	}
+
+	/**
+	 * Returns the alternate management capability used by focused tests.
+	 *
+	 * @return string Alternate management capability.
+	 */
+	public static function use_edit_posts_capability(): string {
+		return 'edit_posts';
+	}
+
+	/**
 	 * Signs in a new user with the given role.
 	 *
 	 * @param string $role Role to create the user with.
@@ -103,7 +151,8 @@ class Post_Import_Notice_Ajax_Test extends WP_Ajax_UnitTestCase {
 	 * @return array Decoded response.
 	 */
 	private function dismiss(): array {
-		$_POST = array( 'nonce' => wp_create_nonce( 'safe_publish_ajax_nonce' ) );
+		$_POST                = array( 'nonce' => wp_create_nonce( 'safe_publish_ajax_nonce' ) );
+		$this->_last_response = '';
 
 		$this->dispatch_ajax_expecting_die( self::ACTION );
 

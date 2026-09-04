@@ -80,12 +80,12 @@ The integration handles creating and setting the shared secret that secures the 
 
 ## Roles and permissions
 
-Access to every Safe Publish admin screen — browsing source content, importing, reviewing imports and exports, and rolling back — requires the `manage_options` capability. In a default WordPress installation, only administrators have this capability.
+Access to every Safe Publish admin screen, including browsing source content, importing, reviewing imports and exports, and rolling back, requires the capability returned by `Safe_Publish\Auth\Permissions::manage_capability()`. It defaults to `manage_options`, which only administrators have in a default WordPress installation, and can be changed with the `safe_publish_manage_capability` filter. Safe Publish management operations and future abilities must use this resolver instead of a capability literal.
 
 Two further checks apply during an import:
 
 - Updating an existing post requires the `edit_post` capability for that specific post.
-- Comparing an existing post with its source requires the `edit_post` capability for that post. A direct API caller without `manage_options` must also have the post type's `edit_posts` capability.
+- Comparing an existing post with its source requires the `edit_post` capability for that post. A direct API caller without the resolved management capability must also have the post type's `edit_posts` capability. These content-level checks are deliberately separate from management access.
 
 Requests from the destination to the source site are not authorized by user capabilities. Instead, each cross-site request is authenticated with the shared secret.
 

@@ -2,13 +2,19 @@
 
 Safe Publish provides REST API endpoints for programmatic access. This guide explains how to use and extend the API.
 
+## Capability contract
+
+Admin screens, AJAX handlers, management operations, and future abilities must use `Safe_Publish\Auth\Permissions::manage_capability()` instead of a capability literal. The resolver defaults to `manage_options` and is filterable with `safe_publish_manage_capability`.
+
+Per-post reads have a separate authorization contract. A direct caller of the diff-preview endpoint who lacks the resolved management capability must have the post type's `edit_posts` capability, and the mapped local post is always checked with `edit_post`.
+
 ## API Endpoints
 
 The plugin registers endpoints under the `safe-publish/v1` namespace.
 
 ### Content Endpoints
 
-Require a WordPress user with the `edit_posts` capability, and `edit_post` for the target post.
+Require either the resolved management capability or the post type's `edit_posts` capability, and always require `edit_post` for the target post.
 
 | Method | Endpoint | Description |
 | --- | --- | --- |
@@ -55,7 +61,9 @@ add_action( 'rest_api_init', function() {
         'methods' => 'POST',
         'callback' => 'safe_publish_custom_action_handler',
         'permission_callback' => function() {
-            return current_user_can( 'manage_options' );
+            return current_user_can(
+                \Safe_Publish\Auth\Permissions::manage_capability()
+            );
         },
         'args' => [
             'post_id' => [
@@ -134,7 +142,9 @@ Standard error responses:
 
 ```php
 'permission_callback' => function() {
-    return current_user_can( 'manage_options' );
+    return current_user_can(
+        \Safe_Publish\Auth\Permissions::manage_capability()
+    );
 }
 ```
 
