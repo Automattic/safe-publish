@@ -28,6 +28,32 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 final class Audit_Log_Page {
 
+	/**
+	 * Registers the Audit Log as the sole top-level page for audit-only users.
+	 *
+	 * @return bool Whether the Audit Log replaced the management menu.
+	 */
+	public static function maybe_add_top_level_page(): bool {
+		if (
+			current_user_can( Permissions::manage_capability() )
+			|| ! current_user_can( Permissions::view_audit_log_capability() )
+		) {
+			return false;
+		}
+
+		add_menu_page(
+			__( 'Audit Log', 'safe-publish' ),
+			__( 'Safe Publish', 'safe-publish' ),
+			Permissions::view_audit_log_capability(),
+			self::PAGE_SLUG,
+			array( new self(), 'render' ),
+			'dashicons-migrate',
+			99
+		);
+
+		return true;
+	}
+
 	use Verifies_Ajax_Request;
 
 	/**
@@ -94,11 +120,15 @@ final class Audit_Log_Page {
 	 * Adds the Audit Log submenu under the safe-publish parent.
 	 */
 	public function add_submenu_page(): void {
+		if ( ! current_user_can( Permissions::manage_capability() ) ) {
+			return;
+		}
+
 		add_submenu_page(
 			'safe-publish',
 			__( 'Audit Log', 'safe-publish' ),
 			__( 'Audit Log', 'safe-publish' ),
-			Permissions::manage_capability(),
+			Permissions::view_audit_log_capability(),
 			self::PAGE_SLUG,
 			array( $this, 'render' )
 		);
@@ -109,11 +139,15 @@ final class Audit_Log_Page {
 	 * the export-only/unconfigured modes.
 	 */
 	public function add_submenu_page_settings(): void {
+		if ( ! current_user_can( Permissions::manage_capability() ) ) {
+			return;
+		}
+
 		add_submenu_page(
 			'safe-publish-settings',
 			__( 'Audit Log', 'safe-publish' ),
 			__( 'Audit Log', 'safe-publish' ),
-			Permissions::manage_capability(),
+			Permissions::view_audit_log_capability(),
 			self::PAGE_SLUG,
 			array( $this, 'render' )
 		);
@@ -123,7 +157,7 @@ final class Audit_Log_Page {
 	 * Renders the Audit Log admin page.
 	 */
 	public function render(): void {
-		if ( ! current_user_can( Permissions::manage_capability() ) ) {
+		if ( ! current_user_can( Permissions::view_audit_log_capability() ) ) {
 			wp_die(
 				esc_html__(
 					'You do not have sufficient permissions to access this page.',
@@ -157,7 +191,10 @@ final class Audit_Log_Page {
 	 * @param string $hook_suffix Current admin page hook suffix.
 	 */
 	public function maybe_enqueue_assets( string $hook_suffix ): void {
-		if ( 'safe-publish_page_' . self::PAGE_SLUG !== $hook_suffix ) {
+		if (
+			'safe-publish_page_' . self::PAGE_SLUG !== $hook_suffix
+			&& 'toplevel_page_' . self::PAGE_SLUG !== $hook_suffix
+		) {
 			return;
 		}
 
@@ -199,7 +236,7 @@ final class Audit_Log_Page {
 	 */
 	public function ajax_get_audit_events(): void {
 		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
-		$this->verify_ajax_capability();
+		$this->verify_ajax_capability( Permissions::view_audit_log_capability() );
 
 		// phpcs:disable WordPress.Security.NonceVerification.Missing -- nonce checked above.
 		$query_args = $this->build_query_args( $_POST );

@@ -556,7 +556,7 @@ final class Admin_Ajax_Controller {
 		if ( ! check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce', false ) ) {
 			$this->send_session_expired_error();
 		}
-		$this->verify_ajax_capability( 'edit_posts' );
+		$this->verify_ajax_capability();
 
 		// phpcs:disable WordPress.Security.NonceVerification.Missing
 		$affected_post_id = absint( $_POST['affected_post_id'] ?? 0 );
@@ -610,14 +610,14 @@ final class Admin_Ajax_Controller {
 
 	/**
 	 * Retries a batch of degradations, serializing dispatch_retry over each and
-	 * aggregating the outcomes. Gated at edit_posts like the single retry;
-	 * over-cap batches are rejected, matching the other bulk handlers.
+	 * aggregating the outcomes. Safe Publish management access gates both the
+	 * single and bulk retry handlers.
 	 */
 	public function ajax_bulk_retry_attention_issues(): void {
 		if ( ! check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce', false ) ) {
 			$this->send_session_expired_error();
 		}
-		$this->verify_ajax_capability( 'edit_posts' );
+		$this->verify_ajax_capability();
 
 		// phpcs:disable WordPress.Security.NonceVerification.Missing
 		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- JSON decoded and each field sanitized in validate_retry_descriptor().
@@ -1662,7 +1662,7 @@ final class Admin_Ajax_Controller {
 		if ( ! check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce', false ) ) {
 			$this->send_session_expired_error();
 		}
-		$this->verify_ajax_capability( 'edit_posts' );
+		$this->verify_ajax_capability();
 
 		$this->validate_auth_or_fail();
 		$this->validate_connection_or_fail();
@@ -1789,7 +1789,7 @@ final class Admin_Ajax_Controller {
 		if ( ! check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce', false ) ) {
 			$this->send_session_expired_error();
 		}
-		$this->verify_ajax_capability( 'edit_posts' );
+		$this->verify_ajax_capability();
 
 		$this->validate_auth_or_fail();
 		$this->validate_connection_or_fail();
@@ -1963,7 +1963,7 @@ final class Admin_Ajax_Controller {
 		if ( ! check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce', false ) ) {
 			$this->send_session_expired_error();
 		}
-		$this->verify_ajax_capability( 'delete_posts' );
+		$this->verify_ajax_capability();
 
 		$post_id = absint( $_POST['post_id'] ?? 0 );
 
@@ -2014,7 +2014,7 @@ final class Admin_Ajax_Controller {
 		if ( ! check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce', false ) ) {
 			$this->send_session_expired_error();
 		}
-		$this->verify_ajax_capability( 'delete_posts' );
+		$this->verify_ajax_capability();
 
 		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- each element is downstream-sanitized via absint().
 		$raw_ids = (array) wp_unslash( $_POST['post_ids'] ?? array() );
@@ -2103,7 +2103,7 @@ final class Admin_Ajax_Controller {
 		if ( ! check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce', false ) ) {
 			$this->send_session_expired_error();
 		}
-		$this->verify_ajax_capability( 'edit_posts' );
+		$this->verify_ajax_capability();
 
 		$this->validate_auth_or_fail();
 

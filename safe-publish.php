@@ -92,6 +92,8 @@ add_action( 'plugins_loaded', 'safe_publish_init_plugin' );
 function safe_publish_init_plugin(): void {
 	global $safe_publish_plugin;
 
+	\Safe_Publish\Auth\Capability_Manager::init();
+
 	// Load text domain.
 	load_plugin_textdomain( 'safe-publish', false, dirname( plugin_basename( __FILE__ ) ) . '/languages' );
 
@@ -158,6 +160,7 @@ function safe_publish_activation(): void {
 	\Safe_Publish\Utils\Imports_Table::create_table();
 	\Safe_Publish\Utils\Import_Items_Table::create_table();
 	\Safe_Publish\Utils\Attention_Issues_Table::create_table();
+	\Safe_Publish\Auth\Capability_Manager::install();
 
 	// Set default options.
 	if ( false === get_option( 'safe_publish_connected_site_url' ) ) {

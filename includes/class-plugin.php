@@ -195,9 +195,10 @@ final class Plugin {
 	 * full list. The "Source Posts" submenu reuses the `safe-publish` slug, so
 	 * it shares the top-level hook suffix and needs no separate entry. The
 	 * Audit Log submenu resolves to `safe-publish_page_safe-publish-audit-log`
-	 * in both modes because WordPress builds the suffix from the sanitized
-	 * parent menu title ("Safe Publish"), not the parent slug. Screens absent
-	 * in the active mode simply never match the current hook suffix.
+	 * because WordPress builds the suffix from the sanitized parent menu title
+	 * ("Safe Publish"), not the parent slug. For audit-only users it is a
+	 * top-level page instead. Screens absent for the user simply never match the
+	 * current hook suffix.
 	 *
 	 * @param string[] $allowed_screens Hook suffixes where Pendo is enabled.
 	 * @return string[] Filtered list including the plugin's admin screens.
@@ -208,6 +209,7 @@ final class Plugin {
 			array(
 				'toplevel_page_safe-publish',
 				'toplevel_page_safe-publish-settings',
+				'toplevel_page_safe-publish-audit-log',
 				'safe-publish_page_safe-publish-settings',
 				'safe-publish_page_safe-publish-audit-log',
 			)
@@ -413,6 +415,10 @@ final class Plugin {
 	 * redirect always lands on a registered page regardless of sync mode.
 	 */
 	public function add_settings_only_admin_menu(): void {
+		if ( Audit_Log_Page::maybe_add_top_level_page() ) {
+			return;
+		}
+
 		add_menu_page(
 			__( 'Safe Publish', 'safe-publish' ),
 			__( 'Safe Publish', 'safe-publish' ),
