@@ -80,12 +80,31 @@ The integration handles creating and setting the shared secret that secures the 
 
 ## Roles and permissions
 
-Access to every Safe Publish admin screen, including browsing source content, importing, reviewing imports and exports, and rolling back, requires the capability returned by `Safe_Publish\Auth\Permissions::manage_capability()`. It defaults to `manage_options`, which only administrators have in a default WordPress installation, and can be changed with the `safe_publish_manage_capability` filter. Safe Publish management operations and future abilities must use this resolver instead of a capability literal.
+Safe Publish management screens, including browsing source content, importing, and rolling back, require `manage_safe_publish` by default. Existing users with `manage_options` retain access for backward compatibility. Safe Publish grants its capabilities to the Administrator role on each enabled site during activation or upgrade. On multisite, super administrators retain access through WordPress' normal capability handling.
 
-Two further checks apply during an import:
+The narrower `view_safe_publish_audit_log` capability provides read-only Audit Log access. The resolved management capability implies Audit Log access, while an audit-only user cannot reach management screens or actions. If `safe_publish_manage_capability` returns another capability, that deliberately configured capability provides management and implied audit access instead; the default capabilities do not override it.
 
-- Updating an existing post requires the `edit_post` capability for that specific post.
-- Comparing an existing post with its source requires the `edit_post` capability for that post. A direct API caller without the resolved management capability must also have the post type's `edit_posts` capability. These content-level checks are deliberately separate from management access.
+### Granting access without Administrator
+
+Assign the capabilities through your role-management code or permissions plugin. This example gives an existing custom role management access while preserving that role's content permissions:
+
+```php
+register_activation_hook( __FILE__, static function (): void {
+    $role = get_role( 'content_operator' );
+
+    if ( null !== $role ) {
+        $role->add_cap( 'manage_safe_publish' );
+    }
+} );
+```
+
+Run equivalent code once during deployment if your role-management layer does not use plugin activation hooks. WordPress persists role capability changes, so an `init` hook is unnecessary, and removing this snippet later does not revoke the grant. Call `$role->remove_cap()` explicitly to revoke it.
+
+Grant `view_safe_publish_audit_log` instead for an audit-only role. These capabilities are per-site role grants on multisite, so grant them only on sites where that role needs Safe Publish access. VIP custom roles use the same WordPress capability map and do not require a Safe Publish-specific integration.
+
+The `safe_publish_manage_capability` filter remains available for installations that map management access to another capability. Returning another capability replaces the default management contract.
+
+Safe Publish does not assign WordPress content, taxonomy, or media capabilities to custom roles. Site owners remain responsible for those grants. Errors returned by the underlying import or rollback operations are surfaced to the user. Comparing an existing post with its source separately requires `edit_post` for that post; a direct API caller without management access must also have the post type's `edit_posts` capability.
 
 Requests from the destination to the source site are not authorized by user capabilities. Instead, each cross-site request is authenticated with the shared secret.
 

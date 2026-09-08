@@ -41,6 +41,9 @@ jobs:
       - name: Install Node dependencies
         run: npm ci --ignore-scripts
 
+      - name: Build plugin assets
+        run: npm run build
+
       - name: Configure WordPress environment
         run: |
           printf '{"core":"%s","phpVersion":"%s"}\n' \

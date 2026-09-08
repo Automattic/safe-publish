@@ -20,12 +20,22 @@ namespace Safe_Publish\Auth;
 final class Permissions {
 
 	/**
+	 * Capability for Safe Publish management access.
+	 */
+	public const MANAGE_CAPABILITY = 'manage_safe_publish';
+
+	/**
+	 * Capability for read-only Audit Log access.
+	 */
+	public const VIEW_AUDIT_LOG_CAPABILITY = 'view_safe_publish_audit_log';
+
+	/**
 	 * Returns the capability required for Safe Publish management operations.
 	 *
 	 * @return string Management capability.
 	 */
 	public static function manage_capability(): string {
-		$default = 'manage_options';
+		$default = self::MANAGE_CAPABILITY;
 
 		/**
 		 * Filters the capability required for Safe Publish management operations.
@@ -41,5 +51,14 @@ final class Permissions {
 		return is_string( $capability ) && '' !== $capability
 			? $capability
 			: $default;
+	}
+
+	/**
+	 * Returns the capability required to read the Safe Publish Audit Log.
+	 *
+	 * @return string Audit Log capability.
+	 */
+	public static function view_audit_log_capability(): string {
+		return self::VIEW_AUDIT_LOG_CAPABILITY;
 	}
 }

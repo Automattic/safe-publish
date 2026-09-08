@@ -9,7 +9,10 @@ declare(strict_types=1);
 
 namespace Safe_Publish\Tests\Integration;
 
+use Safe_Publish\Admin\Admin_Menu_Manager;
 use Safe_Publish\Admin\Audit_Log_Page;
+use Safe_Publish\Auth\Permissions;
+use Safe_Publish\Plugin;
 use Safe_Publish\Tests\Integration\Ajax_Die_Continue_Trait;
 use Safe_Publish\Utils\Audit_Log_Table;
 use WP_Ajax_UnitTestCase;
@@ -213,6 +216,110 @@ class Audit_Log_Page_Test extends WP_Ajax_UnitTestCase {
 		// ASSERT: The request is refused.
 		$response = json_decode( $this->_last_response, true );
 		$this->assertFalse( $response['success'] );
+	}
+
+	/**
+	 * Verifies that an audit-only user can read events over AJAX.
+	 */
+	public function test_audit_only_user_can_read_events(): void {
+		// ARRANGE: An audit event and a subscriber with only the read capability.
+		Audit_Log_Table::insert(
+			'auth',
+			'info',
+			'AUDIT_ONLY',
+			'2026-03-01 10:00:00',
+			array()
+		);
+		$user_id = $this->factory()->user->create( array( 'role' => 'subscriber' ) );
+		$user    = get_user_by( 'id', $user_id );
+		$user->add_cap( Permissions::VIEW_AUDIT_LOG_CAPABILITY );
+		wp_set_current_user( $user_id );
+		$_POST = array(
+			'nonce' => wp_create_nonce( 'safe_publish_ajax_nonce' ),
+		);
+
+		// ACT: Dispatch the audit-events AJAX request.
+		$this->dispatch_ajax_expecting_die( 'safe_publish_get_audit_events' );
+
+		// ASSERT: The narrower capability exposes only the requested audit data.
+		$response = json_decode( $this->_last_response, true );
+		$this->assertTrue( $response['success'] );
+		$this->assertSame( 1, $response['data']['total'] );
+		$this->assertSame( 'AUDIT_ONLY', $response['data']['items'][0]['event'] );
+	}
+
+	/**
+	 * Verifies audit-only and legacy management navigation.
+	 */
+	public function test_navigation_matches_audit_only_and_legacy_management_access(): void {
+		// ARRANGE: An audit-only user and isolated admin-menu globals.
+		$user_id = $this->factory()->user->create( array( 'role' => 'subscriber' ) );
+		( new \WP_User( $user_id ) )->add_cap(
+			Permissions::VIEW_AUDIT_LOG_CAPABILITY
+		);
+		wp_set_current_user( $user_id );
+		global $menu, $submenu, $_registered_pages;
+		$original_menu             = $menu;
+		$original_submenu          = $submenu;
+		$original_registered_pages = $_registered_pages;
+
+		// phpcs:disable WordPress.WP.GlobalVariablesOverride.Prohibited -- Isolated menu-registration test restored in finally.
+		try {
+			$modes = array(
+				'import'        => static function (): void {
+					( new Admin_Menu_Manager() )->add_admin_menu();
+				},
+				'settings-only' => static function (): void {
+					( new Plugin() )->add_settings_only_admin_menu();
+				},
+			);
+
+			foreach ( $modes as $mode => $register ) {
+				$menu              = array();
+				$submenu           = array();
+				$_registered_pages = array();
+
+				// ACT: Register this mode's top-level navigation.
+				$register();
+
+				// ASSERT: Only the audit page is exposed with its top-level suffix.
+				$this->assertCount( 1, $menu, $mode );
+				$entry = reset( $menu );
+				$this->assertIsArray( $entry, $mode );
+				$this->assertSame( Audit_Log_Page::PAGE_SLUG, $entry[2], $mode );
+				$this->assertSame(
+					Permissions::VIEW_AUDIT_LOG_CAPABILITY,
+					$entry[1],
+					$mode
+				);
+			}
+			( new Audit_Log_Page() )->maybe_enqueue_assets(
+				'toplevel_page_' . Audit_Log_Page::PAGE_SLUG
+			);
+			$this->assertTrue( wp_script_is( 'safe-publish-audit-log-script', 'enqueued' ) );
+			$this->assertTrue( wp_style_is( 'safe-publish-audit-log-style', 'enqueued' ) );
+
+			// ACT: Register the import menu for a legacy direct grant.
+			$legacy_user_id = $this->factory()->user->create(
+				array( 'role' => 'subscriber' )
+			);
+			( new \WP_User( $legacy_user_id ) )->add_cap( 'manage_options' );
+			wp_set_current_user( $legacy_user_id );
+			$menu              = array();
+			$submenu           = array();
+			$_registered_pages = array();
+			( new Admin_Menu_Manager() )->add_admin_menu();
+
+			// ASSERT: Legacy management opens the full Safe Publish menu.
+			$entry = reset( $menu );
+			$this->assertIsArray( $entry );
+			$this->assertSame( 'safe-publish', $entry[2] );
+		} finally {
+			$menu              = $original_menu;
+			$submenu           = $original_submenu;
+			$_registered_pages = $original_registered_pages;
+		}
+		// phpcs:enable WordPress.WP.GlobalVariablesOverride.Prohibited
 	}
 
 	/**

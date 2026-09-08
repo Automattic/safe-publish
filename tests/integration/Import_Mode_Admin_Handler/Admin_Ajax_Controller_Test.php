@@ -12,6 +12,7 @@ namespace Safe_Publish\Tests\Integration\Import_Mode_Admin_Handler;
 use Safe_Publish\Admin\Admin_Ajax_Controller;
 use Safe_Publish\Admin\History_Repository;
 use Safe_Publish\Auth\VIP_Safe_Auth;
+use Safe_Publish\Auth\Permissions;
 use Safe_Publish\API\Source_Post_Type_Resolver;
 use Safe_Publish\Tests\Integration\Ajax_Die_Continue_Trait;
 use Safe_Publish\Tests\Integration\Mock_Media_HTTP_Trait;
@@ -126,7 +127,7 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 		if ( str_contains( $url, '/catalog/post-types' ) ) {
 			return \_safe_publish_test_catalog_response();
 		}
-		if ( ! preg_match( '#/wp-json/wp/v2/posts/\d+#', $url ) ) {
+		if ( ! preg_match( '#/wp-json/wp/v2/[^/]+/\d+#', $url ) ) {
 			return $preempt;
 		}
 
@@ -307,6 +308,31 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 	}
 
 	/**
+	 * Verifies that edit_posts alone cannot call the bulk import endpoint.
+	 */
+	public function test_ajax_bulk_import_requires_management_capability(): void {
+		// ARRANGE: An editor can edit content but cannot manage Safe Publish.
+		$editor_id = $this->factory()->user->create( array( 'role' => 'editor' ) );
+		$editor    = get_user_by( 'id', $editor_id );
+		$editor->add_cap( Permissions::VIEW_AUDIT_LOG_CAPABILITY );
+		wp_set_current_user( $editor_id );
+		$this->assertTrue( current_user_can( 'edit_posts' ) );
+		$this->assertFalse( current_user_can( Permissions::manage_capability() ) );
+		$_POST = array(
+			'nonce'      => wp_create_nonce( 'safe_publish_ajax_nonce' ),
+			'posts_data' => wp_json_encode( array( array( 'id' => 9001 ) ) ),
+		);
+
+		// ACT: Call the bulk endpoint directly, bypassing the hidden menu.
+		$this->dispatch_ajax_expecting_die( 'safe_publish_bulk_import' );
+
+		// ASSERT: Management remains an independent required gate.
+		$response = json_decode( $this->_last_response, true );
+		$this->assertFalse( $response['success'] );
+		$this->assertSame( 'Forbidden', $response['data'] );
+	}
+
+	/**
 	 * Verifies that the bulk import endpoint imports a post and returns a JSON
 	 * success response.
 	 */
@@ -378,10 +404,9 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 	}
 
 	/**
-	 * Verifies that the create draft endpoint rejects users without edit_posts
-	 * capability.
+	 * Verifies that the create draft endpoint rejects users without management.
 	 */
-	public function test_ajax_create_draft_rejects_request_without_edit_posts_capability(): void {
+	public function test_ajax_create_draft_rejects_request_without_management(): void {
 		// ARRANGE: Authenticate as subscriber who cannot edit posts.
 		$subscriber_id = $this->factory()->user->create(
 			array( 'role' => 'subscriber' )
@@ -396,14 +421,14 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 		// ACT: Trigger the create draft AJAX handler.
 		$this->dispatch_ajax_expecting_die( 'safe_publish_create_draft' );
 
-		// ASSERT: Response is a JSON failure delivered by the capability guard.
+		// ASSERT: Response is a JSON failure delivered by the management guard.
 		$response = json_decode( $this->_last_response, true );
 		$this->assertIsArray( $response, 'Response should be a JSON object' );
 		$this->assertFalse( $response['success'], 'Subscriber should be denied' );
 		$this->assertSame(
 			'Forbidden',
 			$response['data'],
-			'Capability rejection should return the Forbidden error from verify_ajax_capability()'
+			'Management rejection should return the boundary error.'
 		);
 	}
 
@@ -2144,6 +2169,45 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 
 
 	/**
+	 * Verifies that delete honors a custom post type's mapped capability.
+	 */
+	public function test_ajax_delete_post_allows_custom_post_type_role(): void {
+		// ARRANGE: A manager may delete their CPT posts but lacks delete_posts.
+		$this->register_capability_test_post_type( 'sp_record' );
+
+		try {
+			$user_id = $this->create_capability_test_operator(
+				'sp_record',
+				array( 'delete_posts' )
+			);
+			$post_id = $this->factory()->post->create(
+				array(
+					'post_author' => $user_id,
+					'post_status' => 'draft',
+					'post_type'   => 'sp_record',
+				)
+			);
+			update_post_meta( $post_id, Options::META_SOURCE_POST_ID, '9301' );
+			wp_set_current_user( $user_id );
+			$_POST = array(
+				'nonce'   => wp_create_nonce( 'safe_publish_ajax_nonce' ),
+				'post_id' => (string) $post_id,
+			);
+
+			// ACT: Delete through the single AJAX endpoint.
+			$this->dispatch_ajax_expecting_die( 'safe_publish_delete_post' );
+
+			// ASSERT: The custom delete capability allows the target mutation.
+			$response = json_decode( $this->_last_response, true );
+			$this->assertTrue( $response['success'] );
+			$this->assertSame( 'trash', get_post_status( $post_id ) );
+			$this->assertFalse( current_user_can( 'delete_posts' ) );
+		} finally {
+			unregister_post_type( 'sp_record' );
+		}
+	}
+
+	/**
 	 * Verifies that the bulk-delete-posts endpoint trashes only the
 	 * requested imported posts and reports the count.
 	 */
@@ -2376,5 +2440,52 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 			"SELECT COUNT(*) FROM `{$table}`"
 		);
 		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+	}
+
+	/**
+	 * Registers a test post type with its own primitive capabilities.
+	 *
+	 * @param string $post_type Post type slug.
+	 */
+	private function register_capability_test_post_type( string $post_type ): void {
+		register_post_type(
+			$post_type,
+			array(
+				'public'          => true,
+				'show_in_rest'    => true,
+				'capability_type' => array( $post_type, $post_type . 's' ),
+				'map_meta_cap'    => true,
+			)
+		);
+	}
+
+	/**
+	 * Creates a manager with selected post type capabilities.
+	 *
+	 * @param string   $post_type        Post type slug.
+	 * @param string[] $capability_names WP_Post_Type capability property names.
+	 * @return int User ID.
+	 */
+	private function create_capability_test_operator(
+		string $post_type,
+		array $capability_names
+	): int {
+		$user_id = $this->factory()->user->create(
+			array( 'role' => 'subscriber' )
+		);
+		$this->assertIsInt( $user_id );
+		$user             = get_user_by( 'id', $user_id );
+		$post_type_object = get_post_type_object( $post_type );
+		$this->assertNotFalse( $user );
+		$this->assertNotNull( $post_type_object );
+		$user->add_cap( Permissions::MANAGE_CAPABILITY );
+
+		foreach ( $capability_names as $name ) {
+			$capability = $post_type_object->cap->{$name};
+			assert( is_string( $capability ) );
+			$user->add_cap( $capability );
+		}
+
+		return $user_id;
 	}
 }
