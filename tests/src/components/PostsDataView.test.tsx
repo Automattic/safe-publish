@@ -109,6 +109,7 @@ function searchInput(): HTMLInputElement {
 beforeEach( () => {
 	selector.error = null;
 	dataViews.props = null;
+	window.history.replaceState( null, '', '/' );
 
 	// The destination host is the localized home_url(), distinct from both the
 	// source host and happy-dom's window.location.origin.
@@ -241,6 +242,23 @@ describe( 'PostsDataView fields', () => {
 } );
 
 describe( 'PostsDataView URL search routing', () => {
+	it( 'Verifies that the obsolete focus source parameter is ignored', async () => {
+		// ARRANGE: Open the listing with the removed deep-link parameter.
+		window.history.replaceState( null, '', '/?focus_source=960' );
+
+		// ACT: Mount the listing and wait for its request.
+		render( <PostsDataView sourceSiteUrl={ SOURCE_URL } /> );
+		await waitFor( () => expect( fetchMock ).toHaveBeenCalled() );
+
+		// ASSERT: No focus input is forwarded to the listing endpoint.
+		const bodies = fetchMock.mock.calls.map(
+			( call ) => ( call[ 1 ] as { body: FormData } ).body
+		);
+		expect(
+			bodies.some( ( body ) => body.has( 'focus_source_id' ) )
+		).toBe( false );
+	} );
+
 	it( 'should hint to switch chips when a destination link is pasted on a catalog-primary chip', async () => {
 		// ARRANGE: Mount on the default All chip (catalog-primary).
 		render( <PostsDataView sourceSiteUrl={ SOURCE_URL } /> );

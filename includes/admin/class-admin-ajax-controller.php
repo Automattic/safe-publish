@@ -259,8 +259,6 @@ final class Admin_Ajax_Controller {
 	 * 'all'/'available' are catalog-primary (catalog fetch annotated with
 	 * local data). 'up-to-date'/'outdated' are local-primary (items aggregated
 	 * by source_post_id, merged with source data via include=).
-	 * `focus_source_id` resolves to a concrete state echoed back in
-	 * `focused_state` so the frontend can swap its chip in one render.
 	 */
 	public function ajax_list_posts(): void {
 		if ( ! check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce', false ) ) {
@@ -273,8 +271,7 @@ final class Admin_Ajax_Controller {
 			wp_unslash( $_POST['source_site_url'] ?? '' )
 		);
 		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- allowlisted to a small enum by sanitize_state.
-		$requested_state            = self::sanitize_state( $_POST['state'] ?? 'all' );
-		$focus_source_id            = absint( $_POST['focus_source_id'] ?? 0 );
+		$state                      = self::sanitize_state( $_POST['state'] ?? 'all' );
 		$with_needs_attention_count = 1 === absint(
 			$_POST['with_needs_attention_count'] ?? 0
 		);
@@ -282,18 +279,6 @@ final class Admin_Ajax_Controller {
 
 		if ( '' === $source_site_url ) {
 			wp_send_json_error( __( 'Source site URL is required.', 'safe-publish' ) );
-		}
-
-		$focused_state = null;
-		$state         = $requested_state;
-		if ( $focus_source_id > 0 ) {
-			$focused_state = $this->repository->resolve_source_post_state(
-				Options::get_connected_site_url_with_path(),
-				$focus_source_id
-			);
-			if ( 'all' !== $state && $focused_state !== $state ) {
-				$state = $focused_state;
-			}
 		}
 
 		if ( in_array( $state, array( 'all', 'available' ), true ) ) {
@@ -307,10 +292,6 @@ final class Admin_Ajax_Controller {
 		}
 
 		$payload['state'] = $state;
-		if ( null !== $focused_state ) {
-			$payload['focused_state']          = $focused_state;
-			$payload['focused_source_post_id'] = $focus_source_id;
-		}
 		if ( $with_needs_attention_count ) {
 			$connected_url = Options::get_connected_site_url_with_path();
 
@@ -1389,8 +1370,6 @@ final class Admin_Ajax_Controller {
 			$post_types   = array_values( array_unique( $post_types ) );
 		}
 
-		$session_id = absint( $_POST['session_id'] ?? 0 );
-
 		$orderby = 'title' === sanitize_key( wp_unslash( $_POST['orderby'] ?? '' ) )
 			? 'title'
 			: 'import_date';
@@ -1411,7 +1390,6 @@ final class Admin_Ajax_Controller {
 
 		$args = array(
 			'post_types' => $post_types,
-			'session_id' => $session_id,
 			'orderby'    => $orderby,
 			'order'      => $order,
 		);

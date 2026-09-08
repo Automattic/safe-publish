@@ -481,49 +481,8 @@ final class History_Repository {
 	}
 
 	/**
-	 * Looks up one source's most recent active item row for a given source post.
-	 * An empty $source_site_url matches only sessions recorded without one.
-	 *
-	 * Only non-rolled-back success and updated rows count, so an undone update
-	 * or later error can't mask the current import state. Ties on
-	 * import_date_gmt break by highest id.
-	 *
-	 * @param string $source_site_url Path-bearing source identity.
-	 * @param int    $source_post_id  Source post ID.
-	 * @return array|null Item row, or null when the source has no active row.
-	 */
-	public function get_active_item_for_source(
-		string $source_site_url,
-		int $source_post_id
-	): ?array {
-		global $wpdb;
-
-		$table   = Import_Items_Table::table_name();
-		$imports = Imports_Table::table_name();
-
-		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
-		$row = $wpdb->get_row(
-			$wpdb->prepare(
-				"SELECT t.* FROM `{$table}` t"
-					. " INNER JOIN `{$imports}` s ON s.id = t.session_id"
-					. ' WHERE t.source_post_id = %d'
-					. " AND t.status IN ( 'success', 'updated' )"
-					. ' AND t.rolled_back = 0'
-					. ' AND s.source_site_url = %s'
-					. ' ORDER BY t.import_date_gmt DESC, t.id DESC LIMIT 1',
-				$source_post_id,
-				$source_site_url
-			),
-			ARRAY_A
-		);
-		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
-
-		return $row ? $row : null;
-	}
-
-	/**
-	 * Bulk variant of get_active_item_for_source(): One query per page
-	 * instead of N. Backed by the (source_post_id, import_date_gmt) index.
+	 * Looks up active items for a page of source post IDs in one query. Backed
+	 * by the (source_post_id, import_date_gmt) index.
 	 *
 	 * The dedup subquery is restricted to the same source too, so another
 	 * source's newer success can't hide this source's active row. An empty
@@ -633,37 +592,6 @@ final class History_Repository {
 	}
 
 	/**
-	 * Resolves the routing state for a single source post, scoped to one
-	 * source. Backs the focus_source one-render chip swap on the listing
-	 * endpoint.
-	 *
-	 * @param string $source_site_url Path-bearing source identity.
-	 * @param int    $source_post_id  Source post ID.
-	 * @return string One of 'available', 'up-to-date', 'outdated'.
-	 */
-	public function resolve_source_post_state(
-		string $source_site_url,
-		int $source_post_id
-	): string {
-		$row = $this->get_active_item_for_source(
-			$source_site_url,
-			$source_post_id
-		);
-
-		$post_id            = null !== $row && isset( $row['post_id'] )
-			? (int) $row['post_id']
-			: 0;
-		$local_post_present = false;
-
-		if ( $post_id > 0 ) {
-			$status             = get_post_status( $post_id );
-			$local_post_present = false !== $status && 'trash' !== $status;
-		}
-
-		return self::derive_active_state( $row, $local_post_present );
-	}
-
-	/**
 	 * Lists one source's imported source-post rows per the active-row rule.
 	 * Returns per_page+1 rows so the caller can derive has_more without a
 	 * count query.
@@ -681,7 +609,6 @@ final class History_Repository {
 	 *     @type string   $search          Title substring to match.
 	 *     @type string   $name            Exact wp_posts.post_name (slug) to match.
 	 *     @type string[] $post_types      wp_posts.post_type values to include.
-	 *     @type int      $session_id      Most-recent-item session to match.
 	 *     @type string   $imported_after  Lower bound on import_date_gmt.
 	 *     @type string   $imported_before Upper bound on import_date_gmt.
 	 *     @type string   $freshness       'any' (default), 'up-to-date',
@@ -709,7 +636,6 @@ final class History_Repository {
 		$search          = isset( $args['search'] ) ? (string) $args['search'] : '';
 		$name            = isset( $args['name'] ) ? (string) $args['name'] : '';
 		$post_types      = isset( $args['post_types'] ) ? (array) $args['post_types'] : array();
-		$session_id      = isset( $args['session_id'] ) ? (int) $args['session_id'] : 0;
 		$imported_after  = isset( $args['imported_after'] ) ? (string) $args['imported_after'] : '';
 		$imported_before = isset( $args['imported_before'] ) ? (string) $args['imported_before'] : '';
 		$freshness       = isset( $args['freshness'] ) ? (string) $args['freshness'] : 'any';
@@ -754,11 +680,6 @@ final class History_Repository {
 			$placeholders = implode( ', ', array_fill( 0, count( $post_types ), '%s' ) );
 			$where[]      = "p.post_type IN ({$placeholders})";
 			array_push( $params, ...array_map( 'strval', $post_types ) );
-		}
-
-		if ( $session_id > 0 ) {
-			$where[]  = 't1.session_id = %d';
-			$params[] = $session_id;
 		}
 
 		if ( 'outdated' === $freshness ) {
