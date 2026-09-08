@@ -1184,16 +1184,18 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 	 * Verifies that import error results use the fresh title from the source
 	 * site, not the stale snapshot title from the listing page.
 	 *
-	 * When the fresh content fetch succeeds but a later step (content
-	 * sanitization) fails, the returned error must carry the freshly fetched
+	 * When the fresh content fetch succeeds but a later content write fails,
+	 * the returned error must carry the freshly fetched
 	 * title so that log entries and UI messages reference the correct,
 	 * up-to-date post name.
 	 */
 	public function test_import_error_uses_fresh_title_not_snapshot_title(): void {
-		// ARRANGE: Enable kses so that the <form> content triggers a
-		// sanitization error. The listing snapshot uses a stale title,
-		// but the fresh content endpoint returns an updated title.
-		add_filter( 'safe_publish_import_kses', '__return_true' );
+		// ARRANGE: Use a filtered user so the <form> content is changed. The
+		// listing snapshot uses a stale title, but the fresh endpoint does not.
+		$author_id = self::factory()->user->create(
+			array( 'role' => 'author' )
+		);
+		wp_set_current_user( $author_id );
 
 		$this->mock_post_overrides = array(
 			'title'   => 'Fresh Title From Source',
@@ -1213,18 +1215,16 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 			'post_type' => 'posts',
 		);
 
-		// ACT: Import the post — sanitization will reject the <form>.
+		// ACT: Import the post and detect WordPress' filtered result.
 		$result = $this->import_service->import_post(
 			$post_data,
 			$session_id
 		);
 
-		remove_filter( 'safe_publish_import_kses', '__return_true' );
-
-		// ASSERT: Import must fail due to sanitization.
+		// ASSERT: Import must fail due to filtering.
 		$this->assertFalse(
 			$result['success'],
-			'Import should fail when content is stripped by sanitization.'
+			'Import should fail when content is filtered.'
 		);
 
 		// ASSERT: The error result must carry the fresh title, not the stale
