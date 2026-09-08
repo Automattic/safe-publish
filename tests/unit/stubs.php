@@ -115,6 +115,10 @@ function get_option( string $option, mixed $default = false ): mixed {
 	return $default;
 }
 
+function get_role( string $_role ): ?WP_Role {
+	return null;
+}
+
 function set_test_option( string $option, mixed $value ): void {
 	$GLOBALS['_test_options'][ $option ] = $value;
 }

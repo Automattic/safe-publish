@@ -33,9 +33,7 @@ trait Verifies_Ajax_Request {
 	 * @param string|null $capability Required capability. Defaults to the Safe
 	 *                                Publish management capability.
 	 */
-	private function verify_ajax_capability(
-		?string $capability = null
-	): void {
+	private function verify_ajax_capability( ?string $capability = null ): void {
 		$capability ??= Permissions::manage_capability();
 
 		if ( ! current_user_can( $capability ) ) {

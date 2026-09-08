@@ -11,6 +11,7 @@ namespace Safe_Publish\Tests\Integration;
 
 use Safe_Publish\Admin\Admin_Ajax_Controller;
 use Safe_Publish\Admin\Attention_Issues_Repository;
+use Safe_Publish\Auth\Permissions;
 use Safe_Publish\Utils\Attention_Issues_Table;
 use Safe_Publish\Utils\Audit_Log_Table;
 use Safe_Publish\Utils\Log_Events;
@@ -267,20 +268,23 @@ class Attention_Retry_Ajax_Test extends WP_Ajax_UnitTestCase {
 	}
 
 	/**
-	 * Verifies that a user without edit_posts cannot retry.
+	 * Verifies that an editor without management access cannot retry.
 	 */
-	public function test_retry_rejects_user_without_edit_posts(): void {
-		// ARRANGE: An open issue and a subscriber-level user.
+	public function test_retry_rejects_user_without_management(): void {
+		// ARRANGE: A resolvable issue and an editor without management access.
 		$post_id = self::factory()->post->create(
 			array( 'post_content' => $this->nav_link_content( 9700, 'post-type' ) )
 		);
 		$this->seed_target_post( 9700 );
 		$this->open_issue( $post_id, 'unmapped_block_reference', 9700, 'post' );
-		wp_set_current_user(
-			$this->factory()->user->create( array( 'role' => 'subscriber' ) )
-		);
+		$user = self::factory()->user->create_and_get( array( 'role' => 'editor' ) );
+		$this->assertInstanceOf( \WP_User::class, $user );
+		$user->add_cap( Permissions::manage_capability(), false );
+		wp_set_current_user( $user->ID );
+		$this->assertTrue( current_user_can( 'edit_posts' ) );
+		$this->assertFalse( current_user_can( Permissions::manage_capability() ) );
 
-		// ACT: Retry as the subscriber.
+		// ACT: Retry as the editor.
 		$response = $this->retry(
 			array(
 				'affected_post_id' => (string) $post_id,
@@ -292,6 +296,7 @@ class Attention_Retry_Ajax_Test extends WP_Ajax_UnitTestCase {
 
 		// ASSERT: Forbidden, and the issue is untouched.
 		$this->assertFalse( $response['success'] );
+		$this->assertSame( 'Forbidden', $response['data'] );
 		$this->assertNotNull(
 			$this->attention->get_issue(
 				$post_id,
@@ -671,26 +676,30 @@ class Attention_Retry_Ajax_Test extends WP_Ajax_UnitTestCase {
 	}
 
 	/**
-	 * Verifies that a user without edit_posts cannot bulk-retry.
+	 * Verifies that a user without Safe Publish management cannot bulk-retry.
 	 */
-	public function test_bulk_retry_rejects_user_without_edit_posts(): void {
-		// ARRANGE: An open issue and a subscriber-level user.
+	public function test_bulk_retry_rejects_user_without_management(): void {
+		// ARRANGE: A resolvable issue and an editor without management access.
 		$post_id = self::factory()->post->create(
 			array( 'post_content' => $this->nav_link_content( 8801, 'post-type' ) )
 		);
 		$this->seed_target_post( 8801 );
 		$this->open_issue( $post_id, 'unmapped_block_reference', 8801, 'post' );
-		wp_set_current_user(
-			$this->factory()->user->create( array( 'role' => 'subscriber' ) )
-		);
+		$user = self::factory()->user->create_and_get( array( 'role' => 'editor' ) );
+		$this->assertInstanceOf( \WP_User::class, $user );
+		$user->add_cap( Permissions::manage_capability(), false );
+		wp_set_current_user( $user->ID );
+		$this->assertTrue( current_user_can( 'edit_posts' ) );
+		$this->assertFalse( current_user_can( Permissions::manage_capability() ) );
 
-		// ACT: Bulk-retry as the subscriber.
+		// ACT: Bulk-retry as the editor.
 		$response = $this->bulk_retry(
 			array( $this->descriptor( $post_id, 8801, 'post' ) )
 		);
 
 		// ASSERT: Forbidden, and the issue is untouched.
 		$this->assertFalse( $response['success'] );
+		$this->assertSame( 'Forbidden', $response['data'] );
 		$this->assertNotNull(
 			$this->attention->get_issue(
 				$post_id,
@@ -788,6 +797,100 @@ class Attention_Retry_Ajax_Test extends WP_Ajax_UnitTestCase {
 		}
 
 		return $map;
+	}
+
+	/**
+	 * Verifies that management access without edit_posts permits a real retry.
+	 */
+	public function test_retry_allows_management_without_edit_posts(): void {
+		// ARRANGE: A resolvable gallery and a management-only subscriber.
+		$post_id = self::factory()->post->create(
+			array( 'post_content' => '[gallery id="9700"]' )
+		);
+		$dest_id = $this->seed_target_post( 9700 );
+		$this->open_issue( $post_id, 'unmapped_gallery_reference', 9700, 'post' );
+		$user = self::factory()->user->create_and_get(
+			array( 'role' => 'subscriber' )
+		);
+		$this->assertInstanceOf( \WP_User::class, $user );
+		$user->add_cap( Permissions::manage_capability() );
+		wp_set_current_user( $user->ID );
+		$this->assertFalse( current_user_can( 'edit_posts' ) );
+		$this->assertTrue( current_user_can( Permissions::manage_capability() ) );
+
+		// ACT: Retry the existing issue with management access alone.
+		$response = $this->retry(
+			array(
+				'affected_post_id' => (string) $post_id,
+				'issue_type'       => 'unmapped_gallery_reference',
+				'target_ref'       => '9700',
+				'target_kind'      => 'post',
+			)
+		);
+
+		// ASSERT: The retry rewrites the stored content and clears the issue.
+		$this->assertTrue( $response['success'] );
+		$this->assertSame( 'resolved', $response['data']['outcome'] );
+		$this->assertSame(
+			'[gallery id="' . $dest_id . '"]',
+			get_post_field( 'post_content', $post_id )
+		);
+		$this->assertNull(
+			$this->attention->get_issue(
+				$post_id,
+				'unmapped_gallery_reference',
+				9700,
+				'post'
+			)
+		);
+	}
+
+	/**
+	 * Verifies that management access without edit_posts permits a real retry.
+	 */
+	public function test_bulk_retry_allows_management_without_edit_posts(): void {
+		// ARRANGE: A resolvable gallery and a management-only subscriber.
+		$post_id = self::factory()->post->create(
+			array( 'post_content' => '[gallery id="9700"]' )
+		);
+		$dest_id = $this->seed_target_post( 9700 );
+		$this->open_issue( $post_id, 'unmapped_gallery_reference', 9700, 'post' );
+		$user = self::factory()->user->create_and_get(
+			array( 'role' => 'subscriber' )
+		);
+		$this->assertInstanceOf( \WP_User::class, $user );
+		$user->add_cap( Permissions::manage_capability() );
+		wp_set_current_user( $user->ID );
+		$this->assertFalse( current_user_can( 'edit_posts' ) );
+		$this->assertTrue( current_user_can( Permissions::manage_capability() ) );
+
+		// ACT: Retry the existing issue with management access alone.
+		$response = $this->bulk_retry(
+			array(
+				array(
+					'affected_post_id' => $post_id,
+					'issue_type'       => 'unmapped_gallery_reference',
+					'target_ref'       => 9700,
+					'target_kind'      => 'post',
+				),
+			)
+		);
+
+		// ASSERT: The retry rewrites the stored content and clears the issue.
+		$this->assertTrue( $response['success'] );
+		$this->assertSame( 1, $response['data']['resolved'] );
+		$this->assertSame(
+			'[gallery id="' . $dest_id . '"]',
+			get_post_field( 'post_content', $post_id )
+		);
+		$this->assertNull(
+			$this->attention->get_issue(
+				$post_id,
+				'unmapped_gallery_reference',
+				9700,
+				'post'
+			)
+		);
 	}
 
 	/**

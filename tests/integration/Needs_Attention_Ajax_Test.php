@@ -363,11 +363,10 @@ class Needs_Attention_Ajax_Test extends WP_Ajax_UnitTestCase {
 	}
 
 	/**
-	 * Verifies that ignoring is gated at manage_options: An editor, who has
-	 * edit_posts but not manage_options, is forbidden.
+	 * Verifies that ignoring requires Safe Publish management access.
 	 */
-	public function test_set_ignored_requires_manage_options(): void {
-		// ARRANGE: An editor — edit_posts but not manage_options.
+	public function test_set_ignored_requires_management_capability(): void {
+		// ARRANGE: An editor with content access but no management access.
 		wp_set_current_user(
 			$this->factory()->user->create( array( 'role' => 'editor' ) )
 		);

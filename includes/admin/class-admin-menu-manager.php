@@ -41,6 +41,10 @@ class Admin_Menu_Manager {
 	 * Adds the main admin menu page and Manage submenu entry.
 	 */
 	public function add_admin_menu(): void {
+		if ( Audit_Log_Page::maybe_add_top_level_page() ) {
+			return;
+		}
+
 		add_menu_page(
 			__( 'Manage', 'safe-publish' ),
 			__( 'Safe Publish', 'safe-publish' ),

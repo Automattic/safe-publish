@@ -91,6 +91,7 @@ class PluginTest extends TestCase {
 				'plugins.php',
 				'toplevel_page_safe-publish',
 				'toplevel_page_safe-publish-settings',
+				'toplevel_page_safe-publish-audit-log',
 				'safe-publish_page_safe-publish-settings',
 				'safe-publish_page_safe-publish-audit-log',
 			),
