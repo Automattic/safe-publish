@@ -38,10 +38,16 @@ final class Term_Assignment_State {
 				continue;
 			}
 
+			$args = array( 'fields' => 'ids' );
+			if ( true === get_taxonomy( $taxonomy )->sort ) {
+				$args['orderby'] = 'term_order';
+				$args['order']   = 'ASC';
+			}
+
 			$term_ids = wp_get_object_terms(
 				$post_id,
 				$taxonomy,
-				array( 'fields' => 'ids' )
+				$args
 			);
 
 			if ( ! is_wp_error( $term_ids ) ) {

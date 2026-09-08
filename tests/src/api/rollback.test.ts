@@ -101,7 +101,25 @@ describe( 'rollbackItem', () => {
 			success: true,
 			action: 'restored',
 			message: 'Post restored to its previous version.',
+			omissions: [],
 		} );
+	} );
+
+	it( 'Verifies that successful outcomes preserve omission details', async () => {
+		// ARRANGE: The server reports a retained author on a partial restore.
+		const omissions = [ { field: 'post_author', reason: 'unavailable', id: 123 } ];
+		vi.mocked( fetch ).mockResolvedValue( {
+			json: async () => ( { success: true, data: {
+				action: 'restored', message: 'Some values retained.', omissions,
+			} } ),
+		} as Response );
+
+		// ACT: Roll back the item.
+		const outcome = await rollbackItem( 100, AJAX_URL, NONCE );
+
+		// ASSERT: Partial restoration stays successful and preserves details.
+		expect( outcome ).toStrictEqual( { success: true, action: 'restored',
+			message: 'Some values retained.', omissions } );
 	} );
 
 	it( 'Verifies that the server error message surfaces on failure', async () => {

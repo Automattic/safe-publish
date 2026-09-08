@@ -3,7 +3,7 @@
  * titles the run permanently deletes and the ones it restores.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
 import { Modal } from '@wordpress/components';
 import BulkRollbackPostModal from '@/components/BulkRollbackPostModal';
@@ -372,4 +372,63 @@ describe( 'BulkRollbackPostModal listing refresh', () => {
 		expect( closeModal ).toHaveBeenCalled();
 		expect( onRefresh ).not.toHaveBeenCalled();
 	} );
+} );
+
+
+describe( 'BulkRollbackPostModal partial restores', () => {
+	afterEach( () => {
+		vi.unstubAllGlobals();
+	} );
+
+	it.each( [ false, true ] )(
+		'Verifies that retained values remain visible with failures=%s',
+		async ( hasFailure ) => {
+			// ARRANGE: A partial restore followed by a clean restore or failure.
+			const message = 'Some values retained. Review the Audit Log.';
+			vi.stubGlobal( 'fetch', vi.fn()
+				.mockResolvedValueOnce( {
+					json: async () => ( {
+						success: true,
+						data: {
+							action: 'restored', message,
+							omissions: [ { field: 'post_author', reason: 'unavailable' } ],
+						},
+					} ),
+				} )
+				.mockResolvedValueOnce( {
+					json: async () => hasFailure
+						? { success: false, data: 'Cannot restore this post.' }
+						: { success: true, data: { action: 'restored', message: 'Restored.' } },
+				} )
+			);
+			render(
+				<BulkRollbackPostModal
+					items={ [ buildRow( 1, 'Partial post', true ),
+						buildRow( 2, 'Other post', true ) ] }
+					ajaxurl={ AJAX_URL }
+					nonce={ NONCE }
+				/>
+			);
+
+			// ACT: Complete the bulk rollback.
+			fireEvent.click( screen.getByRole( 'button', { name: 'Roll back 2 posts' } ) );
+
+			// ASSERT: Warnings identify the post without counting it as failed.
+			const heading = await screen.findByText( hasFailure
+				? 'Rollback completed with errors and warnings'
+				: 'Rollback completed with warnings' );
+			expect( heading.style.color ).toBe( 'var(--safe-publish-status-warning)' );
+			const row = screen.getByText( 'Partial post' ).closest( '.safe-publish-import-result-item' )!;
+			expect( within( row as HTMLElement ).getByText( message ) ).toBeInTheDocument();
+			expect( within( row as HTMLElement ).getByText( 'Warning' ) ).toBeInTheDocument();
+			expect( screen.getByText( hasFailure ? 'Rolled back 1 of 2' : 'Rolled back 2 of 2' ) ).toBeInTheDocument();
+			if ( hasFailure ) {
+				const failed = screen.getByText( 'Other post' ).closest( '.safe-publish-import-result-item' )!;
+				expect( within( failed as HTMLElement ).getByText( 'Cannot restore this post.' ) ).toBeInTheDocument();
+				expect( within( failed as HTMLElement ).getByText( 'Failed' ) ).toBeInTheDocument();
+			} else {
+				expect( screen.queryByText( 'Other post' ) ).not.toBeInTheDocument();
+			}
+		}
+	);
 } );

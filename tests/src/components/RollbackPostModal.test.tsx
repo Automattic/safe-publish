@@ -114,6 +114,32 @@ describe( 'RollbackPostModal', () => {
 		expect( onRefresh ).toHaveBeenCalledTimes( 1 );
 	} );
 
+	it( 'Verifies that a partial restore surfaces a warning notice', async () => {
+		// ARRANGE: The endpoint restored available fields and retained an author.
+		const message = 'Some values retained. Review the Audit Log.';
+		vi.stubGlobal( 'fetch', vi.fn().mockResolvedValue( {
+			json: async () => ( {
+				success: true,
+				data: { action: 'restored', message,
+					omissions: [ { field: 'post_author', reason: 'unavailable' } ] },
+			} ),
+		} ) );
+		const onNotice = vi.fn();
+		const closeModal = vi.fn();
+		render( <RollbackPostModal items={ [ buildRow() ] }
+			ajaxurl={ AJAX_URL } nonce={ NONCE }
+			onNotice={ onNotice } closeModal={ closeModal } /> );
+
+		// ACT: Complete the partial restore.
+		fireEvent.click( screen.getByRole( 'button', { name: 'Roll back' } ) );
+
+		// ASSERT: The warning is shown and the completed operation closes.
+		await waitFor( () => expect( onNotice ).toHaveBeenCalledWith( {
+			status: 'warning', message,
+		} ) );
+		expect( closeModal ).toHaveBeenCalledTimes( 1 );
+	} );
+
 	it( 'Verifies that a failed rollback shows the error in-modal without a notice', async () => {
 		// ARRANGE: The endpoint rejects the rollback with a message.
 		vi.stubGlobal(

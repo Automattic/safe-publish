@@ -80,7 +80,10 @@ const RollbackPostModal = ( {
 				return;
 			}
 
-			onNotice?.( { status: 'success', message: outcome.message } );
+			onNotice?.( {
+				status: outcome.omissions.length > 0 ? 'warning' : 'success',
+				message: outcome.message,
+			} );
 			setIsLoading( false );
 			closeModal?.();
 		} );
