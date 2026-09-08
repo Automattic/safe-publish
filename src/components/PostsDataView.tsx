@@ -92,18 +92,6 @@ const statusBadgeClassName = ( status: string ): string =>
 		.join( ' ' );
 
 /**
- * Reads a URL search parameter as a positive integer.
- *
- * @param {string} name Parameter name to read.
- * @return {number} Parsed positive integer, or 0 if absent/invalid.
- */
-const readPositiveIntParam = ( name: string ): number => {
-	const param = new URLSearchParams( window.location.search ).get( name );
-	const parsed = param ? parseInt( param, 10 ) : 0;
-	return Number.isFinite( parsed ) && parsed > 0 ? parsed : 0;
-};
-
-/**
  * Reads the ?state= deep-link as a chip value.
  *
  * @return {ChipState} Initial chip state.
@@ -293,8 +281,8 @@ const getRowId = ( item: UnifiedPostRow ): string =>
  * @param {PostsDataViewProps} props Component props.
  * @return {JSX.Element} Rendered Posts listing.
  */
-// State-routed listing centralizes chip, filter, fetch, sync-status, and
-// focus-source flows in one component.
+// State-routed listing centralizes chip, filter, fetch, and sync-status flows
+// in one component.
 // eslint-disable-next-line complexity
 export function PostsDataView( {
 	sourceSiteUrl,
@@ -331,13 +319,6 @@ export function PostsDataView( {
 	);
 	const [ importedAfter, setImportedAfter ] = useState< string | null >( null );
 	const [ importedBefore, setImportedBefore ] = useState< string | null >( null );
-
-	const [ focusSourceId, setFocusSourceId ] = useState( () =>
-		readPositiveIntParam( 'focus_source' )
-	);
-	const [ focusedSourceId, setFocusedSourceId ] = useState< number | null >(
-		null
-	);
 
 	const [ isLoading, setIsLoading ] = useState( false );
 	const [ hasFetchedOnce, setHasFetchedOnce ] = useState( false );
@@ -469,10 +450,6 @@ export function PostsDataView( {
 				formData.append( 'imported_before', beforeUtc );
 			}
 		}
-
-		if ( focusSourceId > 0 ) {
-			formData.append( 'focus_source_id', String( focusSourceId ) );
-		}
 		const wantsCount = countRefreshedRef.current !== refreshNonce;
 		if ( wantsCount ) {
 			formData.append( 'with_needs_attention_count', '1' );
@@ -519,15 +496,6 @@ export function PostsDataView( {
 					);
 					countRefreshedRef.current = refreshNonce;
 				}
-
-				// Server resolves focus_source to a concrete state; swap the
-				// chip if it differs from what the URL asked for.
-				if ( focusSourceId > 0 && data.focused_state ) {
-					if ( data.focused_state !== state && 'all' !== state ) {
-						setStateValue( data.focused_state );
-					}
-					setFocusedSourceId( focusSourceId );
-				}
 			} )
 			.catch( ( err: unknown ) => {
 				if ( controller.signal.aborted ) {
@@ -568,7 +536,6 @@ export function PostsDataView( {
 		publishedBefore,
 		importedAfter,
 		importedBefore,
-		focusSourceId,
 		refreshNonce,
 	] );
 
@@ -586,7 +553,6 @@ export function PostsDataView( {
 			publishedBefore,
 			importedAfter,
 			importedBefore,
-			focusSourceId,
 			refreshNonce,
 		] ),
 		() => setSelection( [] )
@@ -656,27 +622,6 @@ export function PostsDataView( {
 		},
 		[]
 	);
-
-	const rowRefs = useRef< Map< number, HTMLElement > >( new Map() );
-
-	useEffect( () => {
-		if ( null === focusedSourceId ) {
-			return;
-		}
-		const node = rowRefs.current.get( focusedSourceId );
-		if ( ! node ) {
-			return;
-		}
-		node.scrollIntoView( { behavior: 'smooth', block: 'center' } );
-		node.classList.add( 'is-focused' );
-		const timer = setTimeout( () => {
-			node.classList.remove( 'is-focused' );
-			setFocusedSourceId( null );
-			stripUrlParam( 'focus_source' );
-			setFocusSourceId( 0 );
-		}, 2000 );
-		return () => clearTimeout( timer );
-	}, [ focusedSourceId, rows ] );
 
 	const setPage = useCallback(
 		( next: number ): void =>
@@ -799,17 +744,7 @@ export function PostsDataView( {
 				id: 'title',
 				label: __( 'Title', 'safe-publish' ),
 				enableSorting: true,
-				render: ( { item } ) => (
-					<span
-						ref={ ( node ) => {
-							if ( node && null !== item.source_post_id ) {
-								rowRefs.current.set( item.source_post_id, node );
-							}
-						} }
-					>
-						{ item.title }
-					</span>
-				),
+				render: ( { item } ) => <span>{ item.title }</span>,
 			},
 			{
 				id: 'local_state',

@@ -32,6 +32,27 @@ add_action( 'safe_publish_event_logged', function( string $channel, string $even
 
 ## Filters
 
+### `safe_publish_manage_capability`
+
+Filters the capability required for Safe Publish admin screens, AJAX handlers, management operations, and abilities. Default: `manage_options`.
+
+For per-post reads, callers lacking the resolved management capability require the post type's `edit_posts` capability, while `edit_post` is always required for the mapped local post. See the [capability contract](api.md#capability-contract).
+
+**Parameters:**
+
+- `string $capability`: management capability
+
+**Returns:** A non-empty `string`. Invalid values fall back to `manage_options`.
+
+**Example:**
+
+```php
+add_filter(
+    'safe_publish_manage_capability',
+    static fn( string $_capability ): string => 'edit_safe_publish'
+);
+```
+
 ### `safe_publish_request_timeout`
 
 Filter the HTTP request timeout in seconds for REST API requests. Default: `10`.
@@ -165,56 +186,6 @@ Enabling the fallback relaxes the source-canonical guarantee for parent relation
 ```php
 // Allow hierarchical posts to be imported as orphans when their parent is unresolved.
 add_filter( 'safe_publish_import_allow_orphans', '__return_true' );
-```
-
-### `safe_publish_import_kses`
-
-Filter whether to apply kses sanitization to imported content and excerpts. By default, kses is disabled during import to preserve content fidelity, matching WordPress core importer behavior. Return `true` to enable kses sanitization.
-
-**Parameters:**
-
-- `bool $enabled` — whether to apply kses (default `false`)
-- `string $field` — field being sanitized: `'content'` or `'excerpt'`
-
-**Returns:** `bool`
-
-**Examples:**
-
-```php
-// Enable kses sanitization during import.
-add_filter( 'safe_publish_import_kses', '__return_true' );
-```
-
-```php
-// Enable kses only for content, leaving excerpts unfiltered.
-add_filter( 'safe_publish_import_kses', function( bool $enabled, string $field ): bool {
-    return 'content' === $field;
-}, 10, 2 );
-```
-
-### `safe_publish_import_kses_allowed_html`
-
-Filter the allowed HTML tags and attributes when kses is enabled during import. Only applied when `safe_publish_import_kses` returns `true`.
-
-**Parameters:**
-
-- `array $allowed` — allowed HTML elements and attributes (default: `wp_kses_allowed_html( 'post' )`)
-- `string $field` — field being sanitized: `'content'` or `'excerpt'`
-
-**Returns:** `array`
-
-**Example:**
-
-```php
-// Allow iframes when kses is enabled.
-add_filter( 'safe_publish_import_kses_allowed_html', function( array $allowed ): array {
-    $allowed['iframe'] = array(
-        'src'    => true,
-        'width'  => true,
-        'height' => true,
-    );
-    return $allowed;
-} );
 ```
 
 ### `safe_publish_dev_ssl_verify`

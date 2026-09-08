@@ -21,17 +21,26 @@ use Safe_Publish\Utils\Telemetry_Events;
 class TelemetryEventsTest extends TestCase {
 
 	/**
-	 * Verifies that an allowed error code passes through unchanged.
+	 * Verifies that allowed error codes pass through unchanged.
 	 */
 	public function test_normalize_error_code_allows_known_codes(): void {
-		// ARRANGE: A documented per-item error code.
-		$code = 'media_download_failed';
+		// ARRANGE: Documented existing and content-integrity error codes.
+		$codes = array(
+			'media_download_failed',
+			'content_filtered',
+			'content_cleanup_failed',
+			'content_verification_failed',
+			'content_restore_failed',
+		);
 
-		// ACT: Pass it through the normalizer.
-		$result = Telemetry_Events::normalize_error_code( $code );
+		// ACT: Pass each code through the normalizer.
+		$results = array_map(
+			array( Telemetry_Events::class, 'normalize_error_code' ),
+			$codes
+		);
 
-		// ASSERT: Returned as-is.
-		$this->assertSame( $code, $result );
+		// ASSERT: Every code is returned as-is.
+		$this->assertSame( $codes, $results );
 	}
 
 	/**

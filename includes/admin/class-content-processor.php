@@ -135,13 +135,6 @@ class Content_Processor {
 	private Shortcode_Media_Rewriter $shortcode_media_rewriter;
 
 	/**
-	 * Stores temporarily disabled WordPress filters.
-	 *
-	 * @var array
-	 */
-	private array $disabled_filters = array();
-
-	/**
 	 * Media files that failed to import, keyed by source URL.
 	 *
 	 * @var array<string, string> URL => originating block name.
@@ -845,65 +838,15 @@ class Content_Processor {
 	}
 
 	/**
-	 * Temporarily disables content formatting filters during import.
-	 */
-	public function disable_content_filters(): void {
-		global $wp_filter;
-
-		// Store filters that might affect content formatting.
-		$filters_to_disable = array(
-			'the_content',
-			'content_save_pre',
-			'excerpt_save_pre',
-			'wp_insert_post_data',
-		);
-
-		foreach ( $filters_to_disable as $filter_name ) {
-			if ( isset( $wp_filter[ $filter_name ] ) ) {
-				$this->disabled_filters[ $filter_name ] = $wp_filter[ $filter_name ];
-				unset( $wp_filter[ $filter_name ] );
-			}
-		}
-
-		// Specifically remove common formatting filters.
-		remove_filter( 'the_content', 'wpautop' );
-		remove_filter( 'the_content', 'wptexturize' );
-		remove_filter( 'content_save_pre', 'wp_filter_post_kses' );
-		remove_filter( 'content_filtered_save_pre', 'wp_filter_post_kses' );
-		remove_filter( 'excerpt_save_pre', 'wp_filter_post_kses' );
-	}
-
-	/**
-	 * Restores content formatting filters after import.
-	 */
-	public function restore_content_filters(): void {
-		global $wp_filter;
-
-		// Restore previously disabled filters.
-		foreach ( $this->disabled_filters as $filter_name => $filter_callbacks ) {
-			// phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited
-			$wp_filter[ $filter_name ] = $filter_callbacks;
-		}
-
-		// Clear stored filters.
-		$this->disabled_filters = array();
-
-		// Re-add common formatting filters with default priorities.
-		add_filter( 'the_content', 'wpautop' );
-		add_filter( 'the_content', 'wptexturize' );
-		add_filter( 'content_save_pre', 'wp_filter_post_kses' );
-		add_filter( 'content_filtered_save_pre', 'wp_filter_post_kses' );
-		add_filter( 'excerpt_save_pre', 'wp_filter_post_kses' );
-	}
-
-	/**
 	 * Deletes all attachments created during the current processing run.
 	 *
 	 * Called when an import is aborted to clean up partially-downloaded
 	 * attachments that would otherwise be orphaned in the media library.
+	 *
+	 * @return int[] IDs of attachments WordPress did not delete.
 	 */
-	public function delete_newly_created_media(): void {
-		$this->media_importer->delete_newly_created_attachments();
+	public function delete_newly_created_media(): array {
+		return $this->media_importer->delete_newly_created_attachments();
 	}
 
 	/**

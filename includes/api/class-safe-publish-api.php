@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace Safe_Publish\API;
 
+use Safe_Publish\Auth\Permissions;
 use Safe_Publish\Utils\Auth_Credential_Provider;
 use Safe_Publish\Utils\Options;
 use Safe_Publish\Utils\Post_Type_Map;
@@ -82,7 +83,9 @@ final class Safe_Publish_API extends REST_Base {
 	 *
 	 * The route receives a *source* post ID, so the capability check must be
 	 * performed against the locally-mapped post rather than treating the
-	 * source ID as a local one.
+	 * source ID as a local one. The first gate accepts either the management
+	 * capability or the post type's edit_posts capability; the mapped post
+	 * always requires edit_post.
 	 *
 	 * @param WP_REST_Request $request REST request object.
 	 *
@@ -99,7 +102,7 @@ final class Safe_Publish_API extends REST_Base {
 		);
 
 		// Surface the connection refusal only to users who could act on it.
-		if ( ! current_user_can( 'manage_options' ) ) {
+		if ( ! current_user_can( Permissions::manage_capability() ) ) {
 			$post_type_object = get_post_type_object( $mapped_post_type );
 			$capability       = $post_type_object instanceof WP_Post_Type
 				? $post_type_object->cap->edit_posts
