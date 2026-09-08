@@ -397,7 +397,7 @@ The taxonomy is not registered on the destination site, so its terms could not b
    - Check debug.log for errors.
 
 2. **Verify user permissions**:
-   - User must have `manage_options` capability.
+   - User must have the capability returned by `Safe_Publish\Auth\Permissions::manage_capability()`, which defaults to `manage_options` and can be changed with the `safe_publish_manage_capability` filter.
    - Check user role.
 
 3. **Check for plugin conflicts**:

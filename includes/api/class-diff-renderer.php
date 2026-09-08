@@ -9,6 +9,8 @@ declare(strict_types=1);
 
 namespace Safe_Publish\API;
 
+use Safe_Publish\Auth\Permissions;
+
 use Safe_Publish\Admin\Content_Logger;
 use Safe_Publish\Utils\Options;
 use Safe_Publish\Utils\Post_Type_Map;
@@ -272,11 +274,11 @@ final class Diff_Renderer {
 				return $response;
 			}
 
-			// The transport reason names the connected host, so surface it to
-			// administrators only; the log above records it either way.
+			// The transport reason names the connected host, so surface it only to
+			// management-capability holders; the log above records it either way.
 			$withhold_source_message =
 				HTTP_Client::ERROR_REQUEST_FAILED === $error_code
-				&& ! current_user_can( 'manage_options' );
+				&& ! current_user_can( Permissions::manage_capability() );
 			if ( $withhold_source_message ) {
 				$message = __(
 					'Failed to fetch data from source site.',
