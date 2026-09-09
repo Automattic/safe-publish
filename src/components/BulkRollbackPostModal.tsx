@@ -91,7 +91,12 @@ const BulkRollbackPostModal = ( {
 		} );
 	};
 
-	const failures = result?.entries.filter( entry => ! entry.outcome.success );
+	const hasWarnings = result?.entries.some( entry =>
+		entry.outcome.success && entry.outcome.omissions.length > 0
+	);
+	const reportedEntries = result?.entries.filter( entry =>
+		! entry.outcome.success || entry.outcome.omissions.length > 0
+	);
 
 	let summaryHeading: string = __( 'Rollback completed!', 'safe-publish' );
 	let summaryColor = 'var(--safe-publish-status-success)';
@@ -99,7 +104,12 @@ const BulkRollbackPostModal = ( {
 		summaryHeading = __( 'Rollback failed', 'safe-publish' );
 		summaryColor = 'var(--safe-publish-status-error)';
 	} else if ( result && result.failed > 0 ) {
-		summaryHeading = __( 'Rollback completed with errors', 'safe-publish' );
+		summaryHeading = hasWarnings
+			? __( 'Rollback completed with errors and warnings', 'safe-publish' )
+			: __( 'Rollback completed with errors', 'safe-publish' );
+		summaryColor = 'var(--safe-publish-status-warning)';
+	} else if ( hasWarnings ) {
+		summaryHeading = __( 'Rollback completed with warnings', 'safe-publish' );
 		summaryColor = 'var(--safe-publish-status-warning)';
 	}
 
@@ -177,25 +187,32 @@ const BulkRollbackPostModal = ( {
 							result.total
 						) }
 					</Text>
-					{ failures && failures.length > 0 && (
+					{ reportedEntries && reportedEntries.length > 0 && (
 						<div className="safe-publish-import-results">
-							{ failures.map( ( entry, index ) => (
+							{ reportedEntries.map( ( entry, index ) => (
 								<div
 									key={ index }
 									className="safe-publish-import-result-item"
 								>
 									<div className="safe-publish-result-text">
-										<span className="safe-publish-result-title error">
+										<span className="safe-publish-result-title"
+											style={ { color: entry.outcome.success
+												? 'var(--safe-publish-status-warning)'
+												: 'var(--safe-publish-status-error)' } }>
 											{ entry.item.title }
 										</span>
-										{ ! entry.outcome.success && (
+										{ entry.outcome.success ? (
+											<span>{ entry.outcome.message }</span>
+										) : (
 											<span className="safe-publish-result-error">
 												{ entry.outcome.error }
 											</span>
 										) }
 									</div>
 									<span className="safe-publish-result-status">
-										{ __( 'Failed', 'safe-publish' ) }
+										{ entry.outcome.success
+											? __( 'Warning', 'safe-publish' )
+											: __( 'Failed', 'safe-publish' ) }
 									</span>
 								</div>
 							) ) }

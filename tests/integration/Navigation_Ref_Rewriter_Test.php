@@ -93,6 +93,10 @@ class Navigation_Ref_Rewriter_Test extends Integration_Test_Case {
 			return $this->build_mock_post_response();
 		}
 
+		if ( str_contains( $url, '/safe-publish/v1/catalog/post-types' ) ) {
+			return \_safe_publish_test_catalog_response();
+		}
+
 		return $preempt;
 	}
 

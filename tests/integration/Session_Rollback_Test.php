@@ -11,6 +11,7 @@ namespace Safe_Publish\Tests\Integration;
 
 use Safe_Publish\Admin\History_Repository;
 use Safe_Publish\Admin\Session_Rollback_Service;
+use Safe_Publish\Admin\Term_Assignment_State;
 use Safe_Publish\Utils\Audit_Log_Table;
 use Safe_Publish\Utils\Import_Items_Table;
 use Safe_Publish\Utils\Imports_Table;
@@ -303,6 +304,77 @@ class Session_Rollback_Test extends Integration_Test_Case {
 		$this->assertIsArray( $result );
 		$this->assertSame( 'restored', $result['action'] );
 		$this->assertNotNull( get_post( $media_id ) );
+	}
+
+	/**
+	 * Verifies that rollback preserves ordered taxonomy assignments.
+	 */
+	public function test_restore_preserves_taxonomy_assignment_order(): void {
+		// ARRANGE: Assign terms in a different order from their names.
+		$taxonomy = 'sp_ordered_terms';
+		register_taxonomy( $taxonomy, 'post', array( 'sort' => true ) );
+
+		try {
+			$zulu     = $this->factory()->term->create(
+				array(
+					'taxonomy' => $taxonomy,
+					'name'     => 'Zulu',
+				)
+			);
+			$alpha    = $this->factory()->term->create(
+				array(
+					'taxonomy' => $taxonomy,
+					'name'     => 'Alpha',
+				)
+			);
+			$expected = array( $zulu, $alpha );
+
+			foreach ( array( $expected, array( $alpha ) ) as $updated ) {
+				$post_id = $this->factory()->post->create();
+				wp_set_object_terms( $post_id, $expected, $taxonomy );
+				$snapshot   = Term_Assignment_State::capture(
+					$post_id,
+					array( $taxonomy => $updated )
+				);
+				$session_id = $this->repository->create_session(
+					'https://example.com',
+					'bulk'
+				);
+				$item_id    = $this->repository->log_import_action(
+					$session_id,
+					1,
+					'Updated',
+					'updated',
+					$post_id,
+					null,
+					array(
+						'previous_content' => 'Original content.',
+						'previous_terms'   => $snapshot,
+					)
+				);
+				wp_set_object_terms( $post_id, $updated, $taxonomy );
+
+				// ACT: Roll back changed and unchanged term assignments.
+				$result = $this->rollback_service->rollback_item( $item_id );
+
+				// ASSERT: Stored assignment order matches the original order.
+				$this->assertIsArray( $result );
+				$this->assertSame( 'restored', $result['action'] );
+				$this->assertSame(
+					$expected,
+					wp_get_object_terms(
+						$post_id,
+						$taxonomy,
+						array(
+							'fields'  => 'ids',
+							'orderby' => 'term_order',
+						)
+					)
+				);
+			}
+		} finally {
+			unregister_taxonomy( $taxonomy );
+		}
 	}
 
 	/**

@@ -49,6 +49,20 @@ class Fetch_Fresh_Content_Error_Test extends Integration_Test_Case {
 	);
 
 	/**
+	 * Optional raw_fields value used instead of the valid default.
+	 *
+	 * @var mixed
+	 */
+	private mixed $mock_raw_fields_override = null;
+
+	/**
+	 * Whether catalog entries include raw_fields metadata.
+	 *
+	 * @var bool
+	 */
+	private bool $mock_includes_raw_fields = true;
+
+	/**
 	 * Optional error returned by the mocked catalog request.
 	 *
 	 * @var array|WP_Error|null
@@ -136,7 +150,11 @@ class Fetch_Fresh_Content_Error_Test extends Integration_Test_Case {
 
 			$post_types = $this->mock_post_types;
 			foreach ( $post_types as &$post_type ) {
-				$post_type['raw_fields'] = array_keys( $this->mock_raw_fields );
+				if ( $this->mock_includes_raw_fields ) {
+					$post_type['raw_fields'] = null !== $this->mock_raw_fields_override
+						? $this->mock_raw_fields_override
+						: array_keys( $this->mock_raw_fields );
+				}
 			}
 			unset( $post_type );
 
@@ -173,9 +191,8 @@ class Fetch_Fresh_Content_Error_Test extends Integration_Test_Case {
 	 * @param string $post_type     Source post type.
 	 * @param string $title         Raw post title.
 	 * @param string $content       Raw post content.
-	 * @param bool   $with_excerpt  Optional. Whether to emit excerpt.raw, which
-	 *                              decides whether the catalog is consulted.
-	 *                              Default true.
+	 * @param bool   $with_excerpt Optional. Whether to emit excerpt.raw.
+	 *                             Default true.
 	 * @return string JSON-encoded source post body.
 	 */
 	private function raw_post_body(
@@ -344,17 +361,14 @@ class Fetch_Fresh_Content_Error_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Verifies that a failed catalog request falls back to response-shape
-	 * validation for compatibility with older or temporarily unavailable
-	 * sources.
+	 * Verifies that a failed catalog request returns a retryable catalog error.
 	 */
-	public function test_catalog_request_error_uses_response_shape(): void {
-		// ARRANGE: An absent excerpt forces the catalog lookup, which then fails.
+	public function test_catalog_request_error_rejects_absent_field(): void {
+		// ARRANGE: A complete post response cannot bypass a failed catalog.
 		$this->mock_body          = $this->raw_post_body(
 			'post',
 			'Title',
-			'<p>Content.</p>',
-			false
+			'<p>Content.</p>'
 		);
 		$this->mock_catalog_error = new WP_Error(
 			'transport_down',
@@ -364,17 +378,18 @@ class Fetch_Fresh_Content_Error_Test extends Integration_Test_Case {
 		// ACT: Fetch fresh content for import.
 		$result = $this->fetch();
 
-		// ASSERT: The post imports, treating the absent excerpt as unsupported.
-		$this->assertIsArray( $result );
-		$this->assertSame( 'Title', $result['title'] );
-		$this->assertSame( '<p>Content.</p>', $result['content'] );
-		$this->assertSame( '', $result['excerpt'] );
+		// ASSERT: The transport failure is distinct and retryable.
+		$this->assertInstanceOf( WP_Error::class, $result );
+		$this->assertSame(
+			'fresh_content_catalog_unavailable',
+			$result->get_error_code()
+		);
+		$this->assertTrue( $result->get_error_data()['retryable'] );
 		$this->assertGreaterThan( 0, $this->catalog_requests );
 	}
 
 	/**
-	 * Verifies that catalog fallback still rejects a response for a different
-	 * post type.
+	 * Verifies that catalog failure precedes response-shape validation.
 	 */
 	public function test_catalog_request_error_preserves_type_validation(): void {
 		// ARRANGE: A post request receives a page-shaped response with an absent
@@ -393,17 +408,16 @@ class Fetch_Fresh_Content_Error_Test extends Integration_Test_Case {
 		// ACT: Fetch fresh content for import.
 		$result = $this->fetch();
 
-		// ASSERT: Response-shape fallback does not weaken type validation.
+		// ASSERT: No response-shape fallback is attempted.
 		$this->assertInstanceOf( WP_Error::class, $result );
 		$this->assertSame(
-			'fresh_content_post_type_mismatch',
+			'fresh_content_catalog_unavailable',
 			$result->get_error_code()
 		);
 	}
 
 	/**
-	 * Verifies that a custom REST base can use the authenticated response type
-	 * when catalog metadata is temporarily unavailable.
+	 * Verifies that a custom REST base cannot bypass unavailable metadata.
 	 */
 	public function test_custom_rest_base_survives_catalog_failure(): void {
 		// ARRANGE: A custom REST endpoint returns its canonical custom type while
@@ -421,14 +435,16 @@ class Fetch_Fresh_Content_Error_Test extends Integration_Test_Case {
 		// ACT: Fetch using the REST base rather than the custom type slug.
 		$result = $this->fetch( 'sp_movies' );
 
-		// ASSERT: The valid custom response supplies the canonical type.
-		$this->assertIsArray( $result );
-		$this->assertSame( 'sp_movie', $result['post_type'] );
-		$this->assertSame( 'Movie', $result['title'] );
+		// ASSERT: No custom slug or response-shape fallback is used.
+		$this->assertInstanceOf( WP_Error::class, $result );
+		$this->assertSame(
+			'fresh_content_catalog_unavailable',
+			$result->get_error_code()
+		);
 	}
 
 	/**
-	 * Verifies that custom fallback cannot select a built-in response type.
+	 * Verifies that custom routing propagates catalog failure first.
 	 */
 	public function test_custom_rest_base_cannot_fallback_to_builtin_type(): void {
 		// ARRANGE: An unresolved custom endpoint returns a valid page response.
@@ -445,10 +461,10 @@ class Fetch_Fresh_Content_Error_Test extends Integration_Test_Case {
 		// ACT: Fetch the response through a custom REST base.
 		$result = $this->fetch( 'sp_movies' );
 
-		// ASSERT: Built-in types remain protected by strict matching.
+		// ASSERT: Route construction stops at the catalog failure.
 		$this->assertInstanceOf( WP_Error::class, $result );
 		$this->assertSame(
-			'fresh_content_post_type_mismatch',
+			'fresh_content_catalog_unavailable',
 			$result->get_error_code()
 		);
 	}
@@ -478,10 +494,9 @@ class Fetch_Fresh_Content_Error_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Verifies that a built-in type carrying every raw value resolves without
-	 * a catalog request, which cannot change the outcome.
+	 * Verifies that complete built-in data still requires current metadata.
 	 */
-	public function test_complete_builtin_response_skips_catalog_request(): void {
+	public function test_complete_builtin_response_requires_catalog(): void {
 		// ARRANGE: A post response carrying title, content, and excerpt raw.
 		$this->mock_body = $this->raw_post_body(
 			'post',
@@ -492,10 +507,10 @@ class Fetch_Fresh_Content_Error_Test extends Integration_Test_Case {
 		// ACT: Fetch fresh content for import.
 		$result = $this->fetch();
 
-		// ASSERT: The import succeeds without consulting the catalog.
+		// ASSERT: The import succeeds only after consulting the catalog.
 		$this->assertIsArray( $result );
 		$this->assertSame( 'Title', $result['title'] );
-		$this->assertSame( 0, $this->catalog_requests );
+		$this->assertSame( 1, $this->catalog_requests );
 	}
 
 	/**
@@ -518,7 +533,11 @@ class Fetch_Fresh_Content_Error_Test extends Integration_Test_Case {
 		// ACT: Fetch five items from the same source in one request.
 		for ( $i = 0; $i < 5; $i++ ) {
 			$result = $this->fetch();
-			$this->assertIsArray( $result );
+			$this->assertInstanceOf( WP_Error::class, $result );
+			$this->assertSame(
+				'fresh_content_catalog_unavailable',
+				$result->get_error_code()
+			);
 		}
 
 		// ASSERT: The catalog was attempted twice, not once per item.
@@ -547,6 +566,52 @@ class Fetch_Fresh_Content_Error_Test extends Integration_Test_Case {
 		$this->assertInstanceOf( WP_Error::class, $result );
 		$this->assertSame(
 			'fresh_content_raw_fields_missing',
+			$result->get_error_code()
+		);
+	}
+
+	/**
+	 * Verifies that catalog entries from an older source are incompatible.
+	 */
+	public function test_catalog_requires_raw_fields_metadata(): void {
+		// ARRANGE: A successful legacy catalog omits raw_fields metadata.
+		$this->mock_includes_raw_fields = false;
+		$this->mock_body                = $this->raw_post_body(
+			'post',
+			'Title',
+			'<p>Content.</p>'
+		);
+
+		// ACT: Fetch complete fresh post data.
+		$result = $this->fetch();
+
+		// ASSERT: Legacy metadata is rejected before data is accepted.
+		$this->assertInstanceOf( WP_Error::class, $result );
+		$this->assertSame(
+			'fresh_content_catalog_incompatible',
+			$result->get_error_code()
+		);
+	}
+
+	/**
+	 * Verifies that malformed raw_fields metadata is an invalid catalog.
+	 */
+	public function test_catalog_rejects_malformed_raw_fields_metadata(): void {
+		// ARRANGE: A successful catalog returns a scalar raw_fields value.
+		$this->mock_raw_fields_override = 'title';
+		$this->mock_body                = $this->raw_post_body(
+			'post',
+			'Title',
+			'<p>Content.</p>'
+		);
+
+		// ACT: Fetch complete fresh post data.
+		$result = $this->fetch();
+
+		// ASSERT: Malformed metadata has its own definitive error.
+		$this->assertInstanceOf( WP_Error::class, $result );
+		$this->assertSame(
+			'fresh_content_catalog_invalid',
 			$result->get_error_code()
 		);
 	}

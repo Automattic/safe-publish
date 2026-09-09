@@ -113,6 +113,10 @@ abstract class Source_Posts_API_Test_Base extends Integration_Test_Case {
 			return $preempt;
 		}
 
+		if ( str_contains( $url, '/catalog/post-types' ) ) {
+			return \_safe_publish_test_catalog_response();
+		}
+
 		// Handle single-post REST endpoint used by fetch_fresh_post() for both
 		// post and page types.
 		if ( preg_match( '#/wp-json/wp/v2/(?:posts|pages)/\d+#', $url ) ) {

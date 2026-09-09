@@ -21,9 +21,8 @@ if ( ! defined( 'ABSPATH' ) ) {
  * Resolves source post type metadata used to fetch and validate source posts.
  *
  * The source's authenticated /catalog/post-types response pairs each eligible
- * slug with its REST base and, on newer sources, the raw fields declared by
- * its REST controller. Older sources omit raw_fields and remain compatible
- * through response-shape validation.
+ * slug with its REST base and the raw fields declared by its REST controller.
+ * Fresh post data is accepted only when that metadata is current and valid.
  */
 final class Source_Post_Type_Resolver {
 	/**
@@ -41,14 +40,12 @@ final class Source_Post_Type_Resolver {
 	private const MAX_CATALOG_ATTEMPTS = 2;
 
 	/**
-	 * Per-request source metadata, keyed by source URL and type slug.
-	 *
-	 * A null raw_fields value means the source predates that catalog property.
+	 * Per-request source metadata or definitive catalog error, keyed by URL.
 	 *
 	 * @var array<string, array<string, array{
 	 *     rest_base: string,
-	 *     raw_fields: array<string, bool>|null
-	 * }>>
+	 *     raw_fields: array<string, bool>|WP_Error
+	 * }>|WP_Error>
 	 */
 	private static array $metadata = array();
 
@@ -62,21 +59,21 @@ final class Source_Post_Type_Resolver {
 	/**
 	 * Resolves a post type slug to the REST base segment for its source.
 	 *
-	 * Built-ins use their fixed WordPress mapping. Custom types fall back to
-	 * the input when the source catalog is unavailable or does not know them.
+	 * Built-ins use their fixed WordPress mapping. Custom types require an
+	 * authoritative catalog entry and never fall back to the requested slug.
 	 *
 	 * @param string   $post_type       Source post type slug or REST endpoint.
 	 * @param string   $source_site_url Source site URL.
 	 * @param callable $make_request    fn($url, $action, $credentials): array|WP_Error.
 	 * @param array    $credentials     Authentication credentials.
-	 * @return string REST base segment for the wp/v2/{rest_base}/{id} URL.
+	 * @return string|WP_Error REST base segment, or a catalog error.
 	 */
 	public static function resolve_rest_base(
 		string $post_type,
 		string $source_site_url,
 		callable $make_request,
 		array $credentials
-	): string {
+	): string|WP_Error {
 		if ( Post_Type_Map::is_builtin( $post_type ) ) {
 			return Post_Type_Map::to_rest_endpoint( $post_type );
 		}
@@ -85,19 +82,28 @@ final class Source_Post_Type_Resolver {
 			$source_site_url,
 			$make_request,
 			$credentials
-		) ?? array();
-		$entry    = self::find_entry( $post_type, $metadata );
+		);
+		if ( is_wp_error( $metadata ) ) {
+			return $metadata;
+		}
 
-		return null !== $entry ? $entry['rest_base'] : $post_type;
+		$entry = self::find_entry( $post_type, $metadata );
+		if ( null === $entry ) {
+			return self::post_type_unresolved_error();
+		}
+		if ( is_wp_error( $entry['raw_fields'] ) ) {
+			return $entry['raw_fields'];
+		}
+
+		return $entry['rest_base'];
 	}
 
 	/**
 	 * Resolves and validates a source post response's type and raw fields.
 	 *
 	 * Catalog metadata makes response-type and declared-field checks
-	 * authoritative when available. An older or temporarily unavailable
-	 * catalog falls back to the response type and shape without weakening the
-	 * validation of fields that are present.
+	 * authoritative. Missing, invalid, or unavailable metadata fails before any
+	 * response values can be accepted.
 	 *
 	 * @param string   $post_type       Requested source slug or REST base.
 	 * @param array    $data            Decoded source post response.
@@ -116,25 +122,24 @@ final class Source_Post_Type_Resolver {
 		callable $make_request,
 		array $credentials
 	): array|WP_Error {
-		// A built-in takes its expected slug from the static map, and a response
-		// already carrying every raw value cannot gain a requirement from the
-		// catalog, so the request cannot change the outcome.
-		$consult_catalog = ! Post_Type_Map::is_builtin( $post_type )
-			|| ! self::has_all_raw_values( $data );
+		$metadata = self::get_metadata(
+			$source_site_url,
+			$make_request,
+			$credentials
+		);
+		if ( is_wp_error( $metadata ) ) {
+			return $metadata;
+		}
 
-		$metadata          = $consult_catalog
-			? self::get_metadata(
-				$source_site_url,
-				$make_request,
-				$credentials
-			)
-			: null;
-		$catalog_available = null !== $metadata;
-		$metadata        ??= array();
-		$entry             = self::find_entry( $post_type, $metadata );
-		$expected_type     = null !== $entry
-			? $entry['slug']
-			: Post_Type_Map::to_wp_slug( $post_type );
+		$entry = self::find_entry( $post_type, $metadata );
+		if ( null === $entry ) {
+			return self::post_type_unresolved_error();
+		}
+		if ( is_wp_error( $entry['raw_fields'] ) ) {
+			return $entry['raw_fields'];
+		}
+
+		$expected_type = $entry['slug'];
 
 		if ( array_key_exists( 'type', $data ) ) {
 			$response_type = $data['type'];
@@ -147,20 +152,7 @@ final class Source_Post_Type_Resolver {
 				return self::invalid_post_type_error();
 			}
 
-			if (
-				null !== $entry
-				|| Post_Type_Map::is_builtin( $post_type )
-			) {
-				if ( $expected_type !== $response_type ) {
-					return self::post_type_mismatch_error();
-				}
-			} elseif ( $catalog_available ) {
-				// The catalog answered and does not list this type, so there is
-				// no authoritative slug to validate the response against.
-				return self::post_type_unresolved_error();
-			} elseif ( Post_Type_Map::is_builtin( $response_type ) ) {
-				// An unresolved custom endpoint may use the response type only
-				// when the catalog is unavailable and the type is also custom.
+			if ( $expected_type !== $response_type ) {
 				return self::post_type_mismatch_error();
 			}
 
@@ -176,8 +168,10 @@ final class Source_Post_Type_Resolver {
 			}
 		}
 
-		$raw_fields = $metadata[ $source_post_type ]['raw_fields'] ?? null;
-		$raw_values = self::extract_raw_values( $data, $raw_fields );
+		$raw_values = self::extract_raw_values(
+			$data,
+			$entry['raw_fields']
+		);
 		if ( is_wp_error( $raw_values ) ) {
 			return $raw_values;
 		}
@@ -189,36 +183,15 @@ final class Source_Post_Type_Resolver {
 	}
 
 	/**
-	 * Determines whether a response carries a raw value for every field.
-	 *
-	 * @param array $data Decoded source response.
-	 * @return bool True when title, content, and excerpt all hold a raw string.
-	 */
-	private static function has_all_raw_values( array $data ): bool {
-		foreach ( self::RAW_FIELDS as $field ) {
-			$field_value = $data[ $field ] ?? null;
-			if (
-				! is_array( $field_value )
-				|| ! is_string( $field_value['raw'] ?? null )
-			) {
-				return false;
-			}
-		}
-
-		return true;
-	}
-
-	/**
 	 * Extracts raw title, content, and excerpt values from a source response.
 	 *
-	 * @param array                    $data       Decoded source response.
-	 * @param array<string, bool>|null $raw_fields Declared raw fields, or null
-	 *                                             for an older source.
+	 * @param array               $data       Decoded source response.
+	 * @param array<string, bool> $raw_fields Declared raw fields.
 	 * @return array{title:string,content:string,excerpt:string}|WP_Error
 	 */
 	private static function extract_raw_values(
 		array $data,
-		?array $raw_fields
+		array $raw_fields
 	): array|WP_Error {
 		$raw_values     = array(
 			'title'   => '',
@@ -239,8 +212,9 @@ final class Source_Post_Type_Resolver {
 			}
 
 			if (
-				array_key_exists( $field, $data )
-				|| ( null !== $raw_fields && isset( $raw_fields[ $field ] ) )
+				'title' === $field
+				|| array_key_exists( $field, $data )
+				|| isset( $raw_fields[ $field ] )
 			) {
 				$missing_fields[] = $field;
 				continue;
@@ -266,36 +240,31 @@ final class Source_Post_Type_Resolver {
 	}
 
 	/**
-	 * Returns source post type metadata, fetching it once on success.
+	 * Returns source post type metadata or a typed catalog error.
 	 *
-	 * Any valid catalog list, including an empty list, is authoritative and
-	 * memoized. Failed or malformed responses return null and are not memoized,
-	 * allowing a later bulk item to retry until MAX_CATALOG_ATTEMPTS is spent.
-	 * Individual malformed entries are ignored; an invalid raw_fields property
-	 * conservatively requires every supported field.
+	 * Definitive metadata errors are memoized. Temporary request failures may be
+	 * retried up to MAX_CATALOG_ATTEMPTS, after which the error is memoized so a
+	 * bulk run cannot issue one catalog request per item.
 	 *
 	 * @param string   $source_site_url Source site URL.
 	 * @param callable $make_request    fn($url, $action, $credentials): array|WP_Error.
 	 * @param array    $credentials     Authentication credentials.
 	 * @return array<string, array{
 	 *     rest_base: string,
-	 *     raw_fields: array<string, bool>|null
-	 * }>|null Metadata keyed by post type slug, or null when unavailable.
+	 *     raw_fields: array<string, bool>|WP_Error
+	 * }>|WP_Error Metadata keyed by post type slug, or a catalog error.
 	 */
 	private static function get_metadata(
 		string $source_site_url,
 		callable $make_request,
 		array $credentials
-	): ?array {
+	): array|WP_Error {
 		if ( array_key_exists( $source_site_url, self::$metadata ) ) {
 			return self::$metadata[ $source_site_url ];
 		}
 
-		$attempts = self::$attempts[ $source_site_url ] ?? 0;
-		if ( $attempts >= self::MAX_CATALOG_ATTEMPTS ) {
-			return null;
-		}
-		self::$attempts[ $source_site_url ] = $attempts + 1;
+		$attempts                           = ( self::$attempts[ $source_site_url ] ?? 0 ) + 1;
+		self::$attempts[ $source_site_url ] = $attempts;
 
 		$url = trailingslashit( $source_site_url )
 			. 'wp-json/safe-publish/v1/catalog/post-types';
@@ -306,12 +275,27 @@ final class Source_Post_Type_Resolver {
 			$credentials
 		);
 		if ( is_wp_error( $response ) ) {
-			return null;
+			$error = self::catalog_unavailable_error();
+			if ( self::MAX_CATALOG_ATTEMPTS <= $attempts ) {
+				self::$metadata[ $source_site_url ] = $error;
+			}
+			return $error;
+		}
+
+		$response_code = wp_remote_retrieve_response_code( $response );
+		if ( 200 > $response_code || 299 < $response_code ) {
+			$error = self::catalog_unavailable_error();
+			if ( self::MAX_CATALOG_ATTEMPTS <= $attempts ) {
+				self::$metadata[ $source_site_url ] = $error;
+			}
+			return $error;
 		}
 
 		$data = json_decode( wp_remote_retrieve_body( $response ), true );
 		if ( ! is_array( $data ) || ! array_is_list( $data ) ) {
-			return null;
+			$error                              = self::catalog_invalid_error();
+			self::$metadata[ $source_site_url ] = $error;
+			return $error;
 		}
 
 		$metadata = array();
@@ -332,9 +316,10 @@ final class Source_Post_Type_Resolver {
 				continue;
 			}
 
+			$raw_fields        = self::parse_raw_fields( $type );
 			$metadata[ $slug ] = array(
 				'rest_base'  => $rest_base,
-				'raw_fields' => self::parse_raw_fields( $type ),
+				'raw_fields' => $raw_fields,
 			);
 		}
 
@@ -344,19 +329,19 @@ final class Source_Post_Type_Resolver {
 	}
 
 	/**
-	 * Parses an optional catalog raw_fields property.
+	 * Parses a required catalog raw_fields property.
 	 *
 	 * @param array $type Catalog post type entry.
-	 * @return array<string, bool>|null Parsed fields, or null when unavailable.
+	 * @return array<string, bool>|WP_Error Parsed fields, or a metadata error.
 	 */
-	private static function parse_raw_fields( array $type ): ?array {
+	private static function parse_raw_fields( array $type ): array|WP_Error {
 		if ( ! array_key_exists( 'raw_fields', $type ) ) {
-			return null;
+			return self::catalog_incompatible_error();
 		}
 
 		$fields = $type['raw_fields'];
 		if ( ! is_array( $fields ) || ! array_is_list( $fields ) ) {
-			return array_fill_keys( self::RAW_FIELDS, true );
+			return self::catalog_invalid_error();
 		}
 
 		$raw_fields = array();
@@ -369,7 +354,7 @@ final class Source_Post_Type_Resolver {
 					true
 				)
 			) {
-				return array_fill_keys( self::RAW_FIELDS, true );
+				return self::catalog_invalid_error();
 			}
 			$raw_fields[ $field ] = true;
 		}
@@ -384,7 +369,8 @@ final class Source_Post_Type_Resolver {
 	 * @param array  $metadata  Source metadata keyed by slug.
 	 * @return array{
 	 *     slug: string,
-	 *     rest_base: string
+	 *     rest_base: string,
+	 *     raw_fields: array<string, bool>|WP_Error
 	 * }|null Matching entry, or null.
 	 */
 	private static function find_entry(
@@ -394,16 +380,18 @@ final class Source_Post_Type_Resolver {
 		$slug = Post_Type_Map::to_wp_slug( $post_type );
 		if ( isset( $metadata[ $slug ] ) ) {
 			return array(
-				'slug'      => $slug,
-				'rest_base' => $metadata[ $slug ]['rest_base'],
+				'slug'       => $slug,
+				'rest_base'  => $metadata[ $slug ]['rest_base'],
+				'raw_fields' => $metadata[ $slug ]['raw_fields'],
 			);
 		}
 
 		foreach ( $metadata as $candidate_slug => $entry ) {
 			if ( $post_type === $entry['rest_base'] ) {
 				return array(
-					'slug'      => $candidate_slug,
-					'rest_base' => $entry['rest_base'],
+					'slug'       => $candidate_slug,
+					'rest_base'  => $entry['rest_base'],
+					'raw_fields' => $entry['raw_fields'],
 				);
 			}
 		}
@@ -453,6 +441,57 @@ final class Source_Post_Type_Resolver {
 			'fresh_content_post_type_unresolved',
 			__(
 				'The source site does not list this post type in its catalog. Confirm it is registered on the source with show_in_rest enabled.',
+				'safe-publish'
+			),
+			array( 'status' => 502 )
+		);
+	}
+
+	/**
+	 * Returns the temporary source catalog request error.
+	 *
+	 * @return WP_Error Retryable catalog error.
+	 */
+	private static function catalog_unavailable_error(): WP_Error {
+		return new WP_Error(
+			'fresh_content_catalog_unavailable',
+			__(
+				'The source post type catalog could not be retrieved. Try again.',
+				'safe-publish'
+			),
+			array(
+				'status'    => 503,
+				'retryable' => true,
+			)
+		);
+	}
+
+	/**
+	 * Returns the incompatible source catalog error.
+	 *
+	 * @return WP_Error Incompatible-source error.
+	 */
+	private static function catalog_incompatible_error(): WP_Error {
+		return new WP_Error(
+			'fresh_content_catalog_incompatible',
+			__(
+				'The source site is running an incompatible version of Safe Publish. Update it and try again.',
+				'safe-publish'
+			),
+			array( 'status' => 409 )
+		);
+	}
+
+	/**
+	 * Returns the invalid source catalog metadata error.
+	 *
+	 * @return WP_Error Invalid-metadata error.
+	 */
+	private static function catalog_invalid_error(): WP_Error {
+		return new WP_Error(
+			'fresh_content_catalog_invalid',
+			__(
+				'The source site returned invalid post type field metadata.',
 				'safe-publish'
 			),
 			array( 'status' => 502 )
