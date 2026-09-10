@@ -12,6 +12,7 @@ namespace Safe_Publish;
 use Safe_Publish\Auth\Permissions;
 
 use Safe_Publish\Admin\Admin_Ajax_Controller;
+use Safe_Publish\Admin\Posts_Read_Service;
 use Safe_Publish\Admin\Attention_Issues_Repository;
 use Safe_Publish\Admin\Import_Mode_Admin_Handler;
 use Safe_Publish\Admin\Admin_Menu_Manager;
@@ -385,7 +386,14 @@ final class Plugin {
 			$post_import_service,
 			$post_type_fetcher,
 			$this->telemetry,
-			$attention_issues
+			$attention_issues,
+			new Posts_Read_Service(
+				$api,
+				$repository,
+				$post_import_service,
+				$post_type_fetcher,
+				$attention_issues
+			)
 		);
 
 		return new Import_Mode_Admin_Handler(
