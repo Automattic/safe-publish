@@ -323,3 +323,24 @@ class WP_Error {
 		return $this->message;
 	}
 }
+
+/**
+ * Sanitizes a key for isolated query normalization tests.
+ *
+ * @param string $key Input key.
+ * @return string Sanitized key.
+ */
+function sanitize_key( string $key ): string {
+	return (string) preg_replace( '/[^a-z0-9_\-]/', '', strtolower( $key ) );
+}
+
+/**
+ * Sanitizes plain text for isolated query normalization tests.
+ *
+ * @param string $text Input text.
+ * @return string Sanitized text.
+ */
+function sanitize_text_field( string $text ): string {
+	// phpcs:ignore WordPressVIPMinimum.Functions.StripTags.StripTagsOneParameter -- Minimal unit stub; real sanitization is integration-tested.
+	return trim( strip_tags( $text ) );
+}

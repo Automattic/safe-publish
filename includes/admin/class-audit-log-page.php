@@ -10,10 +10,6 @@ declare(strict_types=1);
 namespace Safe_Publish\Admin;
 
 use Safe_Publish\Auth\Permissions;
-
-use Safe_Publish\Utils\Audit_Log_Table;
-use Safe_Publish\Utils\Datetime_Sanitizer;
-
 // Prevent direct access.
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
@@ -84,17 +80,7 @@ final class Audit_Log_Page {
 	 *
 	 * @var string[]
 	 */
-	public const KNOWN_LEVELS = array( 'info', 'warning', 'error' );
-
-	/**
-	 * Maximum rows the AJAX handler will return in one page.
-	 */
-	private const MAX_PER_PAGE = 100;
-
-	/**
-	 * Default page size when the request omits per_page.
-	 */
-	private const DEFAULT_PER_PAGE = 25;
+	public const KNOWN_LEVELS = Audit_Read_Service::KNOWN_LEVELS;
 
 	/**
 	 * Registers the submenu under the safe-publish parent and the AJAX
@@ -230,7 +216,7 @@ final class Audit_Log_Page {
 	 *   - after        string    ISO 8601 datetime or YYYY-MM-DD; lower bound on created_at_gmt.
 	 *   - before       string    ISO 8601 datetime or YYYY-MM-DD; upper bound (end-of-day if date-only).
 	 *   - page         int       1-based page index.
-	 *   - per_page     int       Page size; capped at MAX_PER_PAGE.
+	 *   - per_page     int       Page size; capped at 100.
 	 *
 	 * Response: { items: AuditEvent[], total: int }.
 	 */
@@ -238,99 +224,32 @@ final class Audit_Log_Page {
 		check_ajax_referer( 'safe_publish_ajax_nonce', 'nonce' );
 		$this->verify_ajax_capability( Permissions::view_audit_log_capability() );
 
-		// phpcs:disable WordPress.Security.NonceVerification.Missing -- nonce checked above.
-		$query_args = $this->build_query_args( $_POST );
+		// The nonce is checked above; the service sanitizes the request values.
+		// phpcs:disable WordPress.Security.NonceVerification.Missing
+		// phpcs:disable WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+		$input = array(
+			'channels'     => $_POST['channels'] ?? null,
+			'levels'       => $_POST['levels'] ?? null,
+			'event_search' => isset( $_POST['event_search'] )
+				&& is_string( $_POST['event_search'] )
+				? wp_unslash( $_POST['event_search'] ) : null,
+			'after'        => isset( $_POST['after'] )
+				&& is_string( $_POST['after'] )
+				? wp_unslash( $_POST['after'] ) : null,
+			'before'       => isset( $_POST['before'] )
+				&& is_string( $_POST['before'] )
+				? wp_unslash( $_POST['before'] ) : null,
+			'page'         => $_POST['page'] ?? null,
+			'per_page'     => $_POST['per_page'] ?? null,
+		);
+		// phpcs:enable WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
 		// phpcs:enable WordPress.Security.NonceVerification.Missing
 
-		$rows  = Audit_Log_Table::get_events( $query_args );
-		$total = Audit_Log_Table::count( $query_args );
-
-		$items = array_map(
-			static function ( array $row ): array {
-				$data    = is_array( $row['data'] ) ? $row['data'] : array();
-				$created = (string) $row['created_at_gmt'];
-
-				return array(
-					'id'                 => (int) $row['id'],
-					'channel'            => (string) $row['channel'],
-					'level'              => (string) $row['level'],
-					'event'              => (string) $row['event'],
-					'date'               => Datetime_Sanitizer::gmt_to_iso8601( $created ),
-					'actor_user_id'      => isset( $data['actor_user_id'] ) ? (int) $data['actor_user_id'] : 0,
-					'actor_display_name' => isset( $data['actor_display_name'] ) ? (string) $data['actor_display_name'] : '',
-					'actor_source'       => isset( $data['actor_source'] ) ? (string) $data['actor_source'] : '',
-					// Cast to object so empty payloads serialize as `{}` (JSON
-					// object), matching the AuditEvent.data type the React side
-					// expects rather than the `[]` PHP emits for empty arrays.
-					'data'               => (object) $data,
-				);
-			},
-			$rows
-		);
-
-		wp_send_json_success(
-			array(
-				'items' => $items,
-				'total' => $total,
-			)
-		);
-	}
-
-	/**
-	 * Translates raw request input into Audit_Log_Table query args. Drops
-	 * filters that resolve to empty so the SQL stays minimal and the index
-	 * on `created_at_gmt` can serve the unfiltered default view.
-	 *
-	 * @param array $input Raw $_POST (already nonce-verified).
-	 * @return array Args suitable for Audit_Log_Table::get_events()/count().
-	 */
-	private function build_query_args( array $input ): array {
-		$args = array();
-
-		$channels = isset( $input['channels'] ) && is_array( $input['channels'] )
-			? array_values( array_filter( array_map( 'sanitize_key', $input['channels'] ) ) )
-			: array();
-		if ( ! empty( $channels ) ) {
-			$args['channel'] = $channels;
+		$result = ( new Audit_Read_Service() )->get_events( $input );
+		if ( is_wp_error( $result ) ) {
+			wp_send_json_error( $result->get_error_message(), 403 );
 		}
 
-		$levels = isset( $input['levels'] ) && is_array( $input['levels'] )
-			? array_values( array_intersect( array_map( 'sanitize_key', $input['levels'] ), self::KNOWN_LEVELS ) )
-			: array();
-		if ( ! empty( $levels ) ) {
-			$args['level'] = $levels;
-		}
-
-		if ( ! empty( $input['event_search'] ) && is_string( $input['event_search'] ) ) {
-			$args['event_type'] = sanitize_text_field( wp_unslash( $input['event_search'] ) );
-		}
-
-		$after_raw  = isset( $input['after'] )
-			? sanitize_text_field( wp_unslash( $input['after'] ) )
-			: '';
-		$before_raw = isset( $input['before'] )
-			? sanitize_text_field( wp_unslash( $input['before'] ) )
-			: '';
-
-		$after  = Datetime_Sanitizer::sanitize_iso_datetime( $after_raw, false );
-		$before = Datetime_Sanitizer::sanitize_iso_datetime( $before_raw, true );
-
-		if ( is_string( $after ) ) {
-			$args['after_gmt'] = $after;
-		}
-
-		if ( is_string( $before ) ) {
-			$args['before_gmt'] = $before;
-		}
-
-		$per_page = isset( $input['per_page'] ) ? absint( $input['per_page'] ) : self::DEFAULT_PER_PAGE;
-		$per_page = min( max( $per_page, 1 ), self::MAX_PER_PAGE );
-
-		$page = isset( $input['page'] ) ? max( absint( $input['page'] ), 1 ) : 1;
-
-		$args['limit']  = $per_page;
-		$args['offset'] = ( $page - 1 ) * $per_page;
-
-		return $args;
+		wp_send_json_success( $result );
 	}
 }
