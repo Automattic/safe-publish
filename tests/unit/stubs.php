@@ -7,6 +7,24 @@
 
 declare(strict_types=1);
 
+function sanitize_text_field( string $text ): string {
+	// phpcs:ignore WordPressVIPMinimum.Functions.StripTags.StripTagsOneParameter -- Minimal test stub; real sanitization is integration-tested.
+	return trim( strip_tags( $text ) );
+}
+
+function get_site_transient( string $key ): mixed {
+	return $GLOBALS['_test_site_transients'][ $key ] ?? false;
+}
+
+function set_site_transient(
+	string $key,
+	mixed $value,
+	int $_expiration = 0
+): bool {
+	$GLOBALS['_test_site_transients'][ $key ] = $value;
+	return true;
+}
+
 function add_action(): void {}
 
 function add_filter(): void {}
