@@ -93,6 +93,11 @@ final class Plugin {
 	 * Initializes plugin.
 	 */
 	public function init(): void {
+		add_action(
+			'wp_abilities_api_categories_init',
+			array( $this, 'register_ability_category' )
+		);
+
 		Audit_Log_Table::maybe_create_table();
 		Imports_Table::maybe_create_table();
 		Import_Items_Table::maybe_create_table();
@@ -185,6 +190,22 @@ final class Plugin {
 		} else {
 			$this->init_settings_only_admin();
 		}
+	}
+
+	/**
+	 * Registers the Safe Publish ability category.
+	 */
+	public function register_ability_category(): void {
+		wp_register_ability_category(
+			'safe-publish',
+			array(
+				'label'       => __( 'Safe Publish', 'safe-publish' ),
+				'description' => __(
+					'Abilities for transferring content between WordPress sites.',
+					'safe-publish'
+				),
+			)
+		);
 	}
 
 	/**
