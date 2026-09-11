@@ -36,10 +36,18 @@ final class History_Repository {
 	private Import_Logger $logger;
 
 	/**
+	 * History reader.
+	 *
+	 * @var History_Read_Service
+	 */
+	private History_Read_Service $read_service;
+
+	/**
 	 * Constructs the History_Repository instance.
 	 */
 	public function __construct() {
-		$this->logger = new Import_Logger();
+		$this->logger       = new Import_Logger();
+		$this->read_service = new History_Read_Service();
 	}
 
 	/**
@@ -360,43 +368,11 @@ final class History_Repository {
 	 *                   updated, and failed counts, or null if not found.
 	 */
 	public function get_session( int $session_id ): ?array {
-		global $wpdb;
-
-		// phpcs:disable WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
-		$row = $wpdb->get_row(
-			$wpdb->prepare(
-				$this->build_session_select_sql(
-					'WHERE i.id = %d GROUP BY i.id'
-				),
-				$session_id
-			),
-			ARRAY_A
+		$result = $this->read_service->get_session(
+			array( 'session_id' => $session_id )
 		);
-		// phpcs:enable WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 
-		return $row ? $row : null;
-	}
-
-	/**
-	 * Builds a session SELECT statement that projects per-session item counts
-	 * by joining the items table.
-	 *
-	 * @param string $tail_clause WHERE/GROUP BY/ORDER BY/LIMIT tail.
-	 * @return string Composed SQL statement.
-	 */
-	private function build_session_select_sql( string $tail_clause ): string {
-		$imports = Imports_Table::table_name();
-		$items   = Import_Items_Table::table_name();
-
-		$counts = 'COUNT(it.id) AS total_items,'
-			. " COALESCE(SUM(it.status IN ('success', 'updated')), 0)"
-			. ' AS successful,'
-			. " COALESCE(SUM(it.status = 'updated'), 0) AS updated,"
-			. " COALESCE(SUM(it.status = 'error'), 0) AS failed";
-
-		return "SELECT i.*, {$counts} FROM `{$imports}` i"
-			. " LEFT JOIN `{$items}` it ON it.session_id = i.id"
-			. " {$tail_clause}";
+		return is_wp_error( $result ) ? null : $result;
 	}
 
 	/**
@@ -410,24 +386,11 @@ final class History_Repository {
 	 * @return array[] Array of item rows.
 	 */
 	public function get_session_items( int $session_id ): array {
-		global $wpdb;
-
-		$table = Import_Items_Table::table_name();
-
-		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
-		$rows = $wpdb->get_results(
-			$wpdb->prepare(
-				'SELECT id, session_id, title, source_post_id, status, post_id,'
-					. ' error_message, has_previous_content, rolled_back,'
-					. " import_date_gmt FROM `{$table}` WHERE session_id = %d"
-					. ' ORDER BY id ASC',
-				$session_id
-			),
-			ARRAY_A
+		$result = $this->read_service->get_session_items(
+			array( 'session_id' => $session_id )
 		);
-		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 
-		return $rows ? $rows : array();
+		return is_wp_error( $result ) ? array() : $result;
 	}
 
 	/**
@@ -437,18 +400,11 @@ final class History_Repository {
 	 * @return array|null Item row or null if not found.
 	 */
 	public function get_item( int $item_id ): ?array {
-		global $wpdb;
-
-		$table = Import_Items_Table::table_name();
-
-		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
-		$row = $wpdb->get_row(
-			$wpdb->prepare( "SELECT * FROM `{$table}` WHERE id = %d", $item_id ),
-			ARRAY_A
+		$result = $this->read_service->get_item(
+			array( 'item_id' => $item_id )
 		);
-		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 
-		return $row ? $row : null;
+		return is_wp_error( $result ) ? null : $result;
 	}
 
 	/**
@@ -461,23 +417,11 @@ final class History_Repository {
 	 * @return array|null Item row or null if no matching item exists.
 	 */
 	public function get_item_for_post( int $post_id ): ?array {
-		global $wpdb;
-
-		$table = Import_Items_Table::table_name();
-
-		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
-		$row = $wpdb->get_row(
-			$wpdb->prepare(
-				"SELECT * FROM `{$table}` WHERE post_id = %d"
-					. ' AND rolled_back = 0'
-					. ' ORDER BY id DESC LIMIT 1',
-				$post_id
-			),
-			ARRAY_A
+		$result = $this->read_service->get_item_for_post(
+			array( 'post_id' => $post_id )
 		);
-		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 
-		return $row ? $row : null;
+		return is_wp_error( $result ) ? null : $result;
 	}
 
 	/**
@@ -496,51 +440,14 @@ final class History_Repository {
 		string $source_site_url,
 		array $source_ids
 	): array {
-		if ( 0 === count( $source_ids ) ) {
-			return array();
-		}
-
-		global $wpdb;
-
-		$table        = Import_Items_Table::table_name();
-		$imports      = Imports_Table::table_name();
-		$placeholders = implode( ', ', array_fill( 0, count( $source_ids ), '%d' ) );
-		$values       = array_values( $source_ids );
-		$values[]     = $source_site_url;
-
-		// NOT EXISTS picks the latest active row per source (ties broken by id);
-		// a rolled-back row or newer error can't mask it. Served by
-		// source_post_id_import_date.
-		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
-		$rows = $wpdb->get_results(
-			$wpdb->prepare(
-				"SELECT t1.* FROM `{$table}` t1"
-					. " INNER JOIN `{$imports}` s1 ON s1.id = t1.session_id"
-					. " WHERE t1.source_post_id IN ({$placeholders})"
-					. " AND t1.status IN ( 'success', 'updated' )"
-					. ' AND t1.rolled_back = 0'
-					. ' AND s1.source_site_url = %s'
-					. " AND NOT EXISTS ( SELECT 1 FROM `{$table}` t2"
-					. " INNER JOIN `{$imports}` s2 ON s2.id = t2.session_id"
-					. ' WHERE t2.source_post_id = t1.source_post_id'
-					. " AND t2.status IN ( 'success', 'updated' )"
-					. ' AND t2.rolled_back = 0'
-					. ' AND s2.source_site_url = s1.source_site_url'
-					. ' AND ( t2.import_date_gmt > t1.import_date_gmt'
-					. ' OR ( t2.import_date_gmt = t1.import_date_gmt'
-					. ' AND t2.id > t1.id ) ) )',
-				...$values
-			),
-			ARRAY_A
+		$result = $this->read_service->get_active_items_by_source_ids(
+			array(
+				'source_site_url' => $source_site_url,
+				'source_ids'      => $source_ids,
+			)
 		);
-		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 
-		$by_source = array();
-		foreach ( is_array( $rows ) ? $rows : array() as $row ) {
-			$by_source[ (int) $row['source_post_id'] ] = $row;
-		}
-
-		return $by_source;
+		return is_wp_error( $result ) ? array() : $result;
 	}
 
 	/**
@@ -625,135 +532,18 @@ final class History_Repository {
 		int $per_page = 20,
 		array $args = array()
 	): array {
-		global $wpdb;
-
-		$items_table   = Import_Items_Table::table_name();
-		$imports_table = Imports_Table::table_name();
-		$posts_table   = $wpdb->posts;
-		$offset        = max( 0, ( $page - 1 ) * $per_page );
-		$limit         = $per_page + 1;
-
-		$search          = isset( $args['search'] ) ? (string) $args['search'] : '';
-		$name            = isset( $args['name'] ) ? (string) $args['name'] : '';
-		$post_types      = isset( $args['post_types'] ) ? (array) $args['post_types'] : array();
-		$imported_after  = isset( $args['imported_after'] ) ? (string) $args['imported_after'] : '';
-		$imported_before = isset( $args['imported_before'] ) ? (string) $args['imported_before'] : '';
-		$freshness       = isset( $args['freshness'] ) ? (string) $args['freshness'] : 'any';
-		$orderby         = ( isset( $args['orderby'] ) && 'title' === $args['orderby'] )
-			? 't1.title'
-			: 't1.import_date_gmt';
-		$order           = ( isset( $args['order'] ) && 'asc' === strtolower( (string) $args['order'] ) )
-			? 'ASC'
-			: 'DESC';
-
-		$where  = array(
-			't1.source_post_id IS NOT NULL',
-			"t1.status IN ( 'success', 'updated' )",
-			't1.rolled_back = 0',
-			't1.post_id IS NOT NULL',
-			"p.post_status != 'trash'",
-			's1.source_site_url = %s',
+		$result = $this->read_service->list_imported_source_rows(
+			array(
+				'source_site_url' => $source_site_url,
+				'page'            => $page,
+				'per_page'        => $per_page,
+				'args'            => $args,
+			)
 		);
-		$params = array( $source_site_url );
 
-		if ( '' !== $search ) {
-			$where[]  = 't1.title LIKE %s';
-			$params[] = '%' . $wpdb->esc_like( $search ) . '%';
-		}
-
-		if ( '' !== $name ) {
-			$where[]  = 'p.post_name = %s';
-			$params[] = $name;
-		}
-
-		if ( '' !== $imported_after ) {
-			$where[]  = 't1.import_date_gmt >= %s';
-			$params[] = $imported_after;
-		}
-
-		if ( '' !== $imported_before ) {
-			$where[]  = 't1.import_date_gmt <= %s';
-			$params[] = $imported_before;
-		}
-
-		if ( count( $post_types ) > 0 ) {
-			$placeholders = implode( ', ', array_fill( 0, count( $post_types ), '%s' ) );
-			$where[]      = "p.post_type IN ({$placeholders})";
-			array_push( $params, ...array_map( 'strval', $post_types ) );
-		}
-
-		if ( 'outdated' === $freshness ) {
-			$where[] = 't1.source_modified_gmt IS NOT NULL';
-			$where[] = 't1.source_modified_gmt > t1.import_date_gmt';
-		} elseif ( 'up-to-date' === $freshness ) {
-			$where[] = '( t1.source_modified_gmt IS NULL'
-				. ' OR t1.source_modified_gmt <= t1.import_date_gmt )';
-		}
-
-		$where_sql = implode( ' AND ', $where );
-		$params[]  = $limit;
-		$params[]  = $offset;
-
-		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
-		$rows = $wpdb->get_results(
-			$wpdb->prepare(
-				'SELECT t1.*, p.post_type AS wp_post_type,'
-					. ' p.post_status AS wp_post_status'
-					. " FROM `{$items_table}` t1"
-					. " INNER JOIN `{$posts_table}` p ON p.ID = t1.post_id"
-					. " INNER JOIN `{$imports_table}` s1 ON s1.id = t1.session_id"
-					. " WHERE {$where_sql}"
-					. " AND NOT EXISTS ( SELECT 1 FROM `{$items_table}` t2"
-					. " INNER JOIN `{$imports_table}` s2 ON s2.id = t2.session_id"
-					. ' WHERE t2.source_post_id = t1.source_post_id'
-					. " AND t2.status IN ( 'success', 'updated' )"
-					. ' AND t2.rolled_back = 0'
-					. ' AND s2.source_site_url = s1.source_site_url'
-					. ' AND ( t2.import_date_gmt > t1.import_date_gmt'
-					. ' OR ( t2.import_date_gmt = t1.import_date_gmt AND t2.id > t1.id ) ) )'
-					. " ORDER BY {$orderby} {$order}, t1.id DESC"
-					. ' LIMIT %d OFFSET %d',
-				...$params
-			),
-			ARRAY_A
-		);
-		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
-
-		return is_array( $rows ) ? $rows : array();
+		return is_wp_error( $result ) ? array() : $result;
 	}
 
-	/**
-	 * WHERE fragment (alias it) selecting the inbox's failure rows: Any error
-	 * with no later row for the same source post on the same source site.
-	 * Orphans (no source_post_id) always qualify.
-	 *
-	 * The ignored_gmt column is NULL for an open failure and set once ignored;
-	 * $ignored=true selects the ignored set instead of the open one.
-	 *
-	 * Carries one %s placeholder: Callers join the imports table as alias s and
-	 * pass $source_site_url first to prepare().
-	 *
-	 * @param bool $ignored Select ignored rows instead of open ones.
-	 * @return string WHERE fragment.
-	 */
-	private function failures_where_sql( bool $ignored ): string {
-		$items_table   = Import_Items_Table::table_name();
-		$imports_table = Imports_Table::table_name();
-		$ignore_sql    = $ignored
-			? 'it.ignored_gmt IS NOT NULL'
-			: 'it.ignored_gmt IS NULL';
-
-		return "it.status = 'error' AND {$ignore_sql}"
-			. ' AND s.source_site_url = %s'
-			. ' AND ( it.source_post_id IS NULL'
-			. " OR NOT EXISTS ( SELECT 1 FROM `{$items_table}` t2"
-			. " INNER JOIN `{$imports_table}` s2 ON s2.id = t2.session_id"
-			. ' WHERE t2.source_post_id = it.source_post_id'
-			. ' AND s2.source_site_url = s.source_site_url'
-			. ' AND ( t2.import_date_gmt > it.import_date_gmt'
-			. ' OR ( t2.import_date_gmt = it.import_date_gmt'
-			. ' AND t2.id > it.id ) ) ) )';
-	}
 
 	/**
 	 * Lists one source's failure rows for the Needs attention inbox. Orphans
@@ -773,35 +563,16 @@ final class History_Repository {
 		int $limit,
 		bool $ignored = false
 	): array {
-		if ( $limit < 1 ) {
-			return array();
-		}
-
-		global $wpdb;
-
-		$items_table   = Import_Items_Table::table_name();
-		$imports_table = Imports_Table::table_name();
-		$where_sql     = $this->failures_where_sql( $ignored );
-
-		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
-		$rows = $wpdb->get_results(
-			$wpdb->prepare(
-				'SELECT it.id, it.session_id, it.title, it.source_post_id,'
-					. ' it.error_message, it.import_date_gmt, s.source_site_url'
-					. " FROM `{$items_table}` it"
-					. " INNER JOIN `{$imports_table}` s ON s.id = it.session_id"
-					. " WHERE {$where_sql}"
-					. ' ORDER BY it.import_date_gmt DESC, it.id DESC'
-					. ' LIMIT %d OFFSET %d',
-				$source_site_url,
-				$limit,
-				max( 0, $offset )
-			),
-			ARRAY_A
+		$result = $this->read_service->list_failures(
+			array(
+				'source_site_url' => $source_site_url,
+				'offset'          => $offset,
+				'limit'           => $limit,
+				'ignored'         => $ignored,
+			)
 		);
-		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 
-		return is_array( $rows ) ? $rows : array();
+		return is_wp_error( $result ) ? array() : $result;
 	}
 
 	/**
@@ -817,24 +588,14 @@ final class History_Repository {
 		string $source_site_url,
 		bool $ignored = false
 	): int {
-		global $wpdb;
-
-		$items_table   = Import_Items_Table::table_name();
-		$imports_table = Imports_Table::table_name();
-		$where_sql     = $this->failures_where_sql( $ignored );
-
-		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
-		$count = $wpdb->get_var(
-			$wpdb->prepare(
-				"SELECT COUNT(*) FROM `{$items_table}` it"
-					. " INNER JOIN `{$imports_table}` s ON s.id = it.session_id"
-					. " WHERE {$where_sql}",
-				$source_site_url
+		$result = $this->read_service->count_failures(
+			array(
+				'source_site_url' => $source_site_url,
+				'ignored'         => $ignored,
 			)
 		);
-		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 
-		return null === $count ? 0 : (int) $count;
+		return is_wp_error( $result ) ? 0 : $result['count'];
 	}
 
 	/**
@@ -1015,46 +776,11 @@ final class History_Repository {
 	 * @return array<int, array> Map of post_id → most recent item row.
 	 */
 	public function get_items_for_posts( array $post_ids ): array {
-		if ( 0 === count( $post_ids ) ) {
-			return array();
-		}
-
-		global $wpdb;
-
-		$table        = Import_Items_Table::table_name();
-		$placeholders = implode( ', ', array_fill( 0, count( $post_ids ), '%d' ) );
-		$values       = array_values( $post_ids );
-
-		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
-		$rows = $wpdb->get_results(
-			$wpdb->prepare(
-				"SELECT t1.* FROM `{$table}` t1"
-					. ' INNER JOIN ( SELECT post_id, MAX(import_date_gmt) AS max_date'
-					. " FROM `{$table}` WHERE post_id IN ({$placeholders})"
-					. ' AND rolled_back = 0 GROUP BY post_id ) t2'
-					. ' ON t1.post_id = t2.post_id'
-					. ' AND t1.import_date_gmt = t2.max_date'
-					. ' WHERE t1.rolled_back = 0'
-					. ' ORDER BY t1.id DESC',
-				...$values
-			),
-			ARRAY_A
+		$result = $this->read_service->get_items_for_posts(
+			array( 'post_ids' => $post_ids )
 		);
-		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 
-		if ( ! is_array( $rows ) ) {
-			return array();
-		}
-
-		$by_post_id = array();
-		foreach ( $rows as $row ) {
-			$post_id = (int) $row['post_id'];
-			if ( ! isset( $by_post_id[ $post_id ] ) ) {
-				$by_post_id[ $post_id ] = $row;
-			}
-		}
-
-		return $by_post_id;
+		return is_wp_error( $result ) ? array() : $result;
 	}
 
 	/**

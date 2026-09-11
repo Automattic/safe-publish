@@ -325,9 +325,20 @@ class WP_Error {
 }
 
 /**
- * Sanitizes a key for isolated query normalization tests.
+ * Strips tags and whitespace for plain-text unit fixtures.
  *
- * @param string $key Input key.
+ * @param mixed $value Raw fixture value.
+ * @return string Plain text.
+ */
+function sanitize_text_field( mixed $value ): string {
+	// phpcs:ignore WordPressVIPMinimum.Functions.StripTags.StripTagsOneParameter -- unit fixtures contain no scripts or styles.
+	return is_scalar( $value ) ? trim( strip_tags( (string) $value ) ) : '';
+}
+
+/**
+ * Sanitizes a unit fixture key.
+ *
+ * @param string $key Raw key.
  * @return string Sanitized key.
  */
 function sanitize_key( string $key ): string {
@@ -335,12 +346,11 @@ function sanitize_key( string $key ): string {
 }
 
 /**
- * Sanitizes plain text for isolated query normalization tests.
+ * Sanitizes a unit fixture slug.
  *
- * @param string $text Input text.
- * @return string Sanitized text.
+ * @param string $title Raw slug.
+ * @return string Sanitized slug.
  */
-function sanitize_text_field( string $text ): string {
-	// phpcs:ignore WordPressVIPMinimum.Functions.StripTags.StripTagsOneParameter -- Minimal unit stub; real sanitization is integration-tested.
-	return trim( strip_tags( $text ) );
+function sanitize_title( string $title ): string {
+	return sanitize_key( str_replace( ' ', '-', $title ) );
 }
