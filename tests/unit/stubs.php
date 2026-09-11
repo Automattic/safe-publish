@@ -323,3 +323,34 @@ class WP_Error {
 		return $this->message;
 	}
 }
+
+/**
+ * Strips tags and whitespace for plain-text unit fixtures.
+ *
+ * @param mixed $value Raw fixture value.
+ * @return string Plain text.
+ */
+function sanitize_text_field( mixed $value ): string {
+	// phpcs:ignore WordPressVIPMinimum.Functions.StripTags.StripTagsOneParameter -- unit fixtures contain no scripts or styles.
+	return is_scalar( $value ) ? trim( strip_tags( (string) $value ) ) : '';
+}
+
+/**
+ * Sanitizes a unit fixture key.
+ *
+ * @param string $key Raw key.
+ * @return string Sanitized key.
+ */
+function sanitize_key( string $key ): string {
+	return (string) preg_replace( '/[^a-z0-9_\-]/', '', strtolower( $key ) );
+}
+
+/**
+ * Sanitizes a unit fixture slug.
+ *
+ * @param string $title Raw slug.
+ * @return string Sanitized slug.
+ */
+function sanitize_title( string $title ): string {
+	return sanitize_key( str_replace( ' ', '-', $title ) );
+}
