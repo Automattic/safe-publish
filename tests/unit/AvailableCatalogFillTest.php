@@ -10,8 +10,10 @@ declare(strict_types=1);
 namespace Safe_Publish\Tests;
 
 use PHPUnit\Framework\TestCase;
-use ReflectionClass;
-use Safe_Publish\Admin\Admin_Ajax_Controller;
+use Safe_Publish\Admin\Posts_Read_Service;
+use Safe_Publish\Admin\History_Repository;
+use Safe_Publish\Admin\Attention_Issues_Repository;
+use Safe_Publish\API\Post_Type_Fetcher;
 use Safe_Publish\API\Catalog_REST_Controller;
 
 /**
@@ -100,7 +102,7 @@ class AvailableCatalogFillTest extends TestCase {
 		// ASSERT: The scan stops at the cap and returns an empty page.
 		$this->assertSame( array(), $result['items'] );
 		$this->assertSame(
-			Admin_Ajax_Controller::AVAILABLE_FILL_MAX_FETCHES,
+			Posts_Read_Service::AVAILABLE_FILL_MAX_FETCHES,
 			count( $api->requested_per_pages )
 		);
 
@@ -147,7 +149,7 @@ class AvailableCatalogFillTest extends TestCase {
 	}
 
 	/**
-	 * Invokes the private Available fill with the given doubles and paging.
+	 * Calls the public listing service with the given doubles and paging.
 	 *
 	 * @param Fake_Catalog_Source_Posts_API $api      Source API double.
 	 * @param Fake_Import_Status_Service    $import   Import status double.
@@ -161,36 +163,32 @@ class AvailableCatalogFillTest extends TestCase {
 		int $page,
 		int $per_page
 	): array {
-		$controller = ( new ReflectionClass( Admin_Ajax_Controller::class ) )
-			->newInstanceWithoutConstructor();
-		set_private_property(
-			Admin_Ajax_Controller::class,
-			$controller,
-			'api',
-			$api
-		);
-		set_private_property(
-			Admin_Ajax_Controller::class,
-			$controller,
-			'post_import_service',
-			$import
+		$previous_secret = getenv( 'SAFE_PUBLISH_SHARED_SECRET' );
+		set_test_env( 'SAFE_PUBLISH_SHARED_SECRET', 'posts-service-test-secret' );
+		$service = new Posts_Read_Service(
+			$api,
+			new History_Repository(),
+			$import,
+			$this->createMock( Post_Type_Fetcher::class ),
+			new Attention_Issues_Repository()
 		);
 
-		$method = get_private_method(
-			Admin_Ajax_Controller::class,
-			'list_available_via_catalog'
-		);
-
-		$result = $method->invoke(
-			$controller,
-			'https://source.example.com',
-			array(),
-			array(
-				'page'      => $page,
-				'per_page'  => $per_page,
-				'post_type' => 'post',
-			)
-		);
+		try {
+			$result = $service->list_posts(
+				array(
+					'source_site_url' => 'https://source.example.com',
+					'state'           => 'available',
+					'page'            => $page,
+					'per_page'        => $per_page,
+					'post_type'       => 'post',
+				)
+			);
+		} finally {
+			set_test_env(
+				'SAFE_PUBLISH_SHARED_SECRET',
+				is_string( $previous_secret ) ? $previous_secret : null
+			);
+		}
 
 		$this->assertIsArray( $result );
 
