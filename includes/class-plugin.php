@@ -12,6 +12,7 @@ namespace Safe_Publish;
 use Safe_Publish\Auth\Permissions;
 
 use Safe_Publish\Admin\Admin_Ajax_Controller;
+use Safe_Publish\Admin\Posts_Read_Service;
 use Safe_Publish\Admin\Attention_Issues_Repository;
 use Safe_Publish\Admin\Import_Mode_Admin_Handler;
 use Safe_Publish\Admin\Admin_Menu_Manager;
@@ -92,6 +93,11 @@ final class Plugin {
 	 * Initializes plugin.
 	 */
 	public function init(): void {
+		add_action(
+			'wp_abilities_api_categories_init',
+			array( $this, 'register_ability_category' )
+		);
+
 		Audit_Log_Table::maybe_create_table();
 		Imports_Table::maybe_create_table();
 		Import_Items_Table::maybe_create_table();
@@ -184,6 +190,22 @@ final class Plugin {
 		} else {
 			$this->init_settings_only_admin();
 		}
+	}
+
+	/**
+	 * Registers the Safe Publish ability category.
+	 */
+	public function register_ability_category(): void {
+		wp_register_ability_category(
+			'safe-publish',
+			array(
+				'label'       => __( 'Safe Publish', 'safe-publish' ),
+				'description' => __(
+					'Abilities for transferring content between WordPress sites.',
+					'safe-publish'
+				),
+			)
+		);
 	}
 
 	/**
@@ -385,7 +407,14 @@ final class Plugin {
 			$post_import_service,
 			$post_type_fetcher,
 			$this->telemetry,
-			$attention_issues
+			$attention_issues,
+			new Posts_Read_Service(
+				$api,
+				$repository,
+				$post_import_service,
+				$post_type_fetcher,
+				$attention_issues
+			)
 		);
 
 		return new Import_Mode_Admin_Handler(

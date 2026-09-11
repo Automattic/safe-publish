@@ -10,6 +10,12 @@ The separate `view_safe_publish_audit_log` capability grants read-only access to
 
 Per-post reads have a separate authorization contract. A direct caller of the diff-preview endpoint who lacks the resolved management capability must have the post type's `edit_posts` capability, and the mapped local post is always checked with `edit_post`.
 
+## Abilities API
+
+Safe Publish requires WordPress 6.9 or later and registers the `safe-publish` ability category on `wp_abilities_api_categories_init`. No abilities are registered yet.
+
+Future Tier 1 (read-only) abilities must explicitly set `meta.show_in_rest` to `false` when registered with `wp_register_ability()`. REST exposure must be a deliberate opt-in for each ability, with separate exposure decisions for other transports. This is a policy for future ability registrations, not category metadata or a replacement for permission callbacks.
+
 ## API Endpoints
 
 The plugin registers endpoints under the `safe-publish/v1` namespace.
