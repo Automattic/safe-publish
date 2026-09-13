@@ -351,6 +351,13 @@ class Needs_Attention_Ajax_Test extends WP_Ajax_UnitTestCase {
 		$this->seed_failure( $session, 500, 'Ignored import' );
 		$post_id = self::factory()->post->create();
 		$this->open_degradation( $post_id, 8300 );
+		$target_id = self::factory()->post->create();
+		update_post_meta( $target_id, Options::META_SOURCE_POST_ID, 8300 );
+		update_post_meta(
+			$target_id,
+			Options::META_SOURCE_SITE_URL,
+			self::SOURCE
+		);
 		$this->ignore_both( $post_id );
 		$this->seed_failure( $session, 501, 'Still open' );
 
@@ -358,8 +365,10 @@ class Needs_Attention_Ajax_Test extends WP_Ajax_UnitTestCase {
 		$response = $this->list_needs_attention( 1, 20, 'ignored' );
 
 		// ASSERT: It lists both ignored rows; the count reports the open failure.
-		$this->assertCount( 2, $response['data']['items'] );
+		$items = $response['data']['items'];
+		$this->assertCount( 2, $items );
 		$this->assertSame( 1, $response['data']['needs_attention_count'] );
+		$this->assertFalse( $items[1]['resolvable'] );
 	}
 
 	/**
