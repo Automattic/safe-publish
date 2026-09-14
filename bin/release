@@ -58,13 +58,6 @@ rm "${local_dev_file}.bak"
 
 echo "Updated $local_dev_file from $current_version to $new_version"
 
-# Update versioned test fixtures
-permission_manager_test_file="tests/integration/auth/Permission_Manager_Test.php"
-sed -i.bak "s/Safe Publish\\/$current_version;/Safe Publish\\/$new_version;/" "$permission_manager_test_file"
-rm "${permission_manager_test_file}.bak"
-
-echo "Updated $permission_manager_test_file from $current_version to $new_version"
-
 # Get current version from package.json
 package_file="package.json"
 package_lock_file="package-lock.json"
@@ -91,7 +84,6 @@ git add "$php_file"
 git add "$local_dev_file"
 git add "$package_file"
 git add "$package_lock_file"
-git add "$permission_manager_test_file"
 git commit -m "v$new_version"
 
 echo "Changes committed to release/v$new_version branch. Push the branch to the remote repository and create a pull request."
