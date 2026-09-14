@@ -12,6 +12,7 @@ declare(strict_types=1);
 
 namespace Safe_Publish\Tests\Integration;
 
+use Safe_Publish\Admin\Admin_Ajax_Controller;
 use Safe_Publish\Admin\Connection_Service;
 use Safe_Publish\API\Source_Posts_API;
 use Safe_Publish\Utils\Options;
@@ -24,6 +25,50 @@ use WP_Ajax_UnitTestCase;
 class Connection_Service_Test extends WP_Ajax_UnitTestCase {
 
 	use Ajax_Die_Continue_Trait;
+
+	/**
+	 * Verifies that callers can remove the original cache invalidation callback.
+	 */
+	public function test_controller_cache_callback_remains_removable(): void {
+		// ARRANGE: All authentication options and the original public callback.
+		$options  = array(
+			Options::OPTION_CONNECTED_SITE_URL,
+			Options::OPTION_BASIC_AUTH_USERNAME,
+			Options::OPTION_BASIC_AUTH_PASSWORD,
+		);
+		$callback = array( Admin_Ajax_Controller::class, 'bust_auth_status_cache' );
+		$cached   = array( 'status' => 'authorized' );
+
+		foreach ( $options as $option ) {
+			foreach ( array( 'add_option_', 'update_option_' ) as $prefix ) {
+				$hook = $prefix . $option;
+				$this->assertSame( 10, has_action( $hook, $callback ) );
+
+				// ACT: Unhook invalidation using the pre-extraction callback.
+				$this->assertTrue( remove_action( $hook, $callback ) );
+				try {
+					delete_option( $option );
+					if ( 'update_option_' === $prefix ) {
+						add_option( $option, 'previous-value' );
+					}
+					set_site_transient(
+						Connection_Service::AUTH_STATUS_TRANSIENT,
+						$cached
+					);
+					update_option( $option, 'new-value' );
+
+					// ASSERT: No replacement callback invalidates the cache.
+					$this->assertSame(
+						$cached,
+						get_site_transient( Connection_Service::AUTH_STATUS_TRANSIENT )
+					);
+				} finally {
+					add_action( $hook, $callback );
+					Connection_Service::bust_auth_status_cache();
+				}
+			}
+		}
+	}
 
 	/**
 	 * Verifies that direct callers receive sanitized inputs without unslashing.

@@ -125,24 +125,6 @@ final class Connection_Service {
 	// phpcs:enable Generic.CodeAnalysis.UnusedFunctionParameter.Found
 
 	/**
-	 * Registers option-update hooks that bust the auth-status transient when
-	 * any authentication-related setting changes.
-	 */
-	public function register_auth_status_invalidation(): void {
-		$options  = array(
-			Options::OPTION_CONNECTED_SITE_URL,
-			Options::OPTION_BASIC_AUTH_USERNAME,
-			Options::OPTION_BASIC_AUTH_PASSWORD,
-		);
-		$callback = array( __CLASS__, 'bust_auth_status_cache' );
-
-		foreach ( $options as $option ) {
-			add_action( 'add_option_' . $option, $callback );
-			add_action( 'update_option_' . $option, $callback );
-		}
-	}
-
-	/**
 	 * Deletes the cached auth-status site transient.
 	 */
 	public static function bust_auth_status_cache(): void {

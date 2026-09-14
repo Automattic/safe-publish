@@ -248,7 +248,18 @@ final class Admin_Ajax_Controller {
 		add_action( 'wp_ajax_safe_publish_bulk_delete_posts', array( $this, 'ajax_bulk_delete_posts' ) );
 		add_action( 'wp_ajax_safe_publish_sync_status_batch', array( $this, 'ajax_sync_status_batch' ) );
 
-		$this->connection_service->register_auth_status_invalidation();
+		// Preserve the public callback identity for remove_action() callers.
+		$options  = array(
+			Options::OPTION_CONNECTED_SITE_URL,
+			Options::OPTION_BASIC_AUTH_USERNAME,
+			Options::OPTION_BASIC_AUTH_PASSWORD,
+		);
+		$callback = array( __CLASS__, 'bust_auth_status_cache' );
+
+		foreach ( $options as $option ) {
+			add_action( 'add_option_' . $option, $callback );
+			add_action( 'update_option_' . $option, $callback );
+		}
 	}
 
 	/**
