@@ -12,7 +12,6 @@ namespace Safe_Publish\Admin;
 use Safe_Publish\API\HTTP_Client;
 use Safe_Publish\API\Source_Posts_API;
 use Safe_Publish\API\Post_Type_Fetcher;
-use Safe_Publish\Auth\Auth_Logger;
 use Safe_Publish\Auth\VIP_Safe_Auth;
 use Safe_Publish\Utils\Auth_Credential_Provider;
 use Safe_Publish\Utils\Options;
@@ -44,14 +43,14 @@ final class Admin_Ajax_Controller {
 	 *
 	 * @var string
 	 */
-	const AUTH_STATUS_TRANSIENT = 'safe_publish_auth_status';
+	const AUTH_STATUS_TRANSIENT = Connection_Service::AUTH_STATUS_TRANSIENT;
 
 	/**
 	 * TTL for the auth-status site transient.
 	 *
 	 * @var int
 	 */
-	const AUTH_STATUS_TTL = 5 * MINUTE_IN_SECONDS;
+	const AUTH_STATUS_TTL = Connection_Service::AUTH_STATUS_TTL;
 
 	/**
 	 * Maximum number of source IDs accepted by ajax_sync_status_batch in a
@@ -174,6 +173,13 @@ final class Admin_Ajax_Controller {
 	private Attention_Issues_Repository $attention_issues;
 
 	/**
+	 * Connection read service.
+	 *
+	 * @var Connection_Service
+	 */
+	private Connection_Service $connection_service;
+
+	/**
 	 * Attention inbox reader.
 	 *
 	 * @var Attention_Read_Service
@@ -190,6 +196,7 @@ final class Admin_Ajax_Controller {
 	 * @param Telemetry_Service           $telemetry          Telemetry service.
 	 * @param Attention_Issues_Repository $attention_issues   Attention issues repository.
 	 * @param Posts_Read_Service|null     $posts_read_service Posts reader.
+	 * @param Connection_Service|null     $connection_service Connection read service.
 	 */
 	public function __construct(
 		Source_Posts_API $api,
@@ -198,13 +205,16 @@ final class Admin_Ajax_Controller {
 		Post_Type_Fetcher $post_type_fetcher,
 		Telemetry_Service $telemetry,
 		Attention_Issues_Repository $attention_issues,
-		?Posts_Read_Service $posts_read_service = null
+		?Posts_Read_Service $posts_read_service = null,
+		?Connection_Service $connection_service = null
 	) {
 		$this->api                    = $api;
 		$this->repository             = $repository;
 		$this->post_import_service    = $post_import_service;
 		$this->telemetry              = $telemetry;
 		$this->attention_issues       = $attention_issues;
+		$this->connection_service     = $connection_service
+			?? new Connection_Service( $api, $telemetry );
 		$this->posts_read_service     = $posts_read_service ?? new Posts_Read_Service(
 			$api,
 			$repository,
@@ -238,14 +248,7 @@ final class Admin_Ajax_Controller {
 		add_action( 'wp_ajax_safe_publish_bulk_delete_posts', array( $this, 'ajax_bulk_delete_posts' ) );
 		add_action( 'wp_ajax_safe_publish_sync_status_batch', array( $this, 'ajax_sync_status_batch' ) );
 
-		$this->register_auth_status_invalidation();
-	}
-
-	/**
-	 * Registers option-update hooks that bust the auth-status transient when
-	 * any authentication-related setting changes.
-	 */
-	private function register_auth_status_invalidation(): void {
+		// Preserve the public callback identity for remove_action() callers.
 		$options  = array(
 			Options::OPTION_CONNECTED_SITE_URL,
 			Options::OPTION_BASIC_AUTH_USERNAME,
@@ -263,7 +266,7 @@ final class Admin_Ajax_Controller {
 	 * Deletes the cached auth-status site transient.
 	 */
 	public static function bust_auth_status_cache(): void {
-		delete_site_transient( self::AUTH_STATUS_TRANSIENT );
+		Connection_Service::bust_auth_status_cache();
 	}
 
 	/**
@@ -761,41 +764,15 @@ final class Admin_Ajax_Controller {
 		}
 		$this->verify_ajax_capability();
 
-		$connected_site_url = sanitize_text_field( wp_unslash( $_POST['connected_site_url'] ?? '' ) );
-
-		if ( empty( $connected_site_url ) ) {
-			wp_send_json_error( __( 'Connected site URL is required.', 'safe-publish' ) );
+		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Service sanitizes the unslashed form fields.
+		$results = $this->connection_service->test_connection( wp_unslash( $_POST ) );
+		if ( is_wp_error( $results ) ) {
+			$data = $results->get_error_data();
+			wp_send_json_error(
+				$results->get_error_message(),
+				is_array( $data ) ? ( $data['status'] ?? null ) : null
+			);
 		}
-
-		$this->validate_auth_or_fail();
-
-		$auth_credentials = Auth_Credential_Provider::get_credentials();
-
-		// When the settings form submits live credential fields, always honour
-		// them — including when they are empty — so cleared fields override any
-		// previously saved Basic Auth credentials.
-		if ( array_key_exists( 'username', $_POST ) && array_key_exists( 'password', $_POST ) ) {
-			$username = sanitize_text_field( wp_unslash( $_POST['username'] ) );
-			$password = sanitize_text_field( wp_unslash( $_POST['password'] ) );
-
-			if ( ! empty( $username ) && ! empty( $password ) ) {
-				$auth_credentials['username'] = $username;
-				$auth_credentials['password'] = $password;
-			} else {
-				unset( $auth_credentials['username'], $auth_credentials['password'] );
-			}
-		}
-
-		$results = $this->api->test_connection( $connected_site_url, $auth_credentials );
-
-		$this->telemetry->record_event(
-			Telemetry_Events::CONNECTION_TEST_COMPLETED,
-			array(
-				'outcome' => Telemetry_Events::normalize_connection_outcome(
-					(string) ( $results['status'] ?? '' )
-				),
-			)
-		);
 
 		wp_send_json_success( $results );
 	}
@@ -813,55 +790,12 @@ final class Admin_Ajax_Controller {
 		}
 		$this->verify_ajax_capability();
 
-		$probe = $this->get_cached_auth_status();
-
-		// Render the message at request time so the cache stays pure probe data.
-		$probe['message'] = Source_Posts_API::describe_auth_status(
-			(string) ( $probe['status'] ?? '' ),
-			(string) ( $probe['error_code'] ?? '' )
-		);
+		$probe = $this->connection_service->auth_status( array() );
+		if ( is_wp_error( $probe ) ) {
+			wp_send_json_error( $probe->get_error_message() );
+		}
 
 		wp_send_json_success( $probe );
-	}
-
-	/**
-	 * Returns the cached auth-status probe result, refreshing it if absent.
-	 *
-	 * @return array Probe result from VIP_Safe_Auth::test_authorization().
-	 */
-	private function get_cached_auth_status(): array {
-		$cached = get_site_transient( self::AUTH_STATUS_TRANSIENT );
-		if ( is_array( $cached ) && isset( $cached['status'] ) ) {
-			return $cached;
-		}
-
-		$result = VIP_Safe_Auth::test_authorization(
-			get_option( Options::OPTION_CONNECTED_SITE_URL, '' ),
-			Auth_Credential_Provider::get_credentials()
-		);
-
-		set_site_transient(
-			self::AUTH_STATUS_TRANSIENT,
-			$result,
-			self::AUTH_STATUS_TTL
-		);
-
-		// Persist non-authorized outcomes so the destination has a trail of why
-		// it cannot connect. Only a cold cache reaches here, so this is throttled.
-		$status = (string) ( $result['status'] ?? '' );
-		if (
-			VIP_Safe_Auth::STATUS_UNAUTHORIZED === $status
-			|| VIP_Safe_Auth::STATUS_BLOCKED === $status
-			|| VIP_Safe_Auth::STATUS_UNREACHABLE === $status
-		) {
-			( new Auth_Logger() )->connection_probe_failed(
-				$status,
-				(int) ( $result['code'] ?? 0 ),
-				(string) ( $result['error_code'] ?? '' )
-			);
-		}
-
-		return $result;
 	}
 
 	/**
