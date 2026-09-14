@@ -245,11 +245,8 @@ final class Audit_Log_Page {
 		// phpcs:enable WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
 		// phpcs:enable WordPress.Security.NonceVerification.Missing
 
-		$result = ( new Audit_Read_Service() )->get_events( $input );
-		if ( is_wp_error( $result ) ) {
-			wp_send_json_error( $result->get_error_message(), 403 );
-		}
-
-		wp_send_json_success( $result );
+		wp_send_json_success(
+			( new Audit_Read_Service() )->get_events( $input )
+		);
 	}
 }

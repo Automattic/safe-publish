@@ -12,7 +12,6 @@ namespace Safe_Publish\Admin;
 use Closure;
 use Safe_Publish\Utils\Audit_Log_Table;
 use Safe_Publish\Utils\Datetime_Sanitizer;
-use WP_Error;
 
 /**
  * Queries and formats audit events for authorized callers.
@@ -70,9 +69,9 @@ final class Audit_Read_Service {
 	 *     @type int|string $page         One-based page index. Default 1.
 	 *     @type int|string $per_page     Page size: 1-100, default 25.
 	 * }
-	 * @return array{items: list<array>, total: int}|WP_Error Audit events and count.
+	 * @return array{items: list<array>, total: int} Audit events and count.
 	 */
-	public function get_events( array $input ): array|WP_Error {
+	public function get_events( array $input ): array {
 		$query_args = $this->build_query_args( $input );
 
 		$rows  = ( $this->query )( $query_args );
