@@ -1,40 +1,6 @@
 @use "@wordpress/base-styles/variables" as *;
 @import "@wordpress/dataviews/build-style/style.css";
 
-// Bulk import styling enhancements
-.safe-publish-dataviews-wrapper {
-
-	.dataviews-bulk-actions {
-		background: var(--safe-publish-bg-info);
-		border: 1px solid var(--safe-publish-primary);
-		border-radius: 3px;
-		margin-bottom: 16px;
-		padding: 12px 16px;
-
-		.dataviews-bulk-actions__selection-count {
-			font-weight: 600;
-			color: var(--safe-publish-primary);
-		}
-	}
-
-	// Highlight selected rows
-	.dataviews-view-table tr[aria-selected="true"] {
-		background-color: var(--safe-publish-bg-info) !important;
-		border-left: 3px solid var(--safe-publish-primary);
-	}
-
-	// Style bulk action buttons
-	.dataviews-bulk-actions button[data-action-id="import"] {
-		background: var(--safe-publish-primary);
-		color: var(--safe-publish-text-on-fill);
-		font-weight: 600;
-
-		&:hover {
-			background: var(--safe-publish-primary-hover);
-		}
-	}
-}
-
 // Bulk import modal improvements
 .safe-publish-bulk-import-progress {
 
@@ -464,13 +430,6 @@ html:has(body.toplevel_page_safe-publish) {
 	}
 }
 
-.dataviews-action-modal__tertiary {
-
-	h2 {
-		font-size: 1.3em;
-	}
-}
-
 .safe-publish-block-diff-viewer {
 	display: flex;
 	flex-direction: column;
@@ -727,15 +686,12 @@ html:has(body.toplevel_page_safe-publish) {
 }
 /* stylelint-enable no-descending-specificity */
 
-// Each admin page drives search/filter from its own toolbar; hide DataViews'
-// built-ins so they don't duplicate the UI.
-.safe-publish-dataviews-wrapper .dataviews-search,
-.safe-publish-dataviews-wrapper .dataviews-filters {
+// Each admin page drives search from its own toolbar.
+.safe-publish-dataviews-wrapper .dataviews-search {
 	display: none;
 }
 
-// Hiding the built-in search/filter UI leaves an empty toolbar row above the
-// table; drop its vertical padding so it doesn't read as a white band.
+// Hiding the search leaves an empty toolbar row that reads as a white band.
 .safe-publish-dataviews-wrapper .dataviews__view-actions {
 	padding-top: 0;
 	padding-bottom: 0;
