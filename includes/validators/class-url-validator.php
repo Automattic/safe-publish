@@ -52,6 +52,58 @@ class URL_Validator {
 	}
 
 	/**
+	 * Determines whether a URL is an absolute http or https URL.
+	 *
+	 * Tests the scheme and host rather than using FILTER_VALIDATE_URL, which is
+	 * ASCII-only and so rejects a valid URL whose path carries non-ASCII
+	 * characters.
+	 *
+	 * @param string $url URL to test.
+	 * @return bool True for an absolute http or https URL.
+	 */
+	public static function is_absolute_http_url( string $url ): bool {
+		$scheme = wp_parse_url( $url, PHP_URL_SCHEME );
+		$host   = wp_parse_url( $url, PHP_URL_HOST );
+
+		if ( ! is_string( $scheme ) || ! is_string( $host ) || '' === $host ) {
+			return false;
+		}
+
+		return in_array( strtolower( $scheme ), array( 'http', 'https' ), true );
+	}
+
+	/**
+	 * Resolves a possibly relative URL against a base site URL.
+	 *
+	 * A URL carrying a scheme is already absolute and is returned untouched,
+	 * which covers non-ASCII paths and opaque schemes such as data: URIs. A
+	 * scheme-relative URL adopts the base URL's scheme.
+	 *
+	 * @param string $url      URL to resolve.
+	 * @param string $base_url Base site URL to resolve against.
+	 * @return string Absolute URL.
+	 */
+	public static function resolve_relative_url(
+		string $url,
+		string $base_url
+	): string {
+		$parsed = wp_parse_url( $url );
+		$parts  = is_array( $parsed ) ? $parsed : array();
+
+		if ( isset( $parts['scheme'] ) ) {
+			return $url;
+		}
+
+		if ( isset( $parts['host'] ) ) {
+			$scheme = wp_parse_url( $base_url, PHP_URL_SCHEME );
+
+			return ( is_string( $scheme ) ? $scheme : 'https' ) . ':' . $url;
+		}
+
+		return rtrim( $base_url, '/' ) . '/' . ltrim( $url, '/' );
+	}
+
+	/**
 	 * Returns true when the host is a literal loopback name or an IP
 	 * literal in a reserved address range.
 	 *

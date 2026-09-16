@@ -1587,7 +1587,7 @@ class Content_Processor {
 				);
 			} elseif (
 				is_string( $value ) &&
-				filter_var( $value, FILTER_VALIDATE_URL ) &&
+				URL_Validator::is_absolute_http_url( $value ) &&
 				$this->content_media_processor
 					->has_uploadable_file_extension( $value )
 			) {
