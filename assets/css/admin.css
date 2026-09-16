@@ -22,12 +22,12 @@
 	padding-bottom: 10px;
 }
 
-.dataviews-wrapper {
+.safe-publish-dataviews-wrapper .dataviews-wrapper {
 	margin: 20px 0;
 }
 
 /* DataViews draws no header underline. */
-.dataviews-view-table th {
+.safe-publish-dataviews-wrapper .dataviews-view-table th {
 	border-bottom: 1px solid var(--safe-publish-border);
 }
 
