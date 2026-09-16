@@ -12,6 +12,7 @@ import { __, _n, sprintf } from '@wordpress/i18n';
 
 import type {
 	AttentionIssue,
+	DisplayError,
 	JsonValue,
 	LocalState,
 	SourceError,
@@ -90,6 +91,23 @@ export function getSourceError( data: unknown ): SourceError | undefined {
 	}
 
 	return { message, template };
+}
+
+/**
+ * Flattens a display error to the sentence it renders as, so two errors can
+ * be compared by text regardless of shape.
+ *
+ * @param {DisplayError} error Error to flatten.
+ *
+ * @return {string} Rendered text.
+ */
+export function displayErrorText( error: DisplayError ): string {
+	if ( typeof error === 'string' ) {
+		return error;
+	}
+
+	// Function replacement: A `$` pattern in the source text stays literal.
+	return error.template.replace( '<reason />', () => error.message );
 }
 
 /**

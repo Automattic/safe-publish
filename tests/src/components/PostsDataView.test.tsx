@@ -13,7 +13,11 @@ import {
 
 import { PostsDataView } from '@/components/PostsDataView';
 
-import type { DataViewsField, UnifiedPostRow } from '@/types';
+import type {
+	DataViewsField,
+	DisplayError,
+	UnifiedPostRow,
+} from '@/types';
 
 const dataViews = vi.hoisted( () => ( {
 	props: null as {
@@ -36,7 +40,7 @@ vi.mock( '@wordpress/dataviews', () => ( {
 } ) );
 
 const selector = vi.hoisted( () => ( {
-	error: null as string | null,
+	error: null as DisplayError | null,
 } ) );
 
 // Stub the selector and drive postTypeError through onError to exercise the
@@ -45,7 +49,7 @@ vi.mock( '@/post-type-selector', () => ( {
 	PostTypeSelector: ( {
 		onError,
 	}: {
-		onError?: ( error: string | null ) => void;
+		onError?: ( error: DisplayError | null ) => void;
 	} ) => {
 		useEffect( () => {
 			onError?.( selector.error );
@@ -64,6 +68,17 @@ const DEST_URL = 'https://destination.example.com';
 
 // The 503 string both AJAX paths surface verbatim.
 const HTTP_503 = 'Source site returned HTTP error 503.';
+
+// A 401 both paths can surface, as the flat sentence and as the structured
+// halves the server composes it from.
+const REASON_401 = 'Refused.';
+const TEMPLATE_401 = 'Source site returned HTTP error 401. <reason />';
+const FLAT_401 = `Source site returned HTTP error 401. ${ REASON_401 }`;
+const SOURCE_ERROR_401 = { message: REASON_401, template: TEMPLATE_401 };
+const STRUCTURED_401 = {
+	success: false,
+	data: { message: FLAT_401, source_error: SOURCE_ERROR_401 },
+};
 
 let fetchMock: ReturnType< typeof vi.fn >;
 
@@ -355,6 +370,85 @@ describe( 'PostsDataView source-error notices', () => {
 		render( <PostsDataView sourceSiteUrl={ SOURCE_URL } /> );
 		await waitFor( () => expect( errorNotices() ).toHaveLength( 1 ) );
 		await resolveList( { success: false, data: HTTP_503 } );
+		expect( errorNotices() ).toHaveLength( 1 );
+
+		// ACT: Dismiss the visible banner.
+		const dismiss = errorNotices()[ 0 ].querySelector( 'button' );
+		expect( dismiss ).not.toBeNull();
+		await act( async () => {
+			fireEvent.click( dismiss as HTMLButtonElement );
+		} );
+
+		// ASSERT: No banner remains; the suppressed twin does not resurface.
+		expect( errorNotices() ).toHaveLength( 0 );
+	} );
+
+	it( 'should isolate the source reason in the list-fetch notice', async () => {
+		// ARRANGE: The list read fails with a reason carrying directional
+		// controls, which would reorder the sentence around it.
+		const reason = '\u202eSource refused the request.\u202c';
+		fetchMock.mockResolvedValue( {
+			json: () =>
+				Promise.resolve( {
+					success: false,
+					data: {
+						message: `Source site returned HTTP error 401. ${ reason }`,
+						source_error: {
+							message: reason,
+							template: TEMPLATE_401,
+						},
+					},
+				} ),
+		} );
+
+		// ACT: Mount on the default catalog chip and let the failure settle.
+		render( <PostsDataView sourceSiteUrl={ SOURCE_URL } /> );
+		await waitFor( () => expect( errorNotices() ).toHaveLength( 1 ) );
+
+		// ASSERT: The reason renders as its own directional run.
+		const isolated = errorNotices()[ 0 ].querySelector( 'bdi' );
+		expect( isolated?.textContent ).toBe( reason );
+		expect( isolated ).toHaveAttribute( 'dir', 'auto' );
+	} );
+
+	it( 'should collapse two structured errors carrying the same text', async () => {
+		// ARRANGE: Both reads fail the same way, so each path builds its own
+		// object with equal halves.
+		selector.error = SOURCE_ERROR_401;
+		const resolveList = deferListFetch();
+
+		// ACT: Mount on the default catalog chip, then settle the list 401.
+		render( <PostsDataView sourceSiteUrl={ SOURCE_URL } /> );
+		await waitFor( () => expect( errorNotices() ).toHaveLength( 1 ) );
+		await resolveList( STRUCTURED_401 );
+
+		// ASSERT: Separate objects, one banner.
+		expect( errorNotices() ).toHaveLength( 1 );
+	} );
+
+	it( 'should collapse a structured error against its flat twin', async () => {
+		// ARRANGE: The post-type read carries structured detail; the list read
+		// reports the same failure as a bare sentence.
+		selector.error = SOURCE_ERROR_401;
+		const resolveList = deferListFetch();
+
+		// ACT: Mount on the default catalog chip, then settle the flat 401.
+		render( <PostsDataView sourceSiteUrl={ SOURCE_URL } /> );
+		await waitFor( () => expect( errorNotices() ).toHaveLength( 1 ) );
+		await resolveList( { success: false, data: FLAT_401 } );
+
+		// ASSERT: Mixed shapes reading alike still collapse to one banner.
+		expect( errorNotices() ).toHaveLength( 1 );
+	} );
+
+	it( 'should clear both structured states on dismiss', async () => {
+		// ARRANGE: The structured identical-error case, with the surviving
+		// notice being the fetch-error one that carries the coupling.
+		selector.error = SOURCE_ERROR_401;
+		const resolveList = deferListFetch();
+		render( <PostsDataView sourceSiteUrl={ SOURCE_URL } /> );
+		await waitFor( () => expect( errorNotices() ).toHaveLength( 1 ) );
+		await resolveList( STRUCTURED_401 );
 		expect( errorNotices() ).toHaveLength( 1 );
 
 		// ACT: Dismiss the visible banner.
