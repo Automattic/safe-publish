@@ -686,6 +686,11 @@ html:has(body.toplevel_page_safe-publish) {
 }
 /* stylelint-enable no-descending-specificity */
 
+// Accents DataViews' faint selected-row tint. A background would break hover.
+.safe-publish-dataviews-wrapper .dataviews-view-table tr.is-selected {
+	border-left: 3px solid var(--wp-admin-theme-color);
+}
+
 // Each admin page drives search from its own toolbar.
 .safe-publish-dataviews-wrapper .dataviews-search {
 	display: none;
