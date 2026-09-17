@@ -8,7 +8,12 @@ SCRIPT_MODE=${1:-start} # "build" or "start". Default is "start".
 # bin/setup-env, which configures WP_HOME for both sites) inherit them.
 # When unset, load the per-worktree pair from .devports.
 if [ -z "$WP_ENV_PORT" ] && [ -f .devports ]; then
-	. ./.devports || echo "warning: could not load .devports; using defaults" >&2
+	# Sourcing an unreadable file exits the shell, so test readability first.
+	if [ -r .devports ]; then
+		. ./.devports
+	else
+		echo "warning: cannot read .devports; using defaults" >&2
+	fi
 fi
 export WP_ENV_PORT="${WP_ENV_PORT-8888}"
 export WP_ENV_TESTS_PORT="${WP_ENV_TESTS_PORT-8889}"
