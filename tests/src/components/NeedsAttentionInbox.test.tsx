@@ -1,7 +1,7 @@
 /**
  * Tests for the NeedsAttentionInbox component.
  */
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import NeedsAttentionInbox from '@/components/NeedsAttentionInbox';
@@ -10,6 +10,15 @@ import type { NeedsAttentionRow } from '@/types';
 const dv = vi.hoisted( () => ( {
 	view: undefined as unknown,
 	onChangeView: undefined as ( ( next: unknown ) => void ) | undefined,
+	actions: [] as Array< { id: string; isPrimary?: boolean } >,
+} ) );
+
+const useViewportMatch = vi.hoisted( () => vi.fn( () => false ) );
+
+// useRowActions reads this to decide whether to demote primary actions.
+vi.mock( '@wordpress/compose', async ( importOriginal ) => ( {
+	...( await importOriginal< typeof import('@wordpress/compose') >() ),
+	useViewportMatch,
 } ) );
 
 // DataViews pulls in @wordpress/private-apis, which cannot unlock in the test
@@ -33,6 +42,7 @@ vi.mock( '@wordpress/dataviews', () => ( {
 		actions?: Array< {
 			id: string;
 			label: string;
+			isPrimary?: boolean;
 			isEligible?: ( item: NeedsAttentionRow ) => boolean;
 		} >;
 		view: unknown;
@@ -41,6 +51,7 @@ vi.mock( '@wordpress/dataviews', () => ( {
 	} ): JSX.Element => {
 		dv.view = view;
 		dv.onChangeView = onChangeView;
+		dv.actions = actions;
 		return (
 			<div>
 				{ header }
@@ -125,11 +136,54 @@ function mockListResponse(
 	);
 }
 
+beforeEach( () => {
+	dv.actions = [];
+	useViewportMatch.mockReturnValue( false );
+} );
+
 afterEach( () => {
 	vi.unstubAllGlobals();
 } );
 
 describe( 'NeedsAttentionInbox', () => {
+	it( 'Verifies that wide viewports keep the inbox actions inline', async () => {
+		// ARRANGE: A wide viewport and one failure row.
+		useViewportMatch.mockReturnValue( false );
+		mockListResponse( [ FAILURE ] );
+
+		// ACT: Render the inbox.
+		render(
+			<NeedsAttentionInbox
+				ajaxurl="https://example.com/wp-admin/admin-ajax.php"
+				nonce="test-nonce"
+			/>
+		);
+		expect( await screen.findByText( 'Broken import' ) ).toBeInTheDocument();
+
+		// ASSERT: The actions reach DataViews as their factory built them.
+		expect( dv.actions.length ).toBeGreaterThan( 0 );
+		expect( dv.actions.some( ( action ) => action.isPrimary ) ).toBe( true );
+	} );
+
+	it( 'Verifies that narrow viewports demote every inbox action', async () => {
+		// ARRANGE: A viewport below the breakpoint and one failure row.
+		useViewportMatch.mockReturnValue( true );
+		mockListResponse( [ FAILURE ] );
+
+		// ACT: Render the inbox.
+		render(
+			<NeedsAttentionInbox
+				ajaxurl="https://example.com/wp-admin/admin-ajax.php"
+				nonce="test-nonce"
+			/>
+		);
+		expect( await screen.findByText( 'Broken import' ) ).toBeInTheDocument();
+
+		// ASSERT: None is primary, so the row gets an overflow menu.
+		expect( dv.actions.length ).toBeGreaterThan( 0 );
+		expect( dv.actions.some( ( action ) => action.isPrimary ) ).toBe( false );
+	} );
+
 	it( 'Verifies that failures and degradations render with per-kind actions', async () => {
 		// ARRANGE: The endpoint returns one failure and one degradation.
 		mockListResponse( [ FAILURE, DEGRADATION ] );
