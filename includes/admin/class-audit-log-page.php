@@ -121,8 +121,8 @@ final class Audit_Log_Page {
 	}
 
 	/**
-	 * Adds the Audit Log submenu under the safe-publish-settings parent for
-	 * the export-only/unconfigured modes.
+	 * Adds the Audit Log submenu under the settings parent for the
+	 * export-only/unconfigured modes.
 	 */
 	public function add_submenu_page_settings(): void {
 		if ( ! current_user_can( Permissions::manage_capability() ) ) {
@@ -130,7 +130,7 @@ final class Audit_Log_Page {
 		}
 
 		add_submenu_page(
-			'safe-publish-settings',
+			Settings_Page::PAGE_SLUG,
 			__( 'Audit Log', 'safe-publish' ),
 			__( 'Audit Log', 'safe-publish' ),
 			Permissions::view_audit_log_capability(),
@@ -199,7 +199,7 @@ final class Audit_Log_Page {
 				'ajaxurl'       => admin_url( 'admin-ajax.php' ),
 				'nonce'         => wp_create_nonce( 'safe_publish_ajax_nonce' ),
 				'containerId'   => 'safe-publish-audit-log-container',
-				'settingsUrl'   => admin_url( 'admin.php?page=safe-publish-settings' ),
+				'settingsUrl'   => Settings_Page::url(),
 				'knownChannels' => self::KNOWN_CHANNELS,
 				'knownLevels'   => self::KNOWN_LEVELS,
 			)

@@ -23,9 +23,22 @@ const dataViews = vi.hoisted( () => ( {
 	props: null as {
 		data: UnifiedPostRow[];
 		fields: DataViewsField< UnifiedPostRow >[];
+		actions?: Array< {
+			id: string;
+			isPrimary?: boolean;
+			isEligible?: ( item: UnifiedPostRow ) => boolean;
+		} >;
 		config?: { perPageSizes: number[] };
 		header?: JSX.Element;
 	} | null,
+} ) );
+
+const useViewportMatch = vi.hoisted( () => vi.fn( () => false ) );
+
+// useRowActions reads this to decide whether to demote primary actions.
+vi.mock( '@wordpress/compose', async ( importOriginal ) => ( {
+	...( await importOriginal< typeof import('@wordpress/compose') >() ),
+	useViewportMatch,
 } ) );
 
 // DataViews pulls in @wordpress/private-apis, which cannot unlock in the test
@@ -124,6 +137,7 @@ function searchInput(): HTMLInputElement {
 beforeEach( () => {
 	selector.error = null;
 	dataViews.props = null;
+	useViewportMatch.mockReturnValue( false );
 	window.history.replaceState( null, '', '/' );
 
 	// The destination host is the localized home_url(), distinct from both the
@@ -176,6 +190,37 @@ describe( 'PostsDataView fields', () => {
 					},
 				} ),
 		} );
+	} );
+
+	it( 'Verifies that an available row keeps an inline action on wide viewports', async () => {
+		// ARRANGE: A wide viewport.
+		useViewportMatch.mockReturnValue( false );
+
+		// ACT: Mount the listing.
+		render( <PostsDataView sourceSiteUrl={ SOURCE_URL } /> );
+		await waitFor( () => expect( dataViews.props?.data ).toHaveLength( 1 ) );
+
+		// ASSERT: Import stays primary, so it renders inline on hover.
+		expect(
+			dataViews.props?.actions?.find( ( action ) => 'import' === action.id )
+				?.isPrimary
+		).toBe( true );
+	} );
+
+	it( 'Verifies that narrow viewports demote every row action', async () => {
+		// ARRANGE: A viewport below the breakpoint.
+		useViewportMatch.mockReturnValue( true );
+
+		// ACT: Mount the listing.
+		render( <PostsDataView sourceSiteUrl={ SOURCE_URL } /> );
+		await waitFor( () => expect( dataViews.props?.data ).toHaveLength( 1 ) );
+
+		// ASSERT: None is primary, so every eligible action reaches the
+		// overflow menu rather than the hidden inline row.
+		expect( dataViews.props?.actions?.length ).toBeGreaterThan( 0 );
+		expect(
+			dataViews.props?.actions?.some( ( action ) => action.isPrimary )
+		).toBe( false );
 	} );
 
 	it( 'Verifies that source post titles render without links', async () => {

@@ -50,6 +50,7 @@ import {
 } from '../utils';
 import { useAuthStatus } from './hooks/useAuthStatus';
 import { useResetSelectionOnQueryChange } from './hooks/useResetSelectionOnQueryChange';
+import { useRowActions } from './hooks/useRowActions';
 import { useStepBackWhenPageEmpties } from './hooks/useStepBackWhenPageEmpties';
 
 import type {
@@ -895,6 +896,20 @@ export function PostsDataView( {
 		currentPage
 	);
 
+	const actions = useRowActions(
+		createPostsActions(
+			refresh,
+			isAuthorized,
+			{
+				ajaxurl: window.safePublishAdminData.ajaxurl,
+				nonce: window.safePublishAdminData.nonce,
+				onNotice: setRollbackNotice,
+			},
+			syncStatuses,
+			selectedCount
+		)
+	);
+
 	return (
 		<div
 			className="safe-publish-dataviews-wrapper safe-publish-dataviews-wrapper--approx-pagination"
@@ -1073,17 +1088,7 @@ export function PostsDataView( {
 					paginationInfo={ paginationInfo }
 					defaultLayouts={ { [ LAYOUT_TABLE ]: {} } }
 					config={ { perPageSizes: [ 10, 20, 50 ] } }
-					actions={ createPostsActions(
-						refresh,
-						isAuthorized,
-						{
-							ajaxurl: window.safePublishAdminData.ajaxurl,
-							nonce: window.safePublishAdminData.nonce,
-							onNotice: setRollbackNotice,
-						},
-						syncStatuses,
-						selectedCount
-					) }
+					actions={ actions }
 					header={
 						<Button
 							className="safe-publish-refresh-button"

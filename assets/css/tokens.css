@@ -24,7 +24,6 @@
 
 	/* Primary action (follows the user's WP admin color scheme). */
 	--safe-publish-primary: var(--wp-admin-theme-color);
-	--safe-publish-primary-hover: var(--wp-admin-theme-color-darker-10);
 
 	/* Status. */
 	--safe-publish-status-success: #008a20;
@@ -32,15 +31,11 @@
 	--safe-publish-status-warning-bg: #fff8e5;
 	--safe-publish-status-warning-border: #f0d589;
 	--safe-publish-status-error: #d63638;
-	--safe-publish-status-error-hover: #b32d2e;
 	--safe-publish-status-future: #9b59b6;
 
 	/* Pills. */
 	--safe-publish-pill-bg-neutral: #dcdcde;
 	--safe-publish-pill-bg-muted: #646970;
-
-	/* Info-tinted background surface (matches WP-native notice alert tone). */
-	--safe-publish-bg-info: #f0f6fc;
 
 	/* Diff palette (unified across inline highlights and block surfaces). */
 	--safe-publish-diff-added-bg: #d1f2a5;

@@ -361,4 +361,131 @@ class URLValidatorTest extends TestCase {
 		// ASSERT: Empty string out.
 		$this->assertSame( '', $identity );
 	}
+
+	/**
+	 * Verifies that absolute http and https URLs are recognized regardless of
+	 * non-ASCII characters in the path, which FILTER_VALIDATE_URL rejects.
+	 *
+	 * @dataProvider absolute_http_url_provider
+	 *
+	 * @param string $url      URL under test.
+	 * @param bool   $expected Expected result.
+	 */
+	public function test_is_absolute_http_url( string $url, bool $expected ): void {
+		// ACT & ASSERT: The URL is classified as expected.
+		$this->assertSame( $expected, URL_Validator::is_absolute_http_url( $url ) );
+	}
+
+	/**
+	 * Data provider for is_absolute_http_url().
+	 *
+	 * @return array<string, array{url: string, expected: bool}>
+	 */
+	public static function absolute_http_url_provider(): array {
+		return array(
+			'ascii https'        => array(
+				'url'      => 'https://example.com/image.png',
+				'expected' => true,
+			),
+			'non-ASCII path'     => array(
+				'url'      => 'https://example.com/uploads/Capture-décran-à-12.56.40.png',
+				'expected' => true,
+			),
+			'http scheme'        => array(
+				'url'      => 'http://example.com/image.png',
+				'expected' => true,
+			),
+			'uppercase scheme'   => array(
+				'url'      => 'HTTPS://example.com/image.png',
+				'expected' => true,
+			),
+			'data URI'           => array(
+				'url'      => 'data:image/gif;base64,R0lGODlhAQABAAAAACw=',
+				'expected' => false,
+			),
+			'protocol-relative'  => array(
+				'url'      => '//cdn.example.com/image.png',
+				'expected' => false,
+			),
+			'root-relative path' => array(
+				'url'      => '/wp-content/uploads/image.png',
+				'expected' => false,
+			),
+			'bare relative path' => array(
+				'url'      => 'uploads/image.png',
+				'expected' => false,
+			),
+			'empty string'       => array(
+				'url'      => '',
+				'expected' => false,
+			),
+		);
+	}
+
+	/**
+	 * Verifies that only genuinely relative URLs are resolved, and that the
+	 * base URL's own path is kept so subsite sources resolve correctly.
+	 *
+	 * @dataProvider resolve_relative_url_provider
+	 *
+	 * @param string $url      URL under test.
+	 * @param string $base     Base site URL.
+	 * @param string $expected Expected resolved URL.
+	 */
+	public function test_resolve_relative_url(
+		string $url,
+		string $base,
+		string $expected
+	): void {
+		// ACT & ASSERT: The URL resolves as expected.
+		$this->assertSame(
+			$expected,
+			URL_Validator::resolve_relative_url( $url, $base )
+		);
+	}
+
+	/**
+	 * Data provider for resolve_relative_url().
+	 *
+	 * @return array<string, array{url: string, base: string, expected: string}>
+	 */
+	public static function resolve_relative_url_provider(): array {
+		return array(
+			'non-ASCII absolute left alone' => array(
+				'url'      => 'https://example.com/uploads/Capture-décran.png',
+				'base'     => 'https://example.com',
+				'expected' => 'https://example.com/uploads/Capture-décran.png',
+			),
+			'data URI left alone'           => array(
+				'url'      => 'data:image/gif;base64,R0lGODlhAQABAAAAACw=',
+				'base'     => 'https://example.com',
+				'expected' => 'data:image/gif;base64,R0lGODlhAQABAAAAACw=',
+			),
+			'protocol-relative adopts base' => array(
+				'url'      => '//cdn.example.com/image.png',
+				'base'     => 'https://example.com',
+				'expected' => 'https://cdn.example.com/image.png',
+			),
+			'root-relative path'            => array(
+				'url'      => '/wp-content/image.png',
+				'base'     => 'https://example.com',
+				'expected' => 'https://example.com/wp-content/image.png',
+			),
+			'bare relative path'            => array(
+				'url'      => 'wp-content/image.png',
+				'base'     => 'https://example.com',
+				'expected' => 'https://example.com/wp-content/image.png',
+			),
+			'base trailing slash'           => array(
+				'url'      => '/wp-content/image.png',
+				'base'     => 'https://example.com/',
+				'expected' => 'https://example.com/wp-content/image.png',
+			),
+			'base path preserved'           => array(
+				'url'      => '/wp-content/image.png',
+				'base'     => 'https://example.com/blog',
+				'expected' => 'https://example.com/blog/wp-content/image.png',
+			),
+		);
+	}
 }
