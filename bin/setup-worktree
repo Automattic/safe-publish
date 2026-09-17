@@ -1,7 +1,8 @@
 #!/bin/sh
 #
 # Bootstrap a worktree: Install dependencies and assign a free wp-env port
-# pair, recorded in .devports so `npm run dev` loads it automatically.
+# pair, recorded in .devports so `npm run dev` and `npm run test:e2e` load it
+# automatically.
 #
 # Usage: bin/setup-worktree
 
