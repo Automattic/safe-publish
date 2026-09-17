@@ -43,7 +43,7 @@ module.exports = {
 			cacheGroups: {
 				...defaultConfig.optimization.splitChunks.cacheGroups,
 				// Merge every entry's style.scss into one fixed-name
-				// stylesheet, enqueued on all admin pages.
+				// stylesheet, enqueued alongside any built entry.
 				style: {
 					...defaultConfig.optimization.splitChunks.cacheGroups.style,
 					name: 'style-safe-publish',

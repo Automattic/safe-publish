@@ -225,7 +225,7 @@ See the [Troubleshooting guide](troubleshooting.md#resetting-configuration).
 
 **Test authentication:**
 
-Use the **Test Connection** button on the settings page.
+Use the **Test Connection** button on the settings page, which is rendered in Destination and Bidirectional modes.
 
 ## Local playground
 
