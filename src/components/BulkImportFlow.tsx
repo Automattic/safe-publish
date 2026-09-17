@@ -508,7 +508,6 @@ export default function BulkImportFlow( {
 						onClick={ () => void handleRun() }
 						disabled={ isLoading }
 						accessibleWhenDisabled
-						data-action-id="import"
 					>
 						{ isLoading ? (
 							<>

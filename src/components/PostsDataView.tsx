@@ -25,6 +25,7 @@ import { __, sprintf } from '@wordpress/i18n';
 import { help, update } from '@wordpress/icons';
 
 import AuthStatusNotice from './AuthStatusNotice';
+import IsolatedErrorMessage from './IsolatedErrorMessage';
 import {
 	calendarRangeToUtcBounds,
 	DateRangeFilter,
@@ -40,19 +41,23 @@ import {
 } from '../constants';
 import { PostTypeSelector } from '../post-type-selector';
 import {
+	displayErrorText,
 	formatBadgeTimestamp,
 	getErrorMessage,
+	getSourceError,
 	statusBadgeModifier,
 	statusLabel,
 } from '../utils';
 import { useAuthStatus } from './hooks/useAuthStatus';
 import { useResetSelectionOnQueryChange } from './hooks/useResetSelectionOnQueryChange';
+import { useRowActions } from './hooks/useRowActions';
 import { useStepBackWhenPageEmpties } from './hooks/useStepBackWhenPageEmpties';
 
 import type {
 	ApiResponse,
 	ChipState,
 	DataViewsField,
+	DisplayError,
 	ImportSyncStatus,
 	LocalState,
 	PostsDataViewProps,
@@ -341,8 +346,10 @@ export function PostsDataView( {
 
 	const [ isLoading, setIsLoading ] = useState( false );
 	const [ hasFetchedOnce, setHasFetchedOnce ] = useState( false );
-	const [ fetchError, setFetchError ] = useState< string | null >( null );
-	const [ postTypeError, setPostTypeError ] = useState< string | null >( null );
+	const [ fetchError, setFetchError ] = useState< DisplayError | null >( null );
+	const [ postTypeError, setPostTypeError ] = useState< DisplayError | null >(
+		null
+	);
 	const [ rollbackNotice, setRollbackNotice ] = useState< ActionNotice | null >(
 		null
 	);
@@ -386,6 +393,12 @@ export function PostsDataView( {
 	const slugChipMismatch =
 		null !== detection
 		&& ! slugMatchesChip( detection.origin, isCatalogPrimary );
+
+	// Equal rendered text means the same backend error surfaced twice.
+	const duplicateSourceError =
+		null !== postTypeError
+		&& null !== fetchError
+		&& displayErrorText( postTypeError ) === displayErrorText( fetchError );
 
 	const handleChipChange = useCallback(
 		( next: ChipState ): void => {
@@ -492,10 +505,11 @@ export function PostsDataView( {
 				}
 				if ( ! result.success ) {
 					setFetchError(
-						getErrorMessage(
-							result,
-							__( 'Failed to load posts.', 'safe-publish' )
-						)
+						getSourceError( result.data ) ??
+							getErrorMessage(
+								result,
+								__( 'Failed to load posts.', 'safe-publish' )
+							)
 					);
 					setRows( [] );
 					setHasMore( false );
@@ -904,6 +918,20 @@ export function PostsDataView( {
 		currentPage
 	);
 
+	const actions = useRowActions(
+		createPostsActions(
+			refresh,
+			isAuthorized,
+			{
+				ajaxurl: window.safePublishAdminData.ajaxurl,
+				nonce: window.safePublishAdminData.nonce,
+				onNotice: setRollbackNotice,
+			},
+			syncStatuses,
+			selectedCount
+		)
+	);
+
 	return (
 		<div
 			className="safe-publish-dataviews-wrapper safe-publish-dataviews-wrapper--approx-pagination"
@@ -996,15 +1024,13 @@ export function PostsDataView( {
 					</Button>
 				) }
 			</div>
-			{ /* Equal text means the same backend error surfaced twice; show it
-				once. */ }
-			{ postTypeError && postTypeError !== fetchError && (
+			{ postTypeError && ! duplicateSourceError && (
 				<Notice
 					className="safe-publish-source-error"
 					status="error"
 					onRemove={ () => setPostTypeError( null ) }
 				>
-					{ postTypeError }
+					<IsolatedErrorMessage error={ postTypeError } />
 				</Notice>
 			) }
 			{ ! slugChipMismatch && fetchError && (
@@ -1015,12 +1041,12 @@ export function PostsDataView( {
 						setFetchError( null );
 						// Clear the suppressed twin too, else it reappears on
 						// dismiss.
-						if ( postTypeError === fetchError ) {
+						if ( duplicateSourceError ) {
 							setPostTypeError( null );
 						}
 					} }
 				>
-					{ fetchError }
+					<IsolatedErrorMessage error={ fetchError } />
 				</Notice>
 			) }
 			{ rollbackNotice && (
@@ -1084,17 +1110,7 @@ export function PostsDataView( {
 					paginationInfo={ paginationInfo }
 					defaultLayouts={ { [ LAYOUT_TABLE ]: {} } }
 					config={ { perPageSizes: [ 10, 20, 50 ] } }
-					actions={ createPostsActions(
-						refresh,
-						isAuthorized,
-						{
-							ajaxurl: window.safePublishAdminData.ajaxurl,
-							nonce: window.safePublishAdminData.nonce,
-							onNotice: setRollbackNotice,
-						},
-						syncStatuses,
-						selectedCount
-					) }
+					actions={ actions }
 					header={
 						<Button
 							className="safe-publish-refresh-button"

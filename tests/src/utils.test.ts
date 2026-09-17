@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getSettings, setSettings } from '@wordpress/date';
 import {
 	attentionIssueId,
+	displayErrorText,
 	formatBadgeTimestamp,
 	formatDateTime,
 	extractUrlPath,
@@ -162,6 +163,63 @@ describe( 'getSourceError', () => {
 		// ACT + ASSERT: A plain error body and a non-record both yield nothing.
 		expect( getSourceError( { status: 500 } ) ).toBeUndefined();
 		expect( getSourceError( 'Source site unreachable' ) ).toBeUndefined();
+	} );
+} );
+
+describe( 'displayErrorText', () => {
+	const TEMPLATE = 'Source site returned HTTP error 401. <reason />';
+
+	it( 'should return a string error unchanged', () => {
+		// ACT + ASSERT: Flat text is already what the user reads.
+		expect( displayErrorText( 'Failed to load posts.' ) ).toBe(
+			'Failed to load posts.'
+		);
+	} );
+
+	it( 'should rebuild the sentence a structured error renders as', () => {
+		// ARRANGE: The halves the server split the sentence into.
+		const error = { message: 'Refused.', template: TEMPLATE };
+
+		// ACT: Flatten it back.
+		const text = displayErrorText( error );
+
+		// ASSERT: Matches the flat message the same failure composes.
+		expect( text ).toBe( 'Source site returned HTTP error 401. Refused.' );
+	} );
+
+	it( 'should match a structured error against its flat twin', () => {
+		// ARRANGE: The two listing reads fail the same way, one endpoint
+		// carrying the structured detail and one only the sentence.
+		const structured = { message: 'Refused.', template: TEMPLATE };
+		const flat = 'Source site returned HTTP error 401. Refused.';
+
+		// ACT + ASSERT: Equal rendered text, so the duplicate collapses.
+		expect( displayErrorText( structured ) ).toBe( displayErrorText( flat ) );
+	} );
+
+	it( 'should separate errors differing only in the reason', () => {
+		// ARRANGE: Same template, different source reasons.
+		const first = { message: 'Refused.', template: TEMPLATE };
+		const second = { message: 'Expired.', template: TEMPLATE };
+
+		// ACT + ASSERT: Distinct text keeps both notices.
+		expect( displayErrorText( first ) ).not.toBe(
+			displayErrorText( second )
+		);
+	} );
+
+	it( 'should separate errors differing only in the template', () => {
+		// ARRANGE: Same reason, different surrounding sentences.
+		const first = { message: 'Refused.', template: TEMPLATE };
+		const second = {
+			message: 'Refused.',
+			template: 'Failed to fetch data from source site. <reason />',
+		};
+
+		// ACT + ASSERT: Distinct text keeps both notices.
+		expect( displayErrorText( first ) ).not.toBe(
+			displayErrorText( second )
+		);
 	} );
 } );
 
