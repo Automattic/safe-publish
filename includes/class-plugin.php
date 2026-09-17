@@ -433,15 +433,16 @@ final class Plugin {
 	private function init_settings_only_admin(): void {
 		add_action( 'admin_menu', array( $this, 'add_settings_only_admin_menu' ) );
 
+		( new Settings_Page() )->init_settings_only();
 		( new Audit_Log_Page() )->init_settings_only();
 	}
 
 	/**
 	 * Registers the Safe Publish top-level menu pointing to the settings page.
 	 *
-	 * Uses the 'safe-publish-settings' slug to match the slug used by
-	 * Admin_Menu_Manager in import mode, so that options.php's post-save
-	 * redirect always lands on a registered page regardless of sync mode.
+	 * Shares the settings page slug with import mode so that options.php's
+	 * post-save redirect always lands on a registered page regardless of
+	 * sync mode.
 	 */
 	public function add_settings_only_admin_menu(): void {
 		if ( Audit_Log_Page::maybe_add_top_level_page() ) {
@@ -452,10 +453,20 @@ final class Plugin {
 			__( 'Safe Publish', 'safe-publish' ),
 			__( 'Safe Publish', 'safe-publish' ),
 			Permissions::manage_capability(),
-			'safe-publish-settings',
+			Settings_Page::PAGE_SLUG,
 			array( $this, 'render_settings_only_page' ),
 			'dashicons-migrate',
 			99
+		);
+
+		// Explicit first submenu entry to override the auto-generated one.
+		add_submenu_page(
+			Settings_Page::PAGE_SLUG,
+			__( 'Safe Publish Settings', 'safe-publish' ),
+			__( 'Settings', 'safe-publish' ),
+			Permissions::manage_capability(),
+			Settings_Page::PAGE_SLUG,
+			array( $this, 'render_settings_only_page' )
 		);
 	}
 

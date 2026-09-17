@@ -6,19 +6,6 @@
 	margin-top: 20px;
 }
 
-/* Settings page has single column layout */
-#safe-publish-settings-page .safe-publish-admin-container {
-	grid-template-columns: 1fr;
-	max-width: 800px;
-}
-
-.safe-publish-settings-section {
-	background: var(--safe-publish-surface-bg);
-	border: 1px solid var(--safe-publish-border-strong);
-	box-shadow: var(--safe-publish-surface-shadow);
-	padding: 20px;
-}
-
 .safe-publish-dataviews-section {
 	grid-column: 1 / -1;
 	background: var(--safe-publish-surface-bg);
