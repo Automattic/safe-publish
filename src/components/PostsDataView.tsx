@@ -156,6 +156,25 @@ const computeVisibleFields = ( isCatalogPrimary: boolean ): string[] => {
 };
 
 /**
+ * Builds a sync-status map that assigns one verdict to every source id.
+ *
+ * @param {number[]}         sourceIds Source post ids to key the map by.
+ * @param {ImportSyncStatus} status    Verdict to assign to each id.
+ * @return {Record<number, {status: ImportSyncStatus}>} Keyed verdicts.
+ */
+const buildSyncStatusMap = (
+	sourceIds: number[],
+	status: ImportSyncStatus
+): Record< number, { status: ImportSyncStatus } > => {
+	const map: Record< number, { status: ImportSyncStatus } > = {};
+	sourceIds.forEach( ( id ) => {
+		// eslint-disable-next-line security/detect-object-injection -- id iterates sourceIds, which are absint-validated server-side.
+		map[ id ] = { status };
+	} );
+	return map;
+};
+
+/**
  * Local-state filter dropdown for the unified listing.
  *
  * @param  root0
@@ -594,12 +613,7 @@ export function PostsDataView( {
 			formData.append( 'source_ids[]', String( id ) )
 		);
 
-		const loadingMap: Record< number, { status: ImportSyncStatus } > = {};
-		sourceIds.forEach( ( id ) => {
-			// eslint-disable-next-line security/detect-object-injection -- id iterates sourceIds, which are absint-validated server-side.
-			loadingMap[ id ] = { status: 'loading' };
-		} );
-		setSyncStatuses( loadingMap );
+		setSyncStatuses( buildSyncStatusMap( sourceIds, 'loading' ) );
 
 		fetch( window.safePublishAdminData.ajaxurl, {
 			method: 'POST',
@@ -616,12 +630,20 @@ export function PostsDataView( {
 				if ( controller.signal.aborted ) {
 					return;
 				}
-				if ( result.success ) {
-					setSyncStatuses( result.data.statuses ?? {} );
-				}
+				// A failed batch marks every row unreachable so the cell shows
+				// the same badge a per-row failure does, instead of passing a
+				// stored state off as a fresh verdict.
+				setSyncStatuses(
+					result.success
+						? result.data.statuses ?? {}
+						: buildSyncStatusMap( sourceIds, 'unreachable' )
+				);
 			} )
 			.catch( () => {
-				/* leave loading verdict; user can refresh */
+				if ( controller.signal.aborted ) {
+					return;
+				}
+				setSyncStatuses( buildSyncStatusMap( sourceIds, 'unreachable' ) );
 			} );
 
 		return () => controller.abort();

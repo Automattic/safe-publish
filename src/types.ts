@@ -101,9 +101,10 @@ export interface PostsResponse {
  * Per-row verdicts returned by safe_publish_sync_status_batch.
  *
  * `invalid` flags a destination-side timestamp that didn't parse — a local
- * data bug, distinct from the network-level `unreachable`. `loading` is a
- * client-only placeholder shown while the batch request is in flight; it
- * is never returned by the server.
+ * data bug, distinct from the network-level `unreachable`, which the client
+ * also assigns to every row when the batch request itself fails. `loading`
+ * is a client-only placeholder shown while the batch request is in flight;
+ * it is never returned by the server.
  */
 export type ImportSyncStatus =
 	| 'up-to-date'
