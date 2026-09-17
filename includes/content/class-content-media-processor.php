@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace Safe_Publish\Content;
 
 use Safe_Publish\Media\Media_Importer;
+use WP_HTML_Decoder;
 use WP_HTML_Tag_Processor;
 
 // Prevent direct access.
@@ -467,7 +468,12 @@ class Content_Media_Processor {
 
 		$remaining = array_unique( $matches[1] );
 
-		foreach ( $remaining as $url ) {
+		foreach ( $remaining as $raw_url ) {
+			// The regex reads raw markup, so decode entities the way the tag
+			// processor does; otherwise an already-recorded failure keyed by
+			// the decoded URL isn't matched here.
+			$url = WP_HTML_Decoder::decode_attribute( $raw_url );
+
 			if ( ! array_key_exists( $url, $this->unprocessable_media )
 				&& ! array_key_exists( $url, $this->failed_media ) ) {
 				$this->unprocessable_media[ $url ] = $block_name;

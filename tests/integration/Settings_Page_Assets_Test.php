@@ -104,6 +104,32 @@ class Settings_Page_Assets_Test extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Verifies that maybe_enqueue_assets enqueues on the top-level settings
+	 * screen, the hook suffix used by the settings-only admin modes.
+	 */
+	public function test_maybe_enqueue_assets_enqueues_on_top_level_screen(): void {
+		// ACT: Dispatch the enqueue callback with the top-level suffix.
+		( new Settings_Page() )->maybe_enqueue_assets(
+			'toplevel_page_' . Settings_Page::PAGE_SLUG
+		);
+
+		// ASSERT: The settings script is enqueued.
+		$this->assertTrue( wp_script_is( self::HANDLE, 'enqueued' ) );
+	}
+
+	/**
+	 * Verifies that maybe_enqueue_assets skips admin screens other than the
+	 * top-level settings page.
+	 */
+	public function test_maybe_enqueue_assets_skips_other_screens(): void {
+		// ACT: Dispatch the enqueue callback with an unrelated suffix.
+		( new Settings_Page() )->maybe_enqueue_assets( 'toplevel_page_other' );
+
+		// ASSERT: Nothing is enqueued.
+		$this->assertFalse( wp_script_is( self::HANDLE, 'enqueued' ) );
+	}
+
+	/**
 	 * Dequeues and deregisters the settings handle to isolate each test.
 	 */
 	private function reset_handle(): void {

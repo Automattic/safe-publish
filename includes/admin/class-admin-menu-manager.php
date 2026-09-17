@@ -77,7 +77,7 @@ class Admin_Menu_Manager {
 			__( 'Safe Publish Settings', 'safe-publish' ),
 			__( 'Settings', 'safe-publish' ),
 			Permissions::manage_capability(),
-			'safe-publish-settings',
+			Settings_Page::PAGE_SLUG,
 			array( $this, 'render_settings_page' )
 		);
 
