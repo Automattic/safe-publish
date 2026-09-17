@@ -88,6 +88,13 @@ class Content_Processor_Test extends Integration_Test_Case {
 	private const PDF_BODY = "%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 3 3]>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF";
 
 	/**
+	 * URLs the processor actually requested, in request order.
+	 *
+	 * @var string[]
+	 */
+	private array $requested_urls = array();
+
+	/**
 	 * Mocks HTTP requests for media downloads, serving fixtures by content type.
 	 *
 	 * Serves fixtures by URL extension, or by an intent marker in the path
@@ -104,6 +111,8 @@ class Content_Processor_Test extends Integration_Test_Case {
 		array $args,
 		string $url
 	): false|array|WP_Error {
+		$this->requested_urls[] = $url;
+
 		if ( false !== $preempt || ! str_contains( $url, 'source.example.com' ) ) {
 			return $preempt;
 		}
@@ -1422,6 +1431,137 @@ class Content_Processor_Test extends Integration_Test_Case {
 			$this->processor->get_failed_media(),
 			'No media failures should be recorded for a successful sideload'
 		);
+	}
+
+	/**
+	 * Verifies that an absolute source media URL whose path carries non-ASCII
+	 * characters is downloaded from that URL unchanged.
+	 *
+	 * The URL is already absolute, so it must not be resolved against the
+	 * source site and turned into a doubled, unreachable URL.
+	 */
+	public function test_process_content_imports_non_ascii_source_media_url(): void {
+		// ARRANGE: An image whose filename carries accented characters.
+		$source_site_url = 'https://source.example.com';
+		$media_url       = 'https://source.example.com/wp-content/uploads/Capture-décran-à-12.56.40.png';
+		$content         = sprintf( '<p><img src="%s" alt="Accented"></p>', $media_url );
+
+		$attachments_before = $this->get_attachment_count();
+
+		// ACT: Process the content.
+		$processed = $this->processor->process_content( $content, $source_site_url );
+
+		// ASSERT: The URL was fetched exactly as given, not doubled.
+		$this->assertSame(
+			array( $media_url ),
+			$this->requested_urls,
+			'Non-ASCII absolute URL should be requested unchanged'
+		);
+
+		// ASSERT: The media was imported and no failure recorded.
+		$this->assertSame(
+			$attachments_before + 1,
+			$this->get_attachment_count(),
+			'Non-ASCII source media should be sideloaded'
+		);
+		$this->assertSame( array(), $this->processor->get_failed_media() );
+		$this->assertStringContainsString( 'wp-content/uploads', $processed );
+	}
+
+	/**
+	 * Verifies that a non-ASCII third-party media URL is left untouched.
+	 *
+	 * Resolving it against the source site would hide its real host from the
+	 * third-party guard and turn a deliberate skip into a failed import.
+	 */
+	public function test_process_content_leaves_non_ascii_third_party_url_unchanged(): void {
+		// ARRANGE: A third-party image whose filename carries accented characters.
+		$source_site_url = 'https://source.example.com';
+		$media_url       = 'https://cdn.other.example/wp-content/uploads/Capture-décran.png';
+		$content         = sprintf( '<p><img src="%s" alt="Accented"></p>', $media_url );
+
+		$attachments_before = $this->get_attachment_count();
+
+		// ACT: Process the content.
+		$processed = $this->processor->process_content( $content, $source_site_url );
+
+		// ASSERT: No request was made and the markup is unchanged.
+		$this->assertSame(
+			array(),
+			$this->requested_urls,
+			'Third-party media should not be fetched'
+		);
+		$this->assertStringContainsString( $media_url, $processed );
+
+		// ASSERT: Nothing was imported and no failure recorded.
+		$this->assert_no_new_attachments( $attachments_before );
+		$this->assertSame( array(), $this->processor->get_failed_media() );
+	}
+
+	/**
+	 * Verifies that a non-ASCII media URL in custom block attrs is imported.
+	 *
+	 * Skipping the sideload leaves the source URL in place for the host-swap
+	 * pass, which rewrites it to a destination URL that serves nothing.
+	 */
+	public function test_process_custom_block_imports_non_ascii_media_from_attrs(): void {
+		// ARRANGE: A custom block storing a non-ASCII media URL in attrs.
+		$source_site_url = 'https://source.example.com';
+		$media_url       = 'https://source.example.com/wp-content/uploads/Capture-décran.png';
+		$content         = '<!-- wp:my-plugin/hero {"backgroundUrl":"' . $media_url . '"} -->'
+			. '<div class="wp-block-my-plugin-hero"></div>'
+			. '<!-- /wp:my-plugin/hero -->';
+
+		$attachments_before = $this->get_attachment_count();
+
+		// ACT: Process through the full Gutenberg path.
+		$processed = $this->processor->process_content( $content, $source_site_url );
+
+		// ASSERT: The URL was fetched exactly as given.
+		$this->assertSame(
+			array( $media_url ),
+			$this->requested_urls,
+			'Non-ASCII attrs URL should be requested unchanged'
+		);
+
+		// ASSERT: The media was imported and the source URL is gone.
+		$this->assertSame(
+			$attachments_before + 1,
+			$this->get_attachment_count(),
+			'Non-ASCII attrs media should be sideloaded as an attachment'
+		);
+		$this->assertStringNotContainsString( $media_url, $processed );
+		$this->assertStringContainsString( 'wp-content/uploads', $processed );
+	}
+
+	/**
+	 * Verifies that a data URI in content is neither fetched nor reported.
+	 *
+	 * A data URI is already self-contained, so resolving it against the source
+	 * site would turn inline media into a spurious download failure.
+	 */
+	public function test_process_content_leaves_data_uri_unchanged(): void {
+		// ARRANGE: An image whose src is an inline data URI.
+		$source_site_url = 'https://source.example.com';
+		$data_uri        = 'data:image/gif;base64,R0lGODlhAQABAAAAACw=';
+		$content         = sprintf( '<p><img src="%s" alt="Inline"></p>', $data_uri );
+
+		$attachments_before = $this->get_attachment_count();
+
+		// ACT: Process the content.
+		$processed = $this->processor->process_content( $content, $source_site_url );
+
+		// ASSERT: No request was made and the data URI survives intact.
+		$this->assertSame(
+			array(),
+			$this->requested_urls,
+			'Data URI should not be fetched'
+		);
+		$this->assertStringContainsString( $data_uri, $processed );
+
+		// ASSERT: Nothing was imported and no failure recorded.
+		$this->assert_no_new_attachments( $attachments_before );
+		$this->assertSame( array(), $this->processor->get_failed_media() );
 	}
 
 	/**
