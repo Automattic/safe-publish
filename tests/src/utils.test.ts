@@ -1,5 +1,5 @@
 /**
- * Tests for utility functions
+ * Tests for utility functions.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getSettings, setSettings } from '@wordpress/date';
