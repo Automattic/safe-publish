@@ -1822,9 +1822,8 @@ class Content_Processor_Test extends Integration_Test_Case {
 	 * Verifies that a custom block attr holding a .webp URL that serves an HTML
 	 * page is kept as a link, not sideloaded as a bogus WebP attachment.
 	 *
-	 * This path registers the WebP upload shim, which would otherwise re-assert
-	 * image/webp for the page during the content check; is_media_content() strips
-	 * it so the real type (text/html) is seen and the link is preserved.
+	 * Nothing re-asserts a type during the content check, so is_media_content()
+	 * sees the real type (text/html) and the link is preserved.
 	 */
 	public function test_process_media_looking_webp_page_link_in_custom_attr_is_kept_as_link(): void {
 		// ARRANGE: A custom block attr holding a .webp URL that serves HTML.

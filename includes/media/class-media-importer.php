@@ -927,35 +927,6 @@ class Media_Importer {
 	}
 
 	/**
-	 * Handles WebP file type validation during upload.
-	 *
-	 * No longer registered on wp_check_filetype_and_ext. That filter runs
-	 * after core has compared the downloaded bytes with the filename
-	 * extension, so re-asserting a type here overrode that check. Do not
-	 * hook this up again; widening the allowed types with add_webp_mime_type
-	 * is the supported way to import WebP onto a restricted destination.
-	 *
-	 * @param array  $wp_check_filetype_and_ext File data with 'ext', 'type', 'proper_filename' keys.
-	 * @param string $_file                     Full path to the file.
-	 * @param string $filename                  File name (may differ from $file if in tmp dir).
-	 * @return array Modified file data.
-	 */
-	public function handle_webp_filetype(
-		array $wp_check_filetype_and_ext,
-		string $_file,
-		string $filename
-	): array {
-		if ( ! $wp_check_filetype_and_ext['type'] && ! $wp_check_filetype_and_ext['ext'] ) {
-			$info = pathinfo( $filename );
-			if ( isset( $info['extension'] ) && 'webp' === strtolower( $info['extension'] ) ) {
-				$wp_check_filetype_and_ext['ext']  = 'webp';
-				$wp_check_filetype_and_ext['type'] = 'image/webp';
-			}
-		}
-		return $wp_check_filetype_and_ext;
-	}
-
-	/**
 	 * Resolves the filename to sideload a downloaded file under.
 	 *
 	 * When the URL basename already maps to a known type, it is used as-is and
