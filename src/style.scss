@@ -491,6 +491,18 @@ html:has(body.toplevel_page_safe-publish) {
 			align-items: center;
 		}
 
+		// Preview wrappers hold rendered source HTML. Paint containment
+		// makes each one a containing block for its positioned descendants
+		// and clips them to it, so preview markup stays inside the card.
+		// The horizontal overflow keeps wider content reachable.
+		&__col,
+		&__added,
+		&__removed,
+		&__unchanged {
+			contain: paint;
+			overflow-x: auto;
+		}
+
 		&__modified {
 			display: flex;
 			gap: 10px;
@@ -499,7 +511,6 @@ html:has(body.toplevel_page_safe-publish) {
 				flex: 1;
 				padding: 8px;
 				max-width: 50%;
-				overflow-x: auto;
 			}
 		}
 
