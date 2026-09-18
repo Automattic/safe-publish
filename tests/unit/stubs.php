@@ -149,6 +149,21 @@ function get_posts( array $args = array() ): array {
 	return $GLOBALS['_test_get_posts_result'] ?? array();
 }
 
+function get_post_types(
+	array $args = array(),
+	string $output = 'names',
+	string $operator = 'and'
+): array {
+	return array(
+		'post'          => 'post',
+		'page'          => 'page',
+		'attachment'    => 'attachment',
+		'revision'      => 'revision',
+		'wp_block'      => 'wp_block',
+		'wp_navigation' => 'wp_navigation',
+	);
+}
+
 function set_test_get_posts_result( array $result ): void {
 	$GLOBALS['_test_get_posts_result'] = $result;
 }
