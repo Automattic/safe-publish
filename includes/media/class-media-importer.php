@@ -326,7 +326,9 @@ class Media_Importer {
 
 		$this->ensure_media_functions_loaded();
 
-		// Temporarily enable WebP uploads during import.
+		// Temporarily allow WebP uploads when the destination does not list
+		// the type. This only widens the allowed list; core still checks the
+		// bytes against the extension, so it cannot admit other content.
 		$webp_filter_added = false;
 		if ( ! $this->is_webp_supported() ) {
 			// phpcs:ignore WordPressVIPMinimum.Hooks.RestrictedHooks.upload_mimes
@@ -334,10 +336,7 @@ class Media_Importer {
 			$webp_filter_added = true;
 		}
 
-		// Also add a filter specifically for media_handle_sideload to bypass restrictions.
-		add_filter( 'wp_check_filetype_and_ext', array( $this, 'handle_webp_filetype' ), 10, 3 );
-
-		// Guarantee the upload filters are removed on every exit, including the
+		// Guarantee the upload filter is removed on every exit, including the
 		// early returns for a failed download or unsupported file type.
 		try {
 			return $this->download_and_create_attachment(
@@ -349,7 +348,6 @@ class Media_Importer {
 			if ( $webp_filter_added ) {
 				remove_filter( 'upload_mimes', array( $this, 'add_webp_mime_type' ) );
 			}
-			remove_filter( 'wp_check_filetype_and_ext', array( $this, 'handle_webp_filetype' ) );
 		}
 	}
 
@@ -931,6 +929,12 @@ class Media_Importer {
 	/**
 	 * Handles WebP file type validation during upload.
 	 *
+	 * No longer registered on wp_check_filetype_and_ext. That filter runs
+	 * after core has compared the downloaded bytes with the filename
+	 * extension, so re-asserting a type here overrode that check. Do not
+	 * hook this up again; widening the allowed types with add_webp_mime_type
+	 * is the supported way to import WebP onto a restricted destination.
+	 *
 	 * @param array  $wp_check_filetype_and_ext File data with 'ext', 'type', 'proper_filename' keys.
 	 * @param string $_file                     Full path to the file.
 	 * @param string $filename                  File name (may differ from $file if in tmp dir).
@@ -994,22 +998,7 @@ class Media_Importer {
 	 * @return bool True when the content is an allowed upload type.
 	 */
 	private function is_media_content( string $temp_file, string $filename ): bool {
-		// Verify the content without the WebP shim, which would otherwise
-		// re-assert image/webp for a page served at a .webp URL and pass it off
-		// as media. Restore it afterward for the sideload that follows.
-		$shim_priority = has_filter(
-			'wp_check_filetype_and_ext',
-			array( $this, 'handle_webp_filetype' )
-		);
-		if ( false !== $shim_priority ) {
-			remove_filter( 'wp_check_filetype_and_ext', array( $this, 'handle_webp_filetype' ) );
-		}
-
 		$verified = wp_check_filetype_and_ext( $temp_file, $filename );
-
-		if ( false !== $shim_priority ) {
-			add_filter( 'wp_check_filetype_and_ext', array( $this, 'handle_webp_filetype' ), 10, 3 );
-		}
 
 		return false !== $verified['type'];
 	}
