@@ -1444,6 +1444,7 @@ class Post_Import_Service {
 
 		$this->add_unregistered_taxonomy_warnings( $fields, $skipped_taxonomies );
 		$this->add_term_conflict_warnings( $fields, $term_report );
+		$this->add_reserved_meta_warning( $fields );
 		$this->rewrite_nav_cross_refs( $fields, $post_id, $post_type );
 		$this->record_attention_issues( $fields, $post_id );
 
@@ -1660,6 +1661,7 @@ class Post_Import_Service {
 
 		$this->add_unregistered_taxonomy_warnings( $fields, $skipped_taxonomies );
 		$this->add_term_conflict_warnings( $fields, $term_report );
+		$this->add_reserved_meta_warning( $fields );
 		$this->rewrite_nav_cross_refs( $fields, $post_id, $post_type );
 		$this->record_attention_issues( $fields, $post_id );
 
@@ -1810,6 +1812,30 @@ class Post_Import_Service {
 				'source_term_id' => $conflict->source_term_id,
 			);
 		}
+	}
+
+	/**
+	 * Records one warning naming the meta keys the import key policy refused.
+	 *
+	 * Read from the same policy the write path applies, so the operator is
+	 * told exactly which of the source's keys were left out. Shared by the
+	 * single and bulk paths, which both write meta through update_meta().
+	 *
+	 * @param array $fields Post fields; mutated to append a warning.
+	 */
+	private function add_reserved_meta_warning( array &$fields ): void {
+		$refused_keys = Meta_Terms_Manager::refused_meta_keys(
+			$fields['meta']
+		);
+
+		if ( array() === $refused_keys ) {
+			return;
+		}
+
+		$fields['warnings'][] = array(
+			'type' => 'reserved_meta_skipped',
+			'keys' => $refused_keys,
+		);
 	}
 
 	/**
@@ -2826,8 +2852,9 @@ class Post_Import_Service {
 			'terms'          => array(),
 		);
 
-		foreach ( (array) $meta as $key => $_ ) {
-			$key                             = sanitize_text_field( (string) $key );
+		// Only the keys the write path touches: The policy skips the rest, so
+		// snapshotting them would restore values no rollback overwrote.
+		foreach ( Meta_Terms_Manager::importable_meta_keys( $meta ) as $key ) {
 			$snapshot['custom_meta'][ $key ] = get_post_meta(
 				$post_id,
 				$key,

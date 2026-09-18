@@ -4180,4 +4180,170 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 			$post->post_content,
 		);
 	}
+
+	/**
+	 * Verifies that a reserved key in the source payload is skipped, reported,
+	 * and leaves the destination's own state intact on the update path.
+	 *
+	 * @dataProvider reserved_meta_session_type_provider
+	 *
+	 * @param string $session_type Import session type under test.
+	 */
+	public function test_import_skips_reserved_meta_and_warns(
+		string $session_type
+	): void {
+		// ARRANGE: Import a post with a featured image once, so the update has
+		// a destination post holding its own identity meta and a mapped
+		// featured image.
+		$session_id = $this->repository->create_session(
+			'https://source.example.com',
+			$session_type
+		);
+
+		$post_data = array(
+			'id'        => 9500,
+			'title'     => 'Queued title',
+			'link'      => 'https://source.example.com/reserved-meta',
+			'post_type' => 'posts',
+		);
+
+		$this->mock_post_overrides = array( 'featured_media' => 100 );
+
+		$first = $this->import_service->import_post( $post_data, $session_id );
+		$this->assertTrue( $first['success'] );
+
+		$post_id       = (int) $first['post_id'];
+		$attachment_id = (int) get_post_thumbnail_id( $post_id );
+		$this->assertGreaterThan(
+			0,
+			$attachment_id,
+			'The first import should map a featured image.'
+		);
+
+		// ARRANGE: The source now sends values for the destination's tracking
+		// key and for the featured image pointer, beside a migratable field.
+		$this->mock_post_overrides = array(
+			'featured_media' => 100,
+			'meta'           => array(
+				'safe_publish_source_post_id' => 4321,
+				'_thumbnail_id'               => 999999,
+				'sp_custom_field'             => 'imported',
+			),
+		);
+
+		// ACT: Re-import through the shared single/bulk import service path.
+		$result = $this->import_service->import_post( $post_data, $session_id );
+
+		// ASSERT: The update lands on the same post, the migratable field is
+		// written, and the destination keeps its identity meta and the
+		// featured image the import mapped.
+		$this->assertTrue( $result['success'] );
+		$this->assertTrue( $result['existing'] );
+		$this->assertSame(
+			'imported',
+			get_post_meta( $post_id, 'sp_custom_field', true )
+		);
+		$this->assertSame(
+			9500,
+			(int) get_post_meta( $post_id, Options::META_SOURCE_POST_ID, true )
+		);
+		$this->assertSame(
+			$attachment_id,
+			(int) get_post_thumbnail_id( $post_id )
+		);
+
+		// ASSERT: The skip is reported on the result and the history row.
+		$this->assertSame(
+			array(
+				array(
+					'type' => 'reserved_meta_skipped',
+					'keys' => array(
+						'safe_publish_source_post_id',
+						'_thumbnail_id',
+					),
+				),
+			),
+			$result['warnings']
+		);
+
+		$items = $this->get_session_items_for_test( $session_id );
+		$this->assertCount( 2, $items );
+		$this->assertSame(
+			$result['warnings'],
+			json_decode( (string) $items[1]['warnings'], true )
+		);
+	}
+
+	/**
+	 * Provides every controller session type using the shared import service.
+	 *
+	 * @return array<string, array{string}> Session type cases.
+	 */
+	public function reserved_meta_session_type_provider(): array {
+		return array(
+			'single import' => array( 'single' ),
+			'bulk import'   => array( 'bulk' ),
+		);
+	}
+
+	/**
+	 * Verifies that a new import records its own identity meta even when the
+	 * source payload sends values for the plugin's tracking keys, which the
+	 * new-post path writes before the custom meta.
+	 */
+	public function test_new_import_skips_reserved_meta_and_warns(): void {
+		// ARRANGE: A source payload naming the plugin's identity keys.
+		$session_id                = $this->repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+		$this->mock_post_overrides = array(
+			'meta' => array(
+				'safe_publish_source_post_id'  => 4321,
+				'safe_publish_source_site_url' => 'https://other.example.com',
+				'sp_custom_field'              => 'imported',
+			),
+		);
+
+		// ACT: Import a source post the destination does not hold yet.
+		$result = $this->import_service->import_post(
+			array(
+				'id'        => 9501,
+				'title'     => 'New title',
+				'link'      => 'https://source.example.com/new-reserved-meta',
+				'post_type' => 'posts',
+			),
+			$session_id
+		);
+
+		// ASSERT: The post carries its own identity meta, the migratable
+		// field lands, and the skip is reported.
+		$this->assertTrue( $result['success'] );
+		$this->assertFalse( $result['existing'] );
+		$post_id = (int) $result['post_id'];
+		$this->assertSame(
+			'imported',
+			get_post_meta( $post_id, 'sp_custom_field', true )
+		);
+		$this->assertSame(
+			9501,
+			(int) get_post_meta( $post_id, Options::META_SOURCE_POST_ID, true )
+		);
+		$this->assertSame(
+			Options::get_connected_site_url_with_path(),
+			get_post_meta( $post_id, Options::META_SOURCE_SITE_URL, true )
+		);
+		$this->assertSame(
+			array(
+				array(
+					'type' => 'reserved_meta_skipped',
+					'keys' => array(
+						'safe_publish_source_post_id',
+						'safe_publish_source_site_url',
+					),
+				),
+			),
+			$result['warnings']
+		);
+	}
 }

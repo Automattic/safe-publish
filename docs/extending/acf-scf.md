@@ -150,6 +150,7 @@ Avoid `_fields`: it is subtractive, so requesting `_fields=acf` drops the title,
 - **Matching definitions on the destination.** Safe Publish stores the values, but the editor renders them as ACF/SCF controls only when ACF or SCF is active on the destination and has matching field groups with the same field keys. Safe Publish does not create or sync field groups.
 - **Reference fields carry source IDs.** Image, file, post object, relationship, taxonomy, and user fields transfer as the source site's IDs. Remap them to destination IDs yourself when the referenced objects differ across sites.
 - **Complex fields need `update_field()`.** The raw REST shape of repeater, group, and flexible-content fields is not a functional ACF value on its own.
+- **Reserved keys are not imported.** Safe Publish refuses its own `safe_publish_` namespace and a short list of core-owned keys that hold destination state. ACF's own field keys and the `_acf_import_payload` stash above are unaffected. See [the import key policy](hooks.md#safe_publish_import_allowed_meta_keys).
 
 ## Stability
 
