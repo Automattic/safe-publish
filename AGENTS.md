@@ -4,6 +4,7 @@
 
 - Analyze and verify human input before agreeing with it. Prioritize truth over agreement.
 - Never provide answers based on unverified or vague assumptions.
+- Before calling a defect unreachable or not worth fixing, prove the verdict with a throwaway integration test; reading the code establishes the mechanism, not the outcome.
 - Focus on being helpful and accurate. If uncertain about something, ask clarifying questions.
 - Read any provided instruction files in their entirety.
 
