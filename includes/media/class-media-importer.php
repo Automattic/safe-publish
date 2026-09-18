@@ -1222,16 +1222,48 @@ class Media_Importer {
 	}
 
 	/**
-	 * Reports whether an IP address is in a range this site must not fetch
-	 * from. PHP's private and reserved range flags cover loopback, RFC1918,
-	 * link-local, IPv6 unique-local, and IPv4-mapped forms; carrier-grade
-	 * NAT is in neither flag, so it is tested separately. The result is not
-	 * an exhaustive reserved-range list: multicast, for one, stays fetchable.
+	 * Reports whether an address literal sits in a range this site must not
+	 * be steered at.
 	 *
-	 * @param string $address IP address to test.
-	 * @return bool True when the address is in a range the guard refuses.
+	 * IPv6 is tested against explicit prefixes rather than filter_var's
+	 * reserved-range flag, whose IPv6 semantics differ across the supported
+	 * PHP versions. An IPv4-mapped address is unwrapped and judged as the
+	 * IPv4 address it carries, for the same reason.
+	 *
+	 * @param string $address IP address literal.
+	 * @return bool True when the address is in a reserved range.
 	 */
 	private static function is_reserved_address( string $address ): bool {
+		if ( false === filter_var( $address, FILTER_VALIDATE_IP ) ) {
+			return true;
+		}
+
+		$packed = inet_pton( $address );
+
+		if ( false === $packed ) {
+			return true;
+		}
+
+		$mapped_prefix = "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xff\xff";
+		if ( 16 === strlen( $packed ) && str_starts_with( $packed, $mapped_prefix ) ) {
+			$packed  = substr( $packed, 12 );
+			$address = (string) inet_ntop( $packed );
+		}
+
+		if ( 4 === strlen( $packed ) ) {
+			return self::is_reserved_ipv4( $address );
+		}
+
+		return self::is_reserved_ipv6( $packed );
+	}
+
+	/**
+	 * Reports whether an IPv4 literal sits in a reserved or private range.
+	 *
+	 * @param string $address IPv4 address literal.
+	 * @return bool True when the address is in a reserved range.
+	 */
+	private static function is_reserved_ipv4( string $address ): bool {
 		$routable = filter_var(
 			$address,
 			FILTER_VALIDATE_IP,
@@ -1249,6 +1281,33 @@ class Media_Importer {
 			&& 100 === (int) $octets[0]
 			&& (int) $octets[1] >= 64
 			&& (int) $octets[1] <= 127;
+	}
+
+	/**
+	 * Reports whether a packed IPv6 address sits in a range that can only
+	 * reach this host or its own network.
+	 *
+	 * @param string $packed Packed 16-byte IPv6 address.
+	 * @return bool True when the address is in a reserved range.
+	 */
+	private static function is_reserved_ipv6( string $packed ): bool {
+		// The unspecified address and the loopback address.
+		if ( str_repeat( "\x00", 16 ) === $packed
+			|| str_repeat( "\x00", 15 ) . "\x01" === $packed
+		) {
+			return true;
+		}
+
+		$first  = ord( $packed[0] );
+		$second = ord( $packed[1] );
+
+		// Unique local, fc00::/7.
+		if ( 0xfc === ( $first & 0xfe ) ) {
+			return true;
+		}
+
+		// Link local, fe80::/10.
+		return 0xfe === $first && 0x80 === ( $second & 0xc0 );
 	}
 
 	/**
