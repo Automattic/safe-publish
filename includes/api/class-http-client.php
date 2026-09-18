@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace Safe_Publish\API;
 
 use Safe_Publish\Auth\VIP_Safe_Auth;
+use Safe_Publish\Validators\URL_Validator;
 use WP_Error;
 
 // Prevent direct access.
@@ -43,6 +44,12 @@ final class HTTP_Client {
 	public const ERROR_REQUEST_FAILED = 'request_failed';
 
 	/**
+	 * WP_Error code returned when a media download stops at a redirect the
+	 * plugin does not follow.
+	 */
+	public const ERROR_DOWNLOAD_REDIRECTED = 'download_redirected';
+
+	/**
 	 * Error-data key carrying structured source failure detail.
 	 */
 	public const ERROR_DATA_SOURCE_ERROR = 'source_error';
@@ -52,6 +59,13 @@ final class HTTP_Client {
 	 * keeping it a sane length for display.
 	 */
 	private const MAX_ERROR_DETAIL_LENGTH = 300;
+
+	/**
+	 * Redirects followed while downloading a file. A source site that
+	 * upgrades the scheme and then canonicalizes the path spends two of
+	 * them; past this budget the chain is treated as a redirect loop.
+	 */
+	private const MAX_DOWNLOAD_REDIRECTS = 3;
 
 	/**
 	 * Makes an HTTP request. $action is sent as X-Safe-Publish-Action and
@@ -381,13 +395,194 @@ final class HTTP_Client {
 	}
 
 	/**
-	 * Downloads a file using the WordPress core function.
+	 * Downloads a file, following only redirects that stay on the host and
+	 * port its URL names.
+	 *
+	 * The transport is told not to follow redirects at all, matching the
+	 * policy make_request() applies to REST traffic, and each redirect is
+	 * resolved here instead. Core revalidates a redirect target but accepts
+	 * any public host, whereas callers only ever approve a media URL by its
+	 * host, so the bytes have to come from the host that URL names. An http
+	 * URL upgraded to https is followed; the reverse is not.
 	 *
 	 * @param string $url File URL.
-	 * @return string|WP_Error Path to downloaded file on success, WP_Error on failure.
+	 * @return string|WP_Error Path to the downloaded file, or WP_Error on
+	 *                         failure.
 	 */
 	public function download_file( string $url ): string|WP_Error {
-		// Use download_url for proper file handling - WordPress core function.
-		return download_url( $url );
+		$target = $url;
+
+		// One pass for the download itself, plus one per redirect followed.
+		for ( $pass = 0; $pass <= self::MAX_DOWNLOAD_REDIRECTS; $pass++ ) {
+			$location = null;
+			$result   = $this->download_without_redirects( $target, $location );
+
+			if ( ! is_wp_error( $result ) || null === $location ) {
+				return $result;
+			}
+
+			$next = $this->resolve_pinned_redirect( $target, $location );
+
+			if ( null === $next ) {
+				return new WP_Error(
+					self::ERROR_DOWNLOAD_REDIRECTED,
+					__(
+						'This file redirects off the host its URL names.',
+						'safe-publish'
+					)
+				);
+			}
+
+			$target = $next;
+		}
+
+		return new WP_Error(
+			self::ERROR_DOWNLOAD_REDIRECTED,
+			__(
+				'The source site redirected this file too many times.',
+				'safe-publish'
+			)
+		);
+	}
+
+	/**
+	 * Downloads a URL with redirects turned off, reporting the redirect the
+	 * source answered with.
+	 *
+	 * Core's download_url() takes no redirection argument, so the policy is
+	 * applied through an http_request_args filter matched to this URL, and a
+	 * companion http_response filter reads the Location off the redirect core
+	 * discards. Both are removed before returning, so no other request can
+	 * pick them up.
+	 *
+	 * @param string      $url      File URL.
+	 * @param string|null $location Set, by reference, to the Location the
+	 *                              source answered with, or null when the
+	 *                              response was not a redirect.
+	 * @return string|WP_Error Path to the downloaded file, or WP_Error on
+	 *                         failure.
+	 */
+	private function download_without_redirects(
+		string $url,
+		?string &$location = null
+	): string|WP_Error {
+		$location = null;
+
+		$refuse_redirects = static function (
+			mixed $args,
+			string $request_url
+		) use ( $url ): mixed {
+			if ( is_array( $args ) && $request_url === $url ) {
+				$args['redirection'] = 0;
+			}
+
+			return $args;
+		};
+
+		$read_location = static function (
+			mixed $response,
+			mixed $_args,
+			string $request_url
+		) use (
+			$url,
+			&$location
+		): mixed {
+			if ( ! is_array( $response ) || $request_url !== $url ) {
+				return $response;
+			}
+
+			$code = (int) wp_remote_retrieve_response_code( $response );
+			if ( $code < 300 || $code > 399 ) {
+				return $response;
+			}
+
+			$header = wp_remote_retrieve_header( $response, 'location' );
+			if ( is_string( $header ) && '' !== $header ) {
+				$location = $header;
+			}
+
+			return $response;
+		};
+
+		// phpcs:ignore WordPressVIPMinimum.Hooks.RestrictedHooks.http_request_args -- Matched to this URL, removed below, and sets redirection only.
+		add_filter( 'http_request_args', $refuse_redirects, 10, 2 );
+		add_filter( 'http_response', $read_location, 10, 3 );
+
+		try {
+			// Core's download_url() streams the body to a temp file.
+			return download_url( $url );
+		} finally {
+			remove_filter( 'http_request_args', $refuse_redirects, 10 );
+			remove_filter( 'http_response', $read_location, 10 );
+		}
+	}
+
+	/**
+	 * Resolves a redirect Location against the URL it came from, keeping only
+	 * a target the same host and port serve.
+	 *
+	 * A relative Location cannot leave the host, so it resolves against the
+	 * requested URL's scheme, host, and port. An absolute Location has to
+	 * name that same host and port, and an https URL is never followed down
+	 * to plain http.
+	 *
+	 * @param string $url      URL that was requested.
+	 * @param string $location Location header the source answered with.
+	 * @return string|null Absolute URL on the same host and port, or null when
+	 *                     the redirect leaves either.
+	 */
+	private function resolve_pinned_redirect(
+		string $url,
+		string $location
+	): ?string {
+		$origin = URL_Validator::normalize_site_url( $url );
+		if ( '' === $origin ) {
+			return null;
+		}
+
+		$target = URL_Validator::resolve_relative_url( $location, $origin );
+		if ( ! URL_Validator::is_absolute_http_url( $target ) ) {
+			return null;
+		}
+
+		$authority        = $this->url_authority( $url );
+		$target_authority = $this->url_authority( $target );
+
+		if ( $target_authority !== $authority ) {
+			return null;
+		}
+
+		// A scheme upgrade is the common redirect; a downgrade is not.
+		$scheme        = $this->url_scheme( $url );
+		$target_scheme = $this->url_scheme( $target );
+
+		if ( 'https' === $scheme && 'https' !== $target_scheme ) {
+			return null;
+		}
+
+		return $target;
+	}
+
+	/**
+	 * Reads a URL's host and explicit port, lower cased for comparison.
+	 *
+	 * @param string $url URL to read.
+	 * @return string Host, with ":port" appended when the URL names one.
+	 */
+	private function url_authority( string $url ): string {
+		$host = strtolower( (string) wp_parse_url( $url, PHP_URL_HOST ) );
+		$port = wp_parse_url( $url, PHP_URL_PORT );
+
+		return is_int( $port ) ? $host . ':' . $port : $host;
+	}
+
+	/**
+	 * Reads a URL's scheme, lower cased for comparison.
+	 *
+	 * @param string $url URL to read.
+	 * @return string Scheme in lower case, or '' when the URL carries none.
+	 */
+	private function url_scheme( string $url ): string {
+		return strtolower( (string) wp_parse_url( $url, PHP_URL_SCHEME ) );
 	}
 }

@@ -22,7 +22,86 @@ function set_site_transient(
 
 function add_action(): void {}
 
-function add_filter(): void {}
+/**
+ * Records a filter registration.
+ *
+ * Unit tests do not run WordPress' hook system. The registry lets a test
+ * assert what a call registered and removed, and lets the download_url()
+ * stub apply the request filters the way WP_Http::request() does.
+ *
+ * @param string $hook_name      Hook name.
+ * @param mixed  $callback       Callback to register.
+ * @param int    $_priority      Unused; kept for parity with core's signature.
+ * @param int    $_accepted_args Unused; kept for parity with core's signature.
+ */
+function add_filter(
+	string $hook_name = '',
+	mixed $callback = null,
+	int $_priority = 10,
+	int $_accepted_args = 1
+): void {
+	if ( '' === $hook_name || null === $callback ) {
+		return;
+	}
+
+	$GLOBALS['_test_registered_filters'][ $hook_name ][] = $callback;
+}
+
+/**
+ * Removes a recorded filter registration.
+ *
+ * @param string $hook_name Hook name.
+ * @param mixed  $callback  Callback to remove.
+ * @param int    $_priority Unused; kept for parity with core's signature.
+ */
+function remove_filter(
+	string $hook_name = '',
+	mixed $callback = null,
+	int $_priority = 10
+): void {
+	$registered = get_test_filters( $hook_name );
+	$index      = array_search( $callback, $registered, true );
+
+	if ( false !== $index ) {
+		unset( $registered[ $index ] );
+	}
+
+	$GLOBALS['_test_registered_filters'][ $hook_name ] = array_values( $registered );
+}
+
+/**
+ * Returns the callbacks recorded for a hook.
+ *
+ * @param string $hook_name Hook name.
+ * @return array Registered callbacks.
+ */
+function get_test_filters( string $hook_name ): array {
+	$registered = $GLOBALS['_test_registered_filters'][ $hook_name ] ?? array();
+
+	return is_array( $registered ) ? $registered : array();
+}
+
+/**
+ * Applies the callbacks recorded for a hook, the way WordPress would.
+ *
+ * @param string $hook_name Hook name.
+ * @param mixed  $value     Value handed to the first callback.
+ * @param mixed  ...$args   Extra arguments passed to every callback.
+ * @return mixed Filtered value.
+ */
+function apply_test_filters(
+	string $hook_name,
+	mixed $value,
+	mixed ...$args
+): mixed {
+	foreach ( get_test_filters( $hook_name ) as $callback ) {
+		if ( is_callable( $callback ) ) {
+			$value = $callback( $value, ...$args );
+		}
+	}
+
+	return $value;
+}
 
 function apply_filters( string $filter, mixed $thing, mixed ...$args ): mixed {
 	$callback = $GLOBALS['_test_filters'][ $filter ] ?? null;
@@ -311,6 +390,165 @@ function reset_test_http_response(): void {
 		$GLOBALS['_test_http_response'],
 		$GLOBALS['_test_http_last_url'],
 		$GLOBALS['_test_http_last_args']
+	);
+}
+
+/**
+ * Reads a header from a stubbed response, case-insensitively.
+ *
+ * @param array|WP_Error $response Stubbed response.
+ * @param string         $header   Header name.
+ * @return string Header value, or '' when the response carries none.
+ */
+function wp_remote_retrieve_header(
+	array|WP_Error $response,
+	string $header
+): string {
+	if ( $response instanceof WP_Error ) {
+		return '';
+	}
+
+	$headers = $response['headers'] ?? array();
+	if ( ! is_array( $headers ) ) {
+		return '';
+	}
+
+	return (string) ( $headers[ strtolower( $header ) ] ?? '' );
+}
+
+/**
+ * Temporary file path the download_url() stub reports on success.
+ *
+ * @return string Temporary file path.
+ */
+function test_download_temp_file(): string {
+	return '/tmp/safe-publish-download.tmp';
+}
+
+/**
+ * URL standing in for another request in flight while a download runs.
+ *
+ * The download_url() stub runs both HTTP hooks for it as well, so a test can
+ * prove a filter only acts on the URL it was registered for.
+ *
+ * @return string Unrelated request URL.
+ */
+function test_unrelated_request_url(): string {
+	return 'https://unrelated.example.org/other.jpg';
+}
+
+/**
+ * Minimal port of WordPress core's download_url() over the filter registry.
+ *
+ * Applies http_request_args and http_response the way WP_Http::request()
+ * does, and turns a non-200 response into the http_404 WP_Error core returns,
+ * so redirect handling can be exercised without a transport.
+ *
+ * @param string $url     File URL.
+ * @param int    $timeout Request timeout in seconds.
+ * @return string|WP_Error Temporary file path, or error.
+ */
+function download_url( string $url, int $timeout = 300 ): string|WP_Error {
+	$defaults = array(
+		'timeout'            => $timeout,
+		'redirection'        => 5,
+		'reject_unsafe_urls' => true,
+		'stream'             => true,
+		'filename'           => test_download_temp_file(),
+	);
+
+	$args = apply_test_filters( 'http_request_args', $defaults, $url );
+
+	$unrelated_url  = test_unrelated_request_url();
+	$unrelated_args = apply_test_filters(
+		'http_request_args',
+		$defaults,
+		$unrelated_url
+	);
+
+	$args           = is_array( $args ) ? $args : $defaults;
+	$unrelated_args = is_array( $unrelated_args ) ? $unrelated_args : $defaults;
+
+	$GLOBALS['_test_download_url_calls'][] = array(
+		'url'              => $url,
+		'args'             => $args,
+		'unrelated_args'   => $unrelated_args,
+		'request_filters'  => count( get_test_filters( 'http_request_args' ) ),
+		'response_filters' => count( get_test_filters( 'http_response' ) ),
+	);
+
+	$unrelated_response = $GLOBALS['_test_unrelated_response'] ?? null;
+	if ( is_array( $unrelated_response ) ) {
+		apply_test_filters(
+			'http_response',
+			$unrelated_response,
+			$unrelated_args,
+			$unrelated_url
+		);
+	}
+
+	$queued   = $GLOBALS['_test_download_responses'] ?? array();
+	$response = array_shift( $queued );
+
+	$GLOBALS['_test_download_responses'] = $queued;
+
+	if ( null === $response ) {
+		$response = array( 'response' => array( 'code' => 200 ) );
+	}
+
+	if ( $response instanceof WP_Error ) {
+		return $response;
+	}
+
+	$filtered = apply_test_filters( 'http_response', $response, $args, $url );
+	$response = is_array( $filtered ) ? $filtered : $response;
+	$code     = wp_remote_retrieve_response_code( $response );
+
+	if ( 200 !== $code ) {
+		return new WP_Error(
+			'http_404',
+			'Not Found',
+			array( 'code' => $code )
+		);
+	}
+
+	return (string) $args['filename'];
+}
+
+/**
+ * Queues the responses the download_url() stub returns, in order.
+ *
+ * @param array $responses Stubbed responses.
+ */
+function set_test_download_responses( array $responses ): void {
+	$GLOBALS['_test_download_responses'] = $responses;
+}
+
+/**
+ * Stubs the response another request in flight receives during a download.
+ *
+ * @param array $response Stubbed response for the unrelated request.
+ */
+function set_test_unrelated_response( array $response ): void {
+	$GLOBALS['_test_unrelated_response'] = $response;
+}
+
+/**
+ * Returns what each download_url() stub call was asked to download.
+ *
+ * @return array Recorded calls.
+ */
+function get_test_download_url_calls(): array {
+	$calls = $GLOBALS['_test_download_url_calls'] ?? array();
+
+	return is_array( $calls ) ? $calls : array();
+}
+
+function reset_test_downloads(): void {
+	unset(
+		$GLOBALS['_test_download_responses'],
+		$GLOBALS['_test_download_url_calls'],
+		$GLOBALS['_test_unrelated_response']
 	);
 }
 
