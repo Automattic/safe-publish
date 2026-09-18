@@ -937,6 +937,12 @@ describe( 'statusLabel', () => {
 		expect( statusLabel( 'pending' ) ).toBe( 'Pending Review' );
 	} );
 
+	it( 'labels a trashed destination rather than titlecasing the slug', () => {
+		// ARRANGE + ACT + ASSERT: The Local Status column reads Trashed, so a
+		// trashed destination is distinguishable from one never imported.
+		expect( statusLabel( 'trash' ) ).toBe( 'Trashed' );
+	} );
+
 	it( 'titlecases an unmapped slug split on - and _', () => {
 		// ARRANGE: Custom editorial-workflow statuses with both separators.
 		// ACT + ASSERT: Each word is capitalized and joined with spaces.
