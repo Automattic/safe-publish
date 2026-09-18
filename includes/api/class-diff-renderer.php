@@ -462,9 +462,20 @@ final class Diff_Renderer {
 		// Taxonomies diff.
 		$diffs['taxonomies'] = $this->generate_terms_diff( $current, $incoming );
 
-		// Meta diff.
-		$current_meta_text  = $this->build_meta_text( $current['meta'] ?? array() );
-		$incoming_meta_text = $this->build_meta_text( $incoming['meta'] ?? array() );
+		// Meta diff, over the keys of the incoming meta object the import
+		// writes: It skips the keys its key policy reserves, and deletes none,
+		// so a key only the destination holds is not a pending change.
+		$meta_keys          = Meta_Terms_Manager::importable_meta_keys(
+			$incoming['meta'] ?? array()
+		);
+		$current_meta_text  = $this->build_meta_text(
+			$current['meta'] ?? array(),
+			$meta_keys
+		);
+		$incoming_meta_text = $this->build_meta_text(
+			$incoming['meta'] ?? array(),
+			$meta_keys
+		);
 		$diffs['meta']      = $this->generate_simple_diff(
 			$current_meta_text,
 			$incoming_meta_text,
@@ -1647,23 +1658,35 @@ final class Diff_Renderer {
 	/**
 	 * Builds text representation of meta for diff comparison.
 	 *
-	 * @param array $meta_array Post meta array.
+	 * Both sides are walked in the comparable key order so that a key stored in
+	 * a different position on the destination does not read as a removal and an
+	 * addition of the same line.
+	 *
+	 * @param array    $meta_array      Post meta array.
+	 * @param string[] $comparable_keys Keys to compare, sanitized the way the
+	 *                                  import sanitizes them.
 	 *
 	 * @return string Text representation.
 	 */
-	private function build_meta_text( array $meta_array ): string {
-		if ( empty( $meta_array ) ) {
-			return '';
+	private function build_meta_text(
+		array $meta_array,
+		array $comparable_keys
+	): string {
+		$by_key = array();
+		foreach ( $meta_array as $key => $value ) {
+			$by_key[ sanitize_text_field( (string) $key ) ] = $value;
 		}
 
 		$lines = array();
-		foreach ( $meta_array as $key => $value ) {
-			// Skip protected meta (leading underscore) and plugin internal meta.
-			if ( 0 === strpos( $key, '_' ) || 0 === strpos( $key, 'safe_publish_' ) ) {
+		foreach ( $comparable_keys as $key ) {
+			if ( ! array_key_exists( $key, $by_key ) ) {
 				continue;
 			}
 
-			$val = is_array( $value ) ? ( isset( $value[0] ) ? $value[0] : wp_json_encode( $value ) ) : $value;
+			$value = $by_key[ $key ];
+			$val   = is_array( $value )
+				? ( isset( $value[0] ) ? $value[0] : wp_json_encode( $value ) )
+				: $value;
 			if ( is_array( $val ) || is_object( $val ) ) {
 				$val = wp_json_encode( $val );
 			}

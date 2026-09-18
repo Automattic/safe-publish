@@ -46,7 +46,7 @@ add_action( 'init', function (): void {
 
 Register the keys against every post type whose SEO settings should migrate. Passing `''` as the object subtype registers them globally, which is the simplest choice; pass a specific post type instead if you want to scope it. A post type exposes the `meta` object in REST only when it supports `custom-fields`; confirm with `post_type_supports( $type, 'custom-fields' )` and add it via `add_post_type_support()` where missing.
 
-Once registered, fetch a source post with `context=edit` and confirm the keys now appear under the core `meta` object. No destination-side code is required — Safe Publish's import writes every key in `meta` verbatim, including underscore-prefixed ones.
+Once registered, fetch a source post with `context=edit` and confirm the keys now appear under the core `meta` object. No destination-side code is required — Safe Publish's import writes every key in `meta` verbatim, including underscore-prefixed ones. The only keys it reserves are its own `safe_publish_` namespace and a short list of core-owned keys; no `_yoast_wpseo_` key is among them. See [the import key policy](hooks.md#safe_publish_import_allowed_meta_keys).
 
 ## Optional: restrict to a known set on the destination
 
