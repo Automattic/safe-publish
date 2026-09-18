@@ -1,6 +1,6 @@
 <?php
 /**
- * Safe Publish capability installation and mapping.
+ * Safe Publish capability installation and mapping
  *
  * @package Safe_Publish
  */

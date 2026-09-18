@@ -1,6 +1,6 @@
 <?php
 /**
- * Auth Credential Provider Test.
+ * Auth Credential Provider Test
  *
  * @package Safe_Publish
  */

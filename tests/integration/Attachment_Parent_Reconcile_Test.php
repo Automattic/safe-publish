@@ -1,6 +1,6 @@
 <?php
 /**
- * Integration tests for attachment parenting across import orders.
+ * Integration tests for attachment parenting across import orders
  *
  * @package Safe_Publish
  */

@@ -1,5 +1,5 @@
 /**
- * Tests for constants
+ * Tests for constants.
  */
 import { describe, expect, it } from 'vitest';
 import {

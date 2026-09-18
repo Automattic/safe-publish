@@ -1,6 +1,6 @@
 <?php
 /**
- * Unit tests for the Available-chip catalog page fill.
+ * Unit tests for the Available-chip catalog page fill
  *
  * @package Safe_Publish
  */

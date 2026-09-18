@@ -1,6 +1,6 @@
 <?php
 /**
- * Reads stored import sessions and items.
+ * Reads stored import sessions and items
  *
  * @package Safe_Publish
  */

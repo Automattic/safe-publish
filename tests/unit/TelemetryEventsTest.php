@@ -1,6 +1,6 @@
 <?php
 /**
- * Telemetry Events Test.
+ * Telemetry Events Test
  *
  * @package Safe_Publish
  */

@@ -1,6 +1,6 @@
 <?php
 /**
- * Topological_Sorter Test.
+ * Topological_Sorter Test
  *
  * @package Safe_Publish
  */

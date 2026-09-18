@@ -1,6 +1,6 @@
 <?php
 /**
- * Integration tests for the Source_Terms_REST_Field class.
+ * Integration tests for the Source_Terms_REST_Field class
  *
  * @package Safe_Publish
  */

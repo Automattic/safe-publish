@@ -1,6 +1,6 @@
 <?php
 /**
- * Attention Issues Repository class.
+ * Attention Issues Repository class
  *
  * @package Safe_Publish
  */

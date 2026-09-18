@@ -1,6 +1,6 @@
 <?php
 /**
- * Term field reconcile integration tests.
+ * Term field reconcile integration tests
  *
  * @package Safe_Publish
  */

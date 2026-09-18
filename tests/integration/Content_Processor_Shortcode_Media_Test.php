@@ -1,6 +1,6 @@
 <?php
 /**
- * Integration tests for classic [audio]/[video] shortcode media import.
+ * Integration tests for classic [audio]/[video] shortcode media import
  *
  * @package Safe_Publish
  */

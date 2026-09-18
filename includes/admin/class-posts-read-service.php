@@ -1,6 +1,6 @@
 <?php
 /**
- * Posts read service.
+ * Posts read service
  *
  * @package Safe_Publish
  */

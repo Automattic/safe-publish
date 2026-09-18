@@ -1,6 +1,6 @@
 <?php
 /**
- * Source/destination post_content parity comparator for integration tests.
+ * Source/destination post_content parity comparator for integration tests
  *
  * @package Safe_Publish
  */

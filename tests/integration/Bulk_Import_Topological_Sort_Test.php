@@ -1,6 +1,6 @@
 <?php
 /**
- * Bulk import topological sort integration tests.
+ * Bulk import topological sort integration tests
  *
  * @package Safe_Publish
  */

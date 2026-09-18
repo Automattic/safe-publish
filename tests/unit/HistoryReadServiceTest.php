@@ -1,6 +1,6 @@
 <?php
 /**
- * Unit tests for history read contracts.
+ * Unit tests for history read contracts
  *
  * @package Safe_Publish
  */
