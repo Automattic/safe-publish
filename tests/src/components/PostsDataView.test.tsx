@@ -1,5 +1,6 @@
 /**
- * Tests for PostsDataView search-to-chip routing and source-error notices.
+ * Tests for PostsDataView search-to-chip routing, source-error notices, and
+ * sync-status batch failures.
  */
 import { useEffect } from '@wordpress/element';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -13,15 +14,32 @@ import {
 
 import { PostsDataView } from '@/components/PostsDataView';
 
-import type { DataViewsField, UnifiedPostRow } from '@/types';
+import type {
+	DataViewsField,
+	DisplayError,
+	UnifiedPostRow,
+} from '@/types';
 
 const dataViews = vi.hoisted( () => ( {
 	props: null as {
 		data: UnifiedPostRow[];
 		fields: DataViewsField< UnifiedPostRow >[];
+		actions?: Array< {
+			id: string;
+			isPrimary?: boolean;
+			isEligible?: ( item: UnifiedPostRow ) => boolean;
+		} >;
 		config?: { perPageSizes: number[] };
 		header?: JSX.Element;
 	} | null,
+} ) );
+
+const useViewportMatch = vi.hoisted( () => vi.fn( () => false ) );
+
+// useRowActions reads this to decide whether to demote primary actions.
+vi.mock( '@wordpress/compose', async ( importOriginal ) => ( {
+	...( await importOriginal< typeof import('@wordpress/compose') >() ),
+	useViewportMatch,
 } ) );
 
 // DataViews pulls in @wordpress/private-apis, which cannot unlock in the test
@@ -36,7 +54,7 @@ vi.mock( '@wordpress/dataviews', () => ( {
 } ) );
 
 const selector = vi.hoisted( () => ( {
-	error: null as string | null,
+	error: null as DisplayError | null,
 } ) );
 
 // Stub the selector and drive postTypeError through onError to exercise the
@@ -45,7 +63,7 @@ vi.mock( '@/post-type-selector', () => ( {
 	PostTypeSelector: ( {
 		onError,
 	}: {
-		onError?: ( error: string | null ) => void;
+		onError?: ( error: DisplayError | null ) => void;
 	} ) => {
 		useEffect( () => {
 			onError?.( selector.error );
@@ -64,6 +82,17 @@ const DEST_URL = 'https://destination.example.com';
 
 // The 503 string both AJAX paths surface verbatim.
 const HTTP_503 = 'Source site returned HTTP error 503.';
+
+// A 401 both paths can surface, as the flat sentence and as the structured
+// halves the server composes it from.
+const REASON_401 = 'Refused.';
+const TEMPLATE_401 = 'Source site returned HTTP error 401. <reason />';
+const FLAT_401 = `Source site returned HTTP error 401. ${ REASON_401 }`;
+const SOURCE_ERROR_401 = { message: REASON_401, template: TEMPLATE_401 };
+const STRUCTURED_401 = {
+	success: false,
+	data: { message: FLAT_401, source_error: SOURCE_ERROR_401 },
+};
 
 let fetchMock: ReturnType< typeof vi.fn >;
 
@@ -109,6 +138,7 @@ function searchInput(): HTMLInputElement {
 beforeEach( () => {
 	selector.error = null;
 	dataViews.props = null;
+	useViewportMatch.mockReturnValue( false );
 	window.history.replaceState( null, '', '/' );
 
 	// The destination host is the localized home_url(), distinct from both the
@@ -161,6 +191,37 @@ describe( 'PostsDataView fields', () => {
 					},
 				} ),
 		} );
+	} );
+
+	it( 'Verifies that an available row keeps an inline action on wide viewports', async () => {
+		// ARRANGE: A wide viewport.
+		useViewportMatch.mockReturnValue( false );
+
+		// ACT: Mount the listing.
+		render( <PostsDataView sourceSiteUrl={ SOURCE_URL } /> );
+		await waitFor( () => expect( dataViews.props?.data ).toHaveLength( 1 ) );
+
+		// ASSERT: Import stays primary, so it renders inline on hover.
+		expect(
+			dataViews.props?.actions?.find( ( action ) => 'import' === action.id )
+				?.isPrimary
+		).toBe( true );
+	} );
+
+	it( 'Verifies that narrow viewports demote every row action', async () => {
+		// ARRANGE: A viewport below the breakpoint.
+		useViewportMatch.mockReturnValue( true );
+
+		// ACT: Mount the listing.
+		render( <PostsDataView sourceSiteUrl={ SOURCE_URL } /> );
+		await waitFor( () => expect( dataViews.props?.data ).toHaveLength( 1 ) );
+
+		// ASSERT: None is primary, so every eligible action reaches the
+		// overflow menu rather than the hidden inline row.
+		expect( dataViews.props?.actions?.length ).toBeGreaterThan( 0 );
+		expect(
+			dataViews.props?.actions?.some( ( action ) => action.isPrimary )
+		).toBe( false );
 	} );
 
 	it( 'Verifies that source post titles render without links', async () => {
@@ -300,6 +361,181 @@ describe( 'PostsDataView URL search routing', () => {
 	} );
 } );
 
+describe( 'PostsDataView sync-status batch failures', () => {
+	// The batch effect only requests ids for rows that are imported and carry
+	// a source id.
+	const IMPORTED_ROW: UnifiedPostRow = {
+		id: 10,
+		source_post_id: 10,
+		title: 'Imported post',
+		link: `${ SOURCE_URL }/imported-post/`,
+		date_gmt: '2026-08-20T00:00:00Z',
+		modified_gmt: '2026-08-20T00:00:00Z',
+		post_type: 'post',
+		status: 'publish',
+		local_state: 'up-to-date',
+		is_imported: true,
+		wp_post_status: 'publish',
+		item_id: 5,
+		post_id: 99,
+		import_date_gmt: '2026-08-21T00:00:00Z',
+		has_previous_content: false,
+		edit_url: '',
+	};
+
+	/**
+	 * Routes the listing and sync-status calls, which share one ajaxurl, by
+	 * the action each sends. A new items array per call keeps the batch
+	 * effect's sourceIds identity fresh on refresh.
+	 *
+	 * @param batch Response factory for the sync-status call.
+	 */
+	function mockByAction( batch: () => Promise< unknown > ): void {
+		fetchMock.mockImplementation(
+			( _url: string, init: { body: FormData } ) => {
+				if (
+					'safe_publish_sync_status_batch' ===
+					init.body.get( 'action' )
+				) {
+					return batch();
+				}
+				return Promise.resolve( {
+					json: () =>
+						Promise.resolve( {
+							success: true,
+							data: {
+								items: [ IMPORTED_ROW ],
+								has_more: false,
+							},
+						} ),
+				} );
+			}
+		);
+	}
+
+	/**
+	 * Renders the local-state cell from the fields DataViews last received,
+	 * which close over the current sync-status map.
+	 */
+	function localStateCell(): HTMLElement {
+		const field = dataViews.props?.fields.find(
+			( candidate ) => 'local_state' === candidate.id
+		);
+		if ( undefined === field?.render ) {
+			throw new Error( 'local_state field not found' );
+		}
+		return render( field.render( { item: IMPORTED_ROW } ) ).container;
+	}
+
+	/**
+	 * Drains the response.json() to setState microtask chain.
+	 */
+	async function drain(): Promise< void > {
+		await act( async () => {
+			await new Promise( ( resolve ) => setTimeout( resolve, 0 ) );
+		} );
+	}
+
+	it( 'Verifies that a rejected batch marks up-to-date rows as a failed sync check', async () => {
+		// ARRANGE: The sync-status call fails at the transport layer.
+		mockByAction( () => Promise.reject( new Error( 'Network down' ) ) );
+
+		// ACT: Mount the listing and let the batch settle.
+		render( <PostsDataView sourceSiteUrl={ SOURCE_URL } /> );
+		await waitFor( () => expect( dataViews.props?.data ).toHaveLength( 1 ) );
+		await drain();
+
+		// ASSERT: The row reports the check failed rather than looking verified.
+		expect( localStateCell() ).toHaveTextContent( 'Sync check failed' );
+	} );
+
+	it( 'Verifies that an error response from the batch marks up-to-date rows as a failed sync check', async () => {
+		// ARRANGE: The sync-status endpoint answers with an error envelope.
+		mockByAction( () =>
+			Promise.resolve( {
+				json: () =>
+					Promise.resolve( {
+						success: false,
+						data: 'Sync status check is limited to 100 posts at a time.',
+					} ),
+			} )
+		);
+
+		// ACT: Mount the listing and let the batch settle.
+		render( <PostsDataView sourceSiteUrl={ SOURCE_URL } /> );
+		await waitFor( () => expect( dataViews.props?.data ).toHaveLength( 1 ) );
+		await drain();
+
+		// ASSERT: An error envelope is treated as a failed check, not ignored.
+		expect( localStateCell() ).toHaveTextContent( 'Sync check failed' );
+	} );
+
+	it( 'Verifies that a successful batch leaves an up-to-date row unbadged', async () => {
+		// ARRANGE: The sync-status endpoint confirms the row is up to date.
+		mockByAction( () =>
+			Promise.resolve( {
+				json: () =>
+					Promise.resolve( {
+						success: true,
+						data: { statuses: { 10: { status: 'up-to-date' } } },
+					} ),
+			} )
+		);
+
+		// ACT: Mount the listing and let the batch settle.
+		render( <PostsDataView sourceSiteUrl={ SOURCE_URL } /> );
+		await waitFor( () => expect( dataViews.props?.data ).toHaveLength( 1 ) );
+		await drain();
+
+		// ASSERT: A confirmed row carries the label alone.
+		const container = localStateCell();
+		expect( container ).toHaveTextContent( 'Up to date' );
+		expect( container ).not.toHaveTextContent( 'Sync check failed' );
+	} );
+
+	it( 'Verifies that an in-flight batch shows no sync-check badge', async () => {
+		// ARRANGE: The sync-status call never settles.
+		mockByAction( () => new Promise( () => {} ) );
+
+		// ACT: Mount the listing and leave the batch pending.
+		render( <PostsDataView sourceSiteUrl={ SOURCE_URL } /> );
+		await waitFor( () => expect( dataViews.props?.data ).toHaveLength( 1 ) );
+		await drain();
+
+		// ASSERT: A pending check stays silent; only a settled one can fail.
+		expect( localStateCell() ).not.toHaveTextContent( 'Sync check failed' );
+	} );
+
+	it( 'Verifies that an aborted batch does not mark rows as a failed sync check', async () => {
+		// ARRANGE: Hold the first batch open so a refresh can supersede it.
+		let rejectFirstBatch: ( reason: unknown ) => void = () => {};
+		let batchCalls = 0;
+		mockByAction( () => {
+			batchCalls += 1;
+			if ( 1 === batchCalls ) {
+				return new Promise( ( _resolve, reject ) => {
+					rejectFirstBatch = reject;
+				} );
+			}
+			return new Promise( () => {} );
+		} );
+		render( <PostsDataView sourceSiteUrl={ SOURCE_URL } /> );
+		await waitFor( () => expect( batchCalls ).toBe( 1 ) );
+
+		// ACT: Refresh to abort the first batch, then settle its AbortError
+		// after the replacement request has already seeded fresh verdicts.
+		fireEvent.click( screen.getByRole( 'button', { name: 'Refresh' } ) );
+		await waitFor( () => expect( batchCalls ).toBe( 2 ) );
+		await act( async () => {
+			rejectFirstBatch( new DOMException( '', 'AbortError' ) );
+			await new Promise( ( resolve ) => setTimeout( resolve, 0 ) );
+		} );
+
+		// ASSERT: The superseded request cannot badge the newer request's rows.
+		expect( localStateCell() ).not.toHaveTextContent( 'Sync check failed' );
+	} );
+} );
+
 describe( 'PostsDataView source-error notices', () => {
 	it( 'should collapse to one notice when both paths surface the identical error', async () => {
 		// ARRANGE: The post-type call reports a 503; the list call is deferred
@@ -355,6 +591,85 @@ describe( 'PostsDataView source-error notices', () => {
 		render( <PostsDataView sourceSiteUrl={ SOURCE_URL } /> );
 		await waitFor( () => expect( errorNotices() ).toHaveLength( 1 ) );
 		await resolveList( { success: false, data: HTTP_503 } );
+		expect( errorNotices() ).toHaveLength( 1 );
+
+		// ACT: Dismiss the visible banner.
+		const dismiss = errorNotices()[ 0 ].querySelector( 'button' );
+		expect( dismiss ).not.toBeNull();
+		await act( async () => {
+			fireEvent.click( dismiss as HTMLButtonElement );
+		} );
+
+		// ASSERT: No banner remains; the suppressed twin does not resurface.
+		expect( errorNotices() ).toHaveLength( 0 );
+	} );
+
+	it( 'should isolate the source reason in the list-fetch notice', async () => {
+		// ARRANGE: The list read fails with a reason carrying directional
+		// controls, which would reorder the sentence around it.
+		const reason = '\u202eSource refused the request.\u202c';
+		fetchMock.mockResolvedValue( {
+			json: () =>
+				Promise.resolve( {
+					success: false,
+					data: {
+						message: `Source site returned HTTP error 401. ${ reason }`,
+						source_error: {
+							message: reason,
+							template: TEMPLATE_401,
+						},
+					},
+				} ),
+		} );
+
+		// ACT: Mount on the default catalog chip and let the failure settle.
+		render( <PostsDataView sourceSiteUrl={ SOURCE_URL } /> );
+		await waitFor( () => expect( errorNotices() ).toHaveLength( 1 ) );
+
+		// ASSERT: The reason renders as its own directional run.
+		const isolated = errorNotices()[ 0 ].querySelector( 'bdi' );
+		expect( isolated?.textContent ).toBe( reason );
+		expect( isolated ).toHaveAttribute( 'dir', 'auto' );
+	} );
+
+	it( 'should collapse two structured errors carrying the same text', async () => {
+		// ARRANGE: Both reads fail the same way, so each path builds its own
+		// object with equal halves.
+		selector.error = SOURCE_ERROR_401;
+		const resolveList = deferListFetch();
+
+		// ACT: Mount on the default catalog chip, then settle the list 401.
+		render( <PostsDataView sourceSiteUrl={ SOURCE_URL } /> );
+		await waitFor( () => expect( errorNotices() ).toHaveLength( 1 ) );
+		await resolveList( STRUCTURED_401 );
+
+		// ASSERT: Separate objects, one banner.
+		expect( errorNotices() ).toHaveLength( 1 );
+	} );
+
+	it( 'should collapse a structured error against its flat twin', async () => {
+		// ARRANGE: The post-type read carries structured detail; the list read
+		// reports the same failure as a bare sentence.
+		selector.error = SOURCE_ERROR_401;
+		const resolveList = deferListFetch();
+
+		// ACT: Mount on the default catalog chip, then settle the flat 401.
+		render( <PostsDataView sourceSiteUrl={ SOURCE_URL } /> );
+		await waitFor( () => expect( errorNotices() ).toHaveLength( 1 ) );
+		await resolveList( { success: false, data: FLAT_401 } );
+
+		// ASSERT: Mixed shapes reading alike still collapse to one banner.
+		expect( errorNotices() ).toHaveLength( 1 );
+	} );
+
+	it( 'should clear both structured states on dismiss', async () => {
+		// ARRANGE: The structured identical-error case, with the surviving
+		// notice being the fetch-error one that carries the coupling.
+		selector.error = SOURCE_ERROR_401;
+		const resolveList = deferListFetch();
+		render( <PostsDataView sourceSiteUrl={ SOURCE_URL } /> );
+		await waitFor( () => expect( errorNotices() ).toHaveLength( 1 ) );
+		await resolveList( STRUCTURED_401 );
 		expect( errorNotices() ).toHaveLength( 1 );
 
 		// ACT: Dismiss the visible banner.

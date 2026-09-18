@@ -21,7 +21,7 @@ use Safe_Publish\Utils\Telemetry_Events;
 use Safe_Publish\Utils\Telemetry_Service;
 use Safe_Publish\Utils\Topological_Sorter;
 use Safe_Publish\Validators\URL_Validator;
-use WP_Post;
+use WP_Error;
 
 // Prevent direct access.
 if ( ! defined( 'ABSPATH' ) ) {
@@ -128,6 +128,17 @@ final class Admin_Ajax_Controller {
 		'post',
 		'term',
 		'taxonomy',
+	);
+
+	/**
+	 * Read-service error codes answered with HTTP 401: The stored credential
+	 * is missing or malformed.
+	 *
+	 * @var string[]
+	 */
+	private const UNAUTHORIZED_READ_ERROR_CODES = array(
+		'posts_read_missing_secret',
+		'posts_read_short_secret',
 	);
 
 	/**
@@ -281,14 +292,40 @@ final class Admin_Ajax_Controller {
 		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- service sanitizes the unslashed input.
 		$result = $this->posts_read_service->list_posts( wp_unslash( $_POST ) );
 		if ( is_wp_error( $result ) ) {
-			$status = in_array(
-				$result->get_error_code(),
-				array( 'posts_read_missing_secret', 'posts_read_short_secret' ),
-				true
-			) ? 401 : null;
-			wp_send_json_error( $result->get_error_message(), $status );
+			$this->send_source_read_error( $result );
 		}
 		wp_send_json_success( $result );
+	}
+
+	/**
+	 * Answers a source-read failure, carrying the structured source detail
+	 * when the failure supplied it so the client can isolate the embedded
+	 * reason.
+	 *
+	 * @param WP_Error $error Failure from a source read service.
+	 */
+	private function send_source_read_error( WP_Error $error ): void {
+		$status = in_array(
+			$error->get_error_code(),
+			self::UNAUTHORIZED_READ_ERROR_CODES,
+			true
+		) ? 401 : null;
+
+		$message      = $error->get_error_message();
+		$error_data   = $error->get_error_data();
+		$source_error = is_array( $error_data )
+			? ( $error_data[ HTTP_Client::ERROR_DATA_SOURCE_ERROR ] ?? null )
+			: null;
+
+		$response_error = $message;
+		if ( is_array( $source_error ) ) {
+			$response_error = array(
+				'message'                            => $message,
+				HTTP_Client::ERROR_DATA_SOURCE_ERROR => $source_error,
+			);
+		}
+
+		wp_send_json_error( $response_error, $status );
 	}
 
 	/**
@@ -745,12 +782,7 @@ final class Admin_Ajax_Controller {
 		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- service sanitizes the unslashed input.
 		$result = $this->posts_read_service->fetch_post_types( wp_unslash( $_POST ) );
 		if ( is_wp_error( $result ) ) {
-			$status = in_array(
-				$result->get_error_code(),
-				array( 'posts_read_missing_secret', 'posts_read_short_secret' ),
-				true
-			) ? 401 : null;
-			wp_send_json_error( $result->get_error_message(), $status );
+			$this->send_source_read_error( $result );
 		}
 		wp_send_json_success( $result );
 	}
@@ -1246,7 +1278,7 @@ final class Admin_Ajax_Controller {
 		if ( is_wp_error( $result ) ) {
 			$status = in_array(
 				$result->get_error_code(),
-				array( 'posts_read_missing_secret', 'posts_read_short_secret' ),
+				self::UNAUTHORIZED_READ_ERROR_CODES,
 				true
 			) ? 401 : null;
 			wp_send_json_error( $result->get_error_message(), $status );

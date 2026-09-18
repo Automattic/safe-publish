@@ -8,23 +8,25 @@
 
 import { useEffect } from '@wordpress/element';
 
+import type { DisplayError } from '../../types';
+
 /**
  * Reduces the current page by 1 when the latest settled fetch returned no
  * rows past page 1. Boolean derivation lives in the hook so callers don't
  * pay the cyclomatic complexity of the gating `&&` chain.
  *
- * @param {Object}      options                Hook arguments.
- * @param {boolean}     options.hasFetchedOnce True once the first fetch settled.
- * @param {boolean}     options.isLoading      True while a fetch is in flight.
- * @param {string|null} options.fetchError     Last fetch's error, or null.
- * @param {boolean}     options.isEmpty        True when the page rendered no rows.
- * @param {number}      options.page           Current page; undefined treated as 1.
- * @param {Function}    options.setPage        Setter for the next page number.
+ * @param {Object}            options                Hook arguments.
+ * @param {boolean}           options.hasFetchedOnce True once the first fetch settled.
+ * @param {boolean}           options.isLoading      True while a fetch is in flight.
+ * @param {DisplayError|null} options.fetchError     Last fetch's error, or null.
+ * @param {boolean}           options.isEmpty        True when the page rendered no rows.
+ * @param {number}            options.page           Current page; undefined treated as 1.
+ * @param {Function}          options.setPage        Setter for the next page number.
  */
 export function useStepBackWhenPageEmpties( options: {
 	hasFetchedOnce: boolean;
 	isLoading: boolean;
-	fetchError: string | null;
+	fetchError: DisplayError | null;
 	isEmpty: boolean;
 	page: number | undefined;
 	setPage: ( next: number ) => void;
