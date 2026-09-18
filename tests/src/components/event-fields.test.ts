@@ -78,6 +78,17 @@ describe( 'getEventLabel', () => {
 		expect( result ).toBe( 'Item rolled back with omissions' );
 	} );
 
+	it( 'should label the refused media host event', () => {
+		// ARRANGE: The audit code the media host guard writes.
+		const event = 'MEDIA_HOST_NOT_ALLOWED';
+
+		// ACT: Derive the event column label.
+		const result = getEventLabel( event );
+
+		// ASSERT: The code renders as prose, not as the raw constant.
+		expect( result ).toBe( 'Media host not allowed' );
+	} );
+
 	it( 'should fall back to the raw code for an unknown event', () => {
 		// ARRANGE: A code with no mapping.
 		const event = 'NOT_A_REAL_EVENT';

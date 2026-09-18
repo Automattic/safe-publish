@@ -16,7 +16,8 @@ use Safe_Publish\API\HTTP_Client;
 /**
  * Media Importer Test.
  *
- * Tests complex WebP logic in the Media_Importer class.
+ * Tests the WebP upload logic, the ownership guards, and the reserved-range
+ * media host guard in the Media_Importer class.
  */
 class MediaImporterTest extends TestCase {
 
@@ -45,6 +46,10 @@ class MediaImporterTest extends TestCase {
 	#[\Override]
 	protected function tearDown(): void {
 		reset_test_get_posts_result();
+		reset_test_http_response();
+		reset_test_filters();
+		reset_test_actions();
+		reset_test_home_url();
 		parent::tearDown();
 	}
 
@@ -318,6 +323,263 @@ class MediaImporterTest extends TestCase {
 		// attachment; the guarded path still returns null for the third party.
 		$this->assertSame( 4242, $owned );
 		$this->assertNull( $guarded );
+	}
+
+	/**
+	 * Builds the source media record that a source ID resolves through.
+	 *
+	 * @param string $source_url source_url the mocked record serves.
+	 * @return array<string, mixed> Stub HTTP response.
+	 */
+	private static function media_record_response( string $source_url ): array {
+		return array(
+			'response' => array( 'code' => 200 ),
+			'body'     => wp_json_encode(
+				array(
+					'id'         => 991,
+					'source_url' => $source_url,
+				)
+			),
+		);
+	}
+
+	/**
+	 * Hosts in an address range the media guard refuses, in the forms a host
+	 * survives wp_parse_url() in. Every literal is drawn from a reserved
+	 * range, never from a live service on one.
+	 *
+	 * @return array<string, array{host: string}>
+	 */
+	public static function reserved_media_host_provider(): array {
+		return array(
+			'link-local'         => array( 'host' => '169.254.1.1' ),
+			'carrier-grade NAT'  => array( 'host' => '100.100.100.200' ),
+			'loopback literal'   => array( 'host' => '127.0.0.1' ),
+			'RFC1918'            => array( 'host' => '10.1.2.3' ),
+			'IPv6 unique-local'  => array( 'host' => '[fd00::1]' ),
+			'IPv4-mapped IPv6'   => array( 'host' => '[::ffff:169.254.1.1]' ),
+			'root dot'           => array( 'host' => '169.254.1.1.' ),
+			'leading space'      => array( 'host' => ' 169.254.1.1' ),
+			'trailing space'     => array( 'host' => '169.254.1.1 ' ),
+			'name that resolves' => array( 'host' => 'localhost' ),
+		);
+	}
+
+	/**
+	 * Verifies that a source media record pointing into a reserved address
+	 * range is not fetched, whatever form its host takes.
+	 *
+	 * @dataProvider reserved_media_host_provider
+	 *
+	 * @param string $host Host the mocked source_url is served from.
+	 */
+	public function test_import_source_media_by_id_refuses_reserved_host(
+		string $host
+	): void {
+		// ARRANGE: A record on that host, a source site and a destination
+		// elsewhere, and a deduplication hit that would otherwise return an
+		// attachment without any download.
+		set_test_home_url( 'https://destination.example.com' );
+		set_test_http_response(
+			self::media_record_response( 'https://' . $host . '/photo-123.jpg' )
+		);
+		set_test_get_posts_result( array( (object) array( 'ID' => 4242 ) ) );
+
+		// ACT: Resolve the ID the featured and shortcode paths both use.
+		$result = $this->importer->import_source_media_by_id(
+			991,
+			'https://source.example.com'
+		);
+
+		// ASSERT: Refused before the deduplication lookup, and refused
+		// distinctly from the null a dangling record returns.
+		$this->assertFalse( $result );
+	}
+
+	/**
+	 * Verifies that a refused media host is recorded in the audit trail.
+	 */
+	public function test_import_source_media_by_id_records_a_refused_host(): void {
+		// ARRANGE: The same reserved-range record, with a deduplication hit
+		// standing in for the download that must not happen.
+		set_test_home_url( 'https://destination.example.com' );
+		set_test_http_response(
+			self::media_record_response( 'https://169.254.1.1/photo-123.jpg' )
+		);
+		set_test_get_posts_result( array( (object) array( 'ID' => 4242 ) ) );
+		reset_test_actions();
+
+		// ACT: Resolve the ID.
+		$this->importer->import_source_media_by_id(
+			991,
+			'https://source.example.com'
+		);
+
+		// ASSERT: One media-channel MEDIA_HOST_NOT_ALLOWED event carrying the
+		// refused URL and the source it came from.
+		$events = array_values(
+			array_filter(
+				get_test_actions(),
+				static fn( array $action ): bool =>
+					'safe_publish_event_logged' === $action['hook']
+					&& 'MEDIA_HOST_NOT_ALLOWED' === $action['args'][1]
+			)
+		);
+
+		$this->assertCount( 1, $events );
+		$this->assertSame( 'media', $events[0]['args'][0] );
+		$this->assertSame(
+			'https://169.254.1.1/photo-123.jpg',
+			$events[0]['args'][2]['url']
+		);
+		$this->assertSame(
+			'https://source.example.com',
+			$events[0]['args'][2]['source_site_url']
+		);
+	}
+
+	/**
+	 * Verifies that a source media record whose source_url carries no host is
+	 * refused rather than handed to the downloader.
+	 */
+	public function test_import_source_media_by_id_refuses_a_url_with_no_host(): void {
+		// ARRANGE: A record serving a data URI, plus the deduplication hit.
+		set_test_home_url( 'https://destination.example.com' );
+		set_test_http_response(
+			self::media_record_response( 'data:image/png;base64,iVBORw0KGgo=' )
+		);
+		set_test_get_posts_result( array( (object) array( 'ID' => 4242 ) ) );
+
+		// ACT: Resolve the ID.
+		$result = $this->importer->import_source_media_by_id(
+			991,
+			'https://source.example.com'
+		);
+
+		// ASSERT: A URL with no host to judge is refused.
+		$this->assertFalse( $result );
+	}
+
+	/**
+	 * Hosts outside every range the guard refuses, including the addresses on
+	 * either side of carrier-grade NAT space and a routable IPv6 literal.
+	 *
+	 * @return array<string, array{host: string}>
+	 */
+	public static function fetchable_media_host_provider(): array {
+		return array(
+			'documentation literal'   => array( 'host' => '203.0.113.10' ),
+			'unresolvable name'       => array( 'host' => 'cdn.example.net' ),
+			'below carrier-grade NAT' => array( 'host' => '100.63.255.255' ),
+			'above carrier-grade NAT' => array( 'host' => '100.128.0.1' ),
+			'routable IPv6'           => array( 'host' => '[2001:db8::1]' ),
+		);
+	}
+
+	/**
+	 * Verifies that a source media record on a routable host still resolves to
+	 * an attachment through the same entry point.
+	 *
+	 * @dataProvider fetchable_media_host_provider
+	 *
+	 * @param string $host Host the mocked source_url is served from.
+	 */
+	public function test_import_source_media_by_id_allows_routable_host(
+		string $host
+	): void {
+		// ARRANGE: The same deduplication hit, behind a routable host.
+		set_test_home_url( 'https://destination.example.com' );
+		set_test_http_response(
+			self::media_record_response( 'https://' . $host . '/photo-123.jpg' )
+		);
+		set_test_get_posts_result( array( (object) array( 'ID' => 4242 ) ) );
+
+		// ACT: Resolve the ID the featured and shortcode paths both use.
+		$result = $this->importer->import_source_media_by_id(
+			991,
+			'https://source.example.com'
+		);
+
+		// ASSERT: The host passes and the deduplicated attachment comes back.
+		$this->assertSame( 4242, $result );
+	}
+
+	/**
+	 * Verifies that media served from this site's own host is fetchable even
+	 * though it resolves into a reserved range, and that the host comparison
+	 * ignores case the way DNS does.
+	 */
+	public function test_import_source_media_by_id_allows_this_sites_own_host(): void {
+		// ARRANGE: A destination on localhost and a record naming that host in
+		// upper case, with a deduplication hit standing in for the download.
+		set_test_home_url( 'http://localhost' );
+		set_test_http_response(
+			self::media_record_response( 'http://LOCALHOST/photo-123.jpg' )
+		);
+		set_test_get_posts_result( array( (object) array( 'ID' => 4242 ) ) );
+
+		// ACT: Resolve the ID.
+		$result = $this->importer->import_source_media_by_id(
+			991,
+			'https://source.example.com'
+		);
+
+		// ASSERT: This site's own host is exempt, as it is in core's
+		// wp_http_validate_url().
+		$this->assertSame( 4242, $result );
+	}
+
+	/**
+	 * Verifies that media served from the connected source site's own host is
+	 * fetchable even when that host is a private address, so a migration over
+	 * a private network keeps working.
+	 */
+	public function test_import_source_media_by_id_allows_the_source_sites_host(): void {
+		// ARRANGE: A source site on a private address serving its own media,
+		// with a deduplication hit standing in for the download.
+		set_test_home_url( 'https://destination.example.com' );
+		set_test_http_response(
+			self::media_record_response( 'http://10.1.2.3/photo-123.jpg' )
+		);
+		set_test_get_posts_result( array( (object) array( 'ID' => 4242 ) ) );
+
+		// ACT: Resolve the ID against that source site.
+		$result = $this->importer->import_source_media_by_id(
+			991,
+			'http://10.1.2.3'
+		);
+
+		// ASSERT: The configured source host is exempt.
+		$this->assertSame( 4242, $result );
+	}
+
+	/**
+	 * Verifies that http_request_host_is_external opts a third host in a
+	 * reserved range back in, which is the documented escape hatch and the one
+	 * the local development mu-plugin uses.
+	 */
+	public function test_import_source_media_by_id_allows_a_host_opted_in_by_filter(): void {
+		// ARRANGE: A reserved-range record on neither this site's host nor the
+		// source's, with a filter opting that one host back in.
+		set_test_home_url( 'https://destination.example.com' );
+		set_test_http_response(
+			self::media_record_response( 'https://169.254.1.1/photo-123.jpg' )
+		);
+		set_test_get_posts_result( array( (object) array( 'ID' => 4242 ) ) );
+		set_test_filter(
+			'http_request_host_is_external',
+			static fn( bool $external, string $host ): bool =>
+				'169.254.1.1' === $host ? true : $external
+		);
+
+		// ACT: Resolve the ID.
+		$result = $this->importer->import_source_media_by_id(
+			991,
+			'https://source.example.com'
+		);
+
+		// ASSERT: The opted-in host is fetched and deduplicates as usual.
+		$this->assertSame( 4242, $result );
 	}
 
 	/**

@@ -25,7 +25,52 @@ function add_action(): void {}
 function add_filter(): void {}
 
 function apply_filters( string $filter, mixed $thing, mixed ...$args ): mixed {
-	return $thing;
+	$callback = $GLOBALS['_test_filters'][ $filter ] ?? null;
+
+	return is_callable( $callback ) ? $callback( $thing, ...$args ) : $thing;
+}
+
+/**
+ * Registers the callback the apply_filters stub runs for one hook. Hooks with
+ * no registered callback keep returning the unfiltered value.
+ *
+ * @param string   $filter   Hook name.
+ * @param callable $callback Receives the filtered value and the hook's args.
+ */
+function set_test_filter( string $filter, callable $callback ): void {
+	$GLOBALS['_test_filters'][ $filter ] = $callback;
+}
+
+function reset_test_filters(): void {
+	unset( $GLOBALS['_test_filters'] );
+}
+
+/**
+ * Records a fired action so a test can assert on it. Logger::write() fires
+ * safe_publish_event_logged here, which is how audit events are observed
+ * without a database.
+ *
+ * @param string $hook Hook name.
+ * @param mixed  ...$args Hook arguments.
+ */
+function do_action( string $hook, mixed ...$args ): void {
+	$GLOBALS['_test_actions'][] = array(
+		'hook' => $hook,
+		'args' => $args,
+	);
+}
+
+/**
+ * Returns every action the do_action stub recorded, oldest first.
+ *
+ * @return array<int, array{hook: string, args: array<int, mixed>}>
+ */
+function get_test_actions(): array {
+	return $GLOBALS['_test_actions'] ?? array();
+}
+
+function reset_test_actions(): void {
+	unset( $GLOBALS['_test_actions'] );
 }
 
 function __( string $text ): string {
@@ -178,7 +223,23 @@ function get_site_url(): string {
 }
 
 function home_url( string $path = '' ): string {
-	return 'http://localhost' . $path;
+	$base = $GLOBALS['_test_home_url'] ?? 'http://localhost';
+
+	return (string) $base . $path;
+}
+
+/**
+ * Overrides the site the home_url stub reports, so a test can move this site
+ * off the default localhost host.
+ *
+ * @param string $url Home URL without a trailing slash.
+ */
+function set_test_home_url( string $url ): void {
+	$GLOBALS['_test_home_url'] = $url;
+}
+
+function reset_test_home_url(): void {
+	unset( $GLOBALS['_test_home_url'] );
 }
 
 function attachment_url_to_postid( string $url ): int {

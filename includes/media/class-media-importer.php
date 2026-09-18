@@ -284,6 +284,10 @@ class Media_Importer {
 	 * attachment on a same-host re-import — accepted, since running it would
 	 * return null and abort the post.
 	 *
+	 * Bypassing the host guard leaves the source site free to name any host
+	 * at all, so this is the one path that checks the host against the
+	 * reserved address ranges before fetching it.
+	 *
 	 * @param string $media_url       Source media URL.
 	 * @param string $source_site_url Source site URL for resolving relative URLs.
 	 * @return int|false Attachment ID on success, false on failure.
@@ -296,6 +300,15 @@ class Media_Importer {
 			$media_url,
 			$source_site_url
 		);
+
+		if ( ! self::is_fetchable_media_url( $media_url, $source_site_url ) ) {
+			$this->logger->media_host_not_allowed(
+				$media_url,
+				$source_site_url
+			);
+
+			return false;
+		}
 
 		return $this->sideload_media( $media_url, $source_site_url ) ?? false;
 	}
@@ -1103,6 +1116,198 @@ class Media_Importer {
 		$candidate = strtok( $media_url, '?' );
 
 		return $candidate === $base || str_starts_with( $candidate, $base . '/' );
+	}
+
+	/**
+	 * Reports whether a media URL's host may be fetched from this site.
+	 *
+	 * Media downloads route through wp_safe_remote_get(), so WordPress
+	 * already refuses loopback and RFC1918 targets. That list does not cover
+	 * link-local, carrier-grade NAT, or IPv6 unique-local space, so the host
+	 * is judged again here.
+	 *
+	 * Two hosts stay fetchable whatever they resolve to: this site's own,
+	 * which wp_http_validate_url() exempts the same way, and the connected
+	 * source site's, which the operator chose and the settings validator
+	 * already vetted. Only some third host the source site named can be
+	 * refused, which is why the inline and attachment import paths do not
+	 * call this. Both require the media host to equal the source host, so
+	 * the check could never refuse anything on them.
+	 *
+	 * A host that is not an IP literal is resolved the way core resolves it,
+	 * so a name pointing into a reserved range is caught too. The answer can
+	 * still change between this check and the request, a race core shares
+	 * and this does not try to close.
+	 *
+	 * @param string $media_url       Absolute media URL about to be downloaded.
+	 * @param string $source_site_url Connected source site URL.
+	 * @return bool True when the URL's host may be fetched.
+	 */
+	private static function is_fetchable_media_url(
+		string $media_url,
+		string $source_site_url
+	): bool {
+		$host = self::normalized_url_host( $media_url );
+
+		if ( '' === $host ) {
+			return false;
+		}
+
+		if (
+			self::normalized_url_host( home_url() ) === $host
+			|| self::normalized_url_host( $source_site_url ) === $host
+		) {
+			return true;
+		}
+
+		$address = self::resolve_host_address( $host );
+
+		if ( '' === $address || ! self::is_reserved_address( $address ) ) {
+			return true;
+		}
+
+		/** This filter is documented in wp-includes/http.php */
+		return (bool) apply_filters(
+			// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound
+			'http_request_host_is_external',
+			false,
+			$host,
+			$media_url
+		);
+	}
+
+	/**
+	 * Reads a URL's host and reduces it to the form the address tests and the
+	 * exemption comparisons expect. wp_parse_url() keeps whitespace, IPv6
+	 * brackets, the root dot, and case, and each of those either hides an IP
+	 * literal from filter_var() or breaks an equality test.
+	 *
+	 * @param string $url URL to read the host from.
+	 * @return string Normalized host, or '' when the URL carries none.
+	 */
+	private static function normalized_url_host( string $url ): string {
+		$host = wp_parse_url( $url, PHP_URL_HOST );
+
+		if ( ! is_string( $host ) ) {
+			return '';
+		}
+
+		// Control characters and spaces never belong to a real host.
+		$host = (string) preg_replace( '/[\x00-\x20\x7F]/', '', $host );
+
+		return strtolower( rtrim( trim( $host, '[]' ), '.' ) );
+	}
+
+	/**
+	 * Resolves a host to the address core would request, mirroring the
+	 * gethostbyname() lookup in wp_http_validate_url() so both decide on the
+	 * same answer. An IP literal is returned unchanged.
+	 *
+	 * The lookup reads A records only, so a name publishing just an AAAA
+	 * record resolves to nothing here and is left to core and the transport
+	 * to judge — the same blind spot core has.
+	 *
+	 * @param string $host Normalized host.
+	 * @return string IP address, or '' when the host has no IPv4 address.
+	 */
+	private static function resolve_host_address( string $host ): string {
+		if ( false !== filter_var( $host, FILTER_VALIDATE_IP ) ) {
+			return $host;
+		}
+
+		// gethostbyname() reports failure by echoing its argument back.
+		$resolved = gethostbyname( $host );
+
+		return $resolved === $host ? '' : $resolved;
+	}
+
+	/**
+	 * Reports whether an address literal sits in a range this site must not
+	 * be steered at.
+	 *
+	 * IPv6 is tested against explicit prefixes rather than filter_var's
+	 * reserved-range flag, whose IPv6 semantics differ across the supported
+	 * PHP versions. An IPv4-mapped address is unwrapped and judged as the
+	 * IPv4 address it carries, for the same reason.
+	 *
+	 * @param string $address IP address literal.
+	 * @return bool True when the address is in a reserved range.
+	 */
+	private static function is_reserved_address( string $address ): bool {
+		if ( false === filter_var( $address, FILTER_VALIDATE_IP ) ) {
+			return true;
+		}
+
+		$packed = inet_pton( $address );
+
+		if ( false === $packed ) {
+			return true;
+		}
+
+		$mapped_prefix = "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xff\xff";
+		if ( 16 === strlen( $packed ) && str_starts_with( $packed, $mapped_prefix ) ) {
+			$packed  = substr( $packed, 12 );
+			$address = (string) inet_ntop( $packed );
+		}
+
+		if ( 4 === strlen( $packed ) ) {
+			return self::is_reserved_ipv4( $address );
+		}
+
+		return self::is_reserved_ipv6( $packed );
+	}
+
+	/**
+	 * Reports whether an IPv4 literal sits in a reserved or private range.
+	 *
+	 * @param string $address IPv4 address literal.
+	 * @return bool True when the address is in a reserved range.
+	 */
+	private static function is_reserved_ipv4( string $address ): bool {
+		$routable = filter_var(
+			$address,
+			FILTER_VALIDATE_IP,
+			FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE
+		);
+
+		if ( false === $routable ) {
+			return true;
+		}
+
+		// Carrier-grade NAT, the one range neither flag covers.
+		$octets = explode( '.', $address );
+
+		return 4 === count( $octets )
+			&& 100 === (int) $octets[0]
+			&& (int) $octets[1] >= 64
+			&& (int) $octets[1] <= 127;
+	}
+
+	/**
+	 * Reports whether a packed IPv6 address sits in a range that can only
+	 * reach this host or its own network.
+	 *
+	 * @param string $packed Packed 16-byte IPv6 address.
+	 * @return bool True when the address is in a reserved range.
+	 */
+	private static function is_reserved_ipv6( string $packed ): bool {
+		// The unspecified address and the loopback address.
+		if ( str_repeat( "\x00", 16 ) === $packed
+			|| str_repeat( "\x00", 15 ) . "\x01" === $packed
+		) {
+			return true;
+		}
+
+		$first  = ord( $packed[0] );
+		$second = ord( $packed[1] );
+
+		// Unique local, fc00::/7.
+		if ( 0xfc === ( $first & 0xfe ) ) {
+			return true;
+		}
+
+		// Link local, fe80::/10.
+		return 0xfe === $first && 0x80 === ( $second & 0xc0 );
 	}
 
 	/**

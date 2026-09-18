@@ -38,6 +38,12 @@ if (
  * issuing safe HTTP calls against `localhost` or `127.0.0.1`. If one
  * shows up, that's a misconfiguration to surface rather than paper over.
  *
+ * Safe Publish's own media-host guard consults the same filter as its last
+ * word, so this one allowance covers both gates. In the wp-env pair it is
+ * not what keeps media flowing: both sites are pinned to
+ * `host.docker.internal`, which that guard exempts as the connected source
+ * host before the filter is reached.
+ *
  * @param bool   $external Whether the request host is considered external.
  * @param string $host     The host being requested.
  * @return bool True for the wp-env dev host, otherwise the original
