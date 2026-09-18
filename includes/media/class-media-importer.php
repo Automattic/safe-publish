@@ -132,8 +132,9 @@ class Media_Importer {
 
 		$this->ensure_media_functions_loaded();
 
-		// Download file.
-		$temp_file = download_url( $media_url );
+		// Download through the shared client, so in-content media gets the
+		// same redirect policy as media imported as an attachment.
+		$temp_file = $this->http_client->download_file( $media_url );
 
 		if ( is_wp_error( $temp_file ) ) {
 			$this->logger->media_download_failed(

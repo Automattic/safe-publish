@@ -79,7 +79,7 @@ If an `<a>` tag's `href` ends in a file extension allowed by WordPress, it is pr
 2. **Normalize**: Query parameters are removed from the working URL; they are reapplied from the original URL in step 7.
 3. **Filter**: Third-party domain URLs are left unchanged.
 4. **Deduplicate**: If the URL was already imported, the existing attachment URL is used, and download is skipped.
-5. **Download**: File fetched using WordPress core's `download_url()`; downloadability is verified at this point.
+5. **Download**: File fetched using WordPress core's `download_url()`; downloadability is verified at this point. Redirects are followed only while they stay on the host and port the media URL names, at most three of them — an `http` URL upgraded to `https` still imports, while a redirect to another host, to another port, or back down to `http` fails the download with `download_redirected`.
 6. **Import**: The file type is classified from the downloaded content, not the URL extension — image, video, audio, and PDF are added to the media library via `media_handle_sideload()`; a media-looking URL that resolves to a page is kept as a link.
 7. **Enrich**: The image's source library metadata — alt text, title, caption, and description — is applied to the new attachment. The source resolves each URL back to its attachment record (a capability core REST lacks) and returns the values alongside the post.
 8. **Replace**: Source URL replaced with the new attachment URL in content; previously stripped query parameters are reapplied.
@@ -94,6 +94,7 @@ An inline `<img>` carries two attachment-ID references alongside its URL — the
 - Uploaded to media library regardless of serving host — unlike content media (step 3), an off-domain featured image is still downloaded because it belongs to the source.
 - The source library metadata (alt text, title, caption, description) is applied to the destination attachment, fetched in edit context for the raw values.
 - Set as post thumbnail via `set_post_thumbnail()`.
+- The redirect rule in step 5 applies here too: whichever host the featured image URL names has to serve the file itself.
 
 ### URL Replacement
 
@@ -105,7 +106,7 @@ Post content and excerpts pass through WordPress' normal save filters for the ac
 
 ### Performance
 
-- Media files downloaded using WordPress core's `download_url()`.
+- Media files downloaded using WordPress core's `download_url()`, with redirects pinned to the host and port the media URL names.
 - Media downloads are not affected by the [`safe_publish_request_timeout`](../extending/hooks.md#safe_publish_request_timeout) filter and use WordPress core's default timeout.
 
 ## Stage 4: Create Post
