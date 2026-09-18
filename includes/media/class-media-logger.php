@@ -47,6 +47,26 @@ class Media_Logger extends Logger {
 	}
 
 	/**
+	 * Logs a media URL left unfetched because its host is in an address range
+	 * this site must not reach.
+	 *
+	 * @param string $url             Media URL that was not fetched.
+	 * @param string $source_site_url Source site the media originated from.
+	 */
+	public function media_host_not_allowed(
+		string $url,
+		string $source_site_url
+	): void {
+		$this->log_failure(
+			Log_Events::MEDIA_HOST_NOT_ALLOWED,
+			array(
+				'url'             => $url,
+				'source_site_url' => $source_site_url,
+			)
+		);
+	}
+
+	/**
 	 * Logs a sideload failure surfaced by media_handle_sideload.
 	 *
 	 * @param string $url             Media URL whose sideload failed.

@@ -193,6 +193,12 @@ add_filter(
    - `wp-content/uploads/` must be writable.
    - Check file permissions (755 for directories, 644 for files).
 
+6. **Check where the source's media records point**:
+   - Media that a source media record serves from a loopback, private, link-local, carrier-grade NAT, or IPv6 unique-local address is refused before it is fetched, and the audit log records `MEDIA_HOST_NOT_ALLOWED`. This covers featured images, `[gallery ids=]` and `[playlist ids=]` rewriting, cross-post referenced sets, and bare `[gallery]`/`[playlist]` attached sets.
+   - A refusal on the featured image or on `[gallery ids=]` rewriting fails the post import. On cross-post referenced sets and bare `[gallery]`/`[playlist]` sets the item is dropped silently and the post imports without it, matching how those paths already treat a failed sideload, so the audit log is the only record.
+   - The destination's own host and the connected source site's host are exempt, so a same-host or private-network migration is unaffected. A host name is resolved first, so a name pointing into one of those ranges is refused too.
+   - To allow one other such host — an internal CDN serving the source's media, for example — opt it back in with WordPress' `http_request_host_is_external` filter.
+
 #### "Raw content fields missing" error
 
 **Symptoms**: Import reports that the source response is missing required raw values

@@ -46,6 +46,7 @@ const EVENT_LABELS: Record< string, string > = {
 	SOURCE_MEDIA_URL_MISSING: __( 'Source media has no URL', 'safe-publish' ),
 	INVALID_ATTACHMENT_ID: __( 'Invalid attachment ID', 'safe-publish' ),
 	MEDIA_DOWNLOAD_FAILED: __( 'Media download failed', 'safe-publish' ),
+	MEDIA_HOST_NOT_ALLOWED: __( 'Media host not allowed', 'safe-publish' ),
 	MEDIA_SIDELOAD_FAILED: __( 'Media sideload failed', 'safe-publish' ),
 	MEDIA_UNSUPPORTED_FILE_TYPE: __( 'Unsupported media file type', 'safe-publish' ),
 	CONTENT_FETCH_FAILED: __( 'Content fetch failed', 'safe-publish' ),
