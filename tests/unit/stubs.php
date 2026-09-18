@@ -190,7 +190,15 @@ function trailingslashit( string $path ): string {
 }
 
 function wp_get_environment_type(): string {
-	return 'production';
+	return $GLOBALS['_test_environment_type'] ?? 'production';
+}
+
+function set_test_environment_type( string $type ): void {
+	$GLOBALS['_test_environment_type'] = $type;
+}
+
+function reset_test_environment_type(): void {
+	unset( $GLOBALS['_test_environment_type'] );
 }
 
 function wp_get_upload_dir(): array {
