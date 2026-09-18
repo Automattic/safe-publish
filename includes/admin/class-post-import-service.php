@@ -282,18 +282,26 @@ class Post_Import_Service {
 		try {
 			$source_site_url = Options::get_connected_site_url_with_path();
 
-			$imported_post = $this->find_imported_post(
+			$claims = $this->resolve_identity_claims(
 				$fields['source_post_id'],
 				$source_site_url
 			);
 
-			if ( $imported_post ) {
+			if ( null !== $claims['present'] ) {
 				return $this->handle_imported_post(
-					$imported_post,
+					$claims['present'],
 					$fields,
 					$post_type,
 					$session_id,
 					$options
+				);
+			}
+
+			if ( null !== $claims['trashed'] ) {
+				return $this->refuse_trashed_claim(
+					$claims['trashed'],
+					$fields,
+					$session_id
 				);
 			}
 
@@ -969,13 +977,15 @@ class Post_Import_Service {
 				$local_post_present
 			);
 
-			$post['local_state']    = $local_state;
-			$post['is_imported']    = in_array(
+			$post['local_state'] = $local_state;
+			$post['is_imported'] = in_array(
 				$local_state,
 				array( 'up-to-date', 'outdated' ),
 				true
 			);
-			$post['wp_post_status'] = $local_post_present ? $wp_post_status : null;
+			// Reported even when trashed, so the row reads as trashed rather
+			// than as never imported. Null only when the post is gone.
+			$post['wp_post_status'] = $wp_post_status;
 
 			$this->attach_active_row_metadata( $post, $active_row, $local_post_present );
 		}
@@ -1180,6 +1190,86 @@ class Post_Import_Service {
 		);
 
 		return array() === $existing_posts ? null : $existing_posts[0];
+	}
+
+	/**
+	 * Partitions the posts claiming a source identity into the newest one
+	 * outside the trash and the newest one in it.
+	 *
+	 * Uncapped: the newest claim overall can be a trashed one hiding a post
+	 * the import should update. Identity meta bounds the result.
+	 *
+	 * @param int    $source_post_id  Source post ID stored in post meta.
+	 * @param string $source_site_url Source site identity of the import.
+	 * @return array{present: WP_Post|null, trashed: WP_Post|null} Newest of each.
+	 */
+	private function resolve_identity_claims(
+		int $source_post_id,
+		string $source_site_url
+	): array {
+		$claims = Source_Identity_Lookup::find(
+			$source_post_id,
+			$source_site_url,
+			array(
+				// Every status: 'any' would drop the ones registered
+				// exclude_from_search, and each of those can hold a claim.
+				'post_status'    => array_keys( get_post_stati() ),
+				// phpcs:ignore WordPressVIPMinimum.Performance.NoPaging
+				'posts_per_page' => -1,
+			)
+		);
+
+		$resolved = array(
+			'present' => null,
+			'trashed' => null,
+		);
+
+		// find() orders newest-first by ID, so the first of each kind wins.
+		foreach ( $claims as $claim ) {
+			if ( 'trash' === $claim->post_status ) {
+				$resolved['trashed'] ??= $claim;
+			} else {
+				$resolved['present'] ??= $claim;
+			}
+		}
+
+		return $resolved;
+	}
+
+	/**
+	 * Refuses an import whose source identity is claimed only by a trashed
+	 * post, so a second claim is never created.
+	 *
+	 * @param WP_Post  $trashed_post Trashed post holding the claim.
+	 * @param array    $fields       Normalized source post fields.
+	 * @param int|null $session_id   Import session, null when unsessioned.
+	 * @return array Error result describing the refusal.
+	 */
+	private function refuse_trashed_claim(
+		WP_Post $trashed_post,
+		array $fields,
+		?int $session_id
+	): array {
+		$error_message = sprintf(
+			/* translators: %s: title of the trashed destination post. */
+			__(
+				'A trashed post ("%s") is still linked to this source post. Restore it to update it, or delete it permanently to import a fresh copy.',
+				'safe-publish'
+			),
+			$trashed_post->post_title
+		);
+
+		$this->log_import_if_session(
+			$session_id,
+			$fields['source_post_id'],
+			$fields['title'],
+			'error',
+			null,
+			$error_message,
+			array( 'action' => 'trashed_copy_exists' )
+		);
+
+		return $this->build_error_result( $fields, $error_message );
 	}
 
 	/**

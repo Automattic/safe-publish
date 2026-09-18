@@ -170,7 +170,7 @@ export function formatBadgeTimestamp( dateString: string ): string {
 }
 
 /**
- * Display labels for built-in publish statuses; access via statusLabel().
+ * Display labels for built-in statuses; access via statusLabel().
  */
 const PUBLISH_STATUS_LABELS: Record< string, string > = {
 	publish: __( 'Published', 'safe-publish' ),
@@ -178,6 +178,7 @@ const PUBLISH_STATUS_LABELS: Record< string, string > = {
 	pending: __( 'Pending Review', 'safe-publish' ),
 	private: __( 'Private', 'safe-publish' ),
 	future:  __( 'Scheduled', 'safe-publish' ),
+	trash:   __( 'Trashed', 'safe-publish' ),
 };
 
 /**
