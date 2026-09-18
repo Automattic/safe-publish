@@ -1,6 +1,6 @@
 <?php
 /**
- * Integration tests for the settings audit logger.
+ * Integration tests for the settings audit logger
  *
  * @package Safe_Publish
  */

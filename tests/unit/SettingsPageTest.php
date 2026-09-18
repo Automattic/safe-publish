@@ -1,6 +1,6 @@
 <?php
 /**
- * Settings Page Test.
+ * Settings Page Test
  *
  * @package Safe_Publish
  */

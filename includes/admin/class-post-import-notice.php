@@ -1,6 +1,6 @@
 <?php
 /**
- * Post-import admin notice class.
+ * Post-import admin notice class
  *
  * @package Safe_Publish
  */

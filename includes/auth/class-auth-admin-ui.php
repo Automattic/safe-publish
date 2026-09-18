@@ -1,6 +1,6 @@
 <?php
 /**
- * Auth Admin UI class.
+ * Auth Admin UI class
  *
  * @package Safe_Publish
  */

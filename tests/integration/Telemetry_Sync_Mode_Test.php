@@ -1,6 +1,6 @@
 <?php
 /**
- * Telemetry sync-mode integration tests.
+ * Telemetry sync-mode integration tests
  *
  * @package Safe_Publish
  */

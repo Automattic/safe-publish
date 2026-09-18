@@ -1,6 +1,6 @@
 <?php
 /**
- * Post Type Map utility class.
+ * Post Type Map utility class
  *
  * @package Safe_Publish
  */

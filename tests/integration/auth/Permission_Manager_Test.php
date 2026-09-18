@@ -1,6 +1,6 @@
 <?php
 /**
- * Integration tests for the Permission Manager.
+ * Integration tests for the Permission Manager
  *
  * @package Safe_Publish
  */

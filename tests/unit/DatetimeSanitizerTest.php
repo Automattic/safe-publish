@@ -1,6 +1,6 @@
 <?php
 /**
- * Datetime Sanitizer Test.
+ * Datetime Sanitizer Test
  *
  * @package Safe_Publish
  */

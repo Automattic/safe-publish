@@ -1,6 +1,6 @@
 <?php
 /**
- * Telemetry per-item failure integration tests.
+ * Telemetry per-item failure integration tests
  *
  * @package Safe_Publish
  */

@@ -1,6 +1,6 @@
 <?php
 /**
- * VIP Safe Auth Test file.
+ * VIP Safe Auth Test file
  *
  * @package Safe_Publish
  */

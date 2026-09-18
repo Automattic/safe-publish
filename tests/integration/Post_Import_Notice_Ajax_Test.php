@@ -1,6 +1,6 @@
 <?php
 /**
- * Integration tests for the post-import notice dismiss endpoint.
+ * Integration tests for the post-import notice dismiss endpoint
  *
  * @package Safe_Publish
  */

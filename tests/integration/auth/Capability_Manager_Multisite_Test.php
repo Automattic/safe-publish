@@ -1,6 +1,6 @@
 <?php
 /**
- * Multisite integration tests for Safe Publish capability installation.
+ * Multisite integration tests for Safe Publish capability installation
  *
  * @package Safe_Publish
  */

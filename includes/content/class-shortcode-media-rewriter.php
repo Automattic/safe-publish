@@ -1,6 +1,6 @@
 <?php
 /**
- * Shortcode Media Rewriter class.
+ * Shortcode Media Rewriter class
  *
  * @package Safe_Publish
  */

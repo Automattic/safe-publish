@@ -1,6 +1,6 @@
 <?php
 /**
- * Integration tests for inline-image attachment-ID reference rewriting.
+ * Integration tests for inline-image attachment-ID reference rewriting
  *
  * @package Safe_Publish
  */

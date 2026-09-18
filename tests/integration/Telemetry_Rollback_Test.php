@@ -1,6 +1,6 @@
 <?php
 /**
- * Telemetry rollback integration tests.
+ * Telemetry rollback integration tests
  *
  * @package Safe_Publish
  */

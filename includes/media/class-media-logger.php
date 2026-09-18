@@ -1,6 +1,6 @@
 <?php
 /**
- * Media Logger class.
+ * Media Logger class
  *
  * @package Safe_Publish
  */
