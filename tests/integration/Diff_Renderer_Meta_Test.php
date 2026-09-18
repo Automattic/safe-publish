@@ -74,9 +74,12 @@ class Diff_Renderer_Meta_Test extends Integration_Test_Case {
 		);
 
 		// ASSERT: The key and both sides of the pending change are on show.
-		$this->assertStringContainsString( '_yoast_wpseo_metadesc', $meta );
-		$this->assertStringContainsString( 'destination-description', $meta );
-		$this->assertStringContainsString( 'source-description', $meta );
+		// wp_text_diff marks the changed words, so a value is split across
+		// del and ins elements; compare against the rendered text.
+		$text = wp_strip_all_tags( $meta );
+		$this->assertStringContainsString( '_yoast_wpseo_metadesc', $text );
+		$this->assertStringContainsString( 'destination-description', $text );
+		$this->assertStringContainsString( 'source-description', $text );
 	}
 
 	/**
