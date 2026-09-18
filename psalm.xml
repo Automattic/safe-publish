@@ -16,6 +16,8 @@
         <file name="*.php"/>
         <directory name="*"/>
         <ignoreFiles allowMissingFiles="true">
+            <directory name=".playwright-mcp/"/>
+            <directory name=".scratch/"/>
             <directory name="build/"/>
             <directory name="node_modules/"/>
             <directory name="vendor/"/>
