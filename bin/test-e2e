@@ -9,20 +9,12 @@ set -e
 
 cd "$(git rev-parse --show-toplevel)"
 
-# Resolve the target the way bin/start resolves wp-env ports, so a worktree
-# runs against its own environment instead of another checkout's. Precedence:
-# a pre-set WP_BASE_URL (CI, an external orchestrator), then WP_ENV_PORT, then
-# the pair in .devports. The target is the development instance, which
-# bin/setup-env puts in import mode and pins to host.docker.internal.
+# A pre-set WP_BASE_URL takes precedence. Otherwise the target is this
+# checkout's development instance, which bin/setup-env puts in import mode
+# and pins to host.docker.internal.
 if [ -z "$WP_BASE_URL" ]; then
-	if [ -z "$WP_ENV_PORT" ] && [ -f .devports ]; then
-		if [ -r .devports ]; then
-			. ./.devports
-		else
-			echo "warning: cannot read .devports; using defaults" >&2
-		fi
-	fi
-	WP_BASE_URL="http://host.docker.internal:${WP_ENV_PORT-8888}"
+	. ./bin/lib/devports
+	WP_BASE_URL="http://host.docker.internal:$WP_ENV_PORT"
 fi
 export WP_BASE_URL
 
