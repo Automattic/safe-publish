@@ -18,10 +18,12 @@ if [ -z "$WP_BASE_URL" ]; then
 fi
 export WP_BASE_URL
 
-# Fail fast. Without this probe an unreachable site retries for 60 seconds
-# before Playwright's global setup surfaces the connection error.
-if ! curl -sf -o /dev/null --max-time 30 "$WP_BASE_URL"; then
-	echo "Cannot reach $WP_BASE_URL. Run \`npm run dev\` first." >&2
+# Fail fast: Without this probe an unreachable site burns 60 seconds of
+# Playwright retries. Reachability, not health — no -f, so a 500 or
+# maintenance 503 keeps its own error. Connect timeout bounds a black-holed
+# host; max-time tolerates a cold one.
+if ! curl -s -o /dev/null --connect-timeout 3 --max-time 30 "$WP_BASE_URL"; then
+	echo "Cannot reach $WP_BASE_URL. Is \`npm run dev\` running?" >&2
 	exit 1
 fi
 
