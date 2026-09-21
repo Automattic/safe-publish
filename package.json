@@ -103,7 +103,11 @@
     "vitest": "4.1.11"
   },
   "stylelint": {
-    "extends": "./node_modules/@wordpress/scripts/config/.stylelintrc.json"
+    "extends": "./node_modules/@wordpress/scripts/config/.stylelintrc.json",
+    "ignoreFiles": [
+      ".playwright-mcp/**",
+      ".scratch/**"
+    ]
   },
   "lint-staged": {
     "*.{js,jsx,ts,tsx}": [
