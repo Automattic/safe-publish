@@ -1211,9 +1211,14 @@ class Post_Import_Service {
 			$source_post_id,
 			$source_site_url,
 			array(
-				// Every status: 'any' would drop the ones registered
-				// exclude_from_search, and each of those can hold a claim.
-				'post_status'    => array_keys( get_post_stati() ),
+				// Every status, registered or not: Naming the hidden ones
+				// alongside 'any' leaves no status clause at all.
+				'post_status'    => array_merge(
+					array( 'any' ),
+					array_keys(
+						get_post_stati( array( 'exclude_from_search' => true ) )
+					)
+				),
 				// phpcs:ignore WordPressVIPMinimum.Performance.NoPaging
 				'posts_per_page' => -1,
 			)

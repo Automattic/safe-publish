@@ -46,6 +46,11 @@ class Import_Identity_Claim_Test extends Source_Posts_API_Test_Base {
 	private const HIDDEN_STATUS = 'sp_archived';
 
 	/**
+	 * Editorial status deregistered after a post was parked in it.
+	 */
+	private const GONE_STATUS = 'sp_retired';
+
+	/**
 	 * History repository shared by the service under test.
 	 *
 	 * @var History_Repository
@@ -74,11 +79,14 @@ class Import_Identity_Claim_Test extends Source_Posts_API_Test_Base {
 	}
 
 	/**
-	 * Unregisters the editorial status, which core keeps in a global.
+	 * Unregisters the editorial statuses, which core keeps in a global.
 	 */
 	#[\Override]
 	protected function tearDown(): void {
-		unset( $GLOBALS['wp_post_statuses'][ self::HIDDEN_STATUS ] );
+		unset(
+			$GLOBALS['wp_post_statuses'][ self::HIDDEN_STATUS ],
+			$GLOBALS['wp_post_statuses'][ self::GONE_STATUS ]
+		);
 		parent::tearDown();
 	}
 
@@ -169,6 +177,43 @@ class Import_Identity_Claim_Test extends Source_Posts_API_Test_Base {
 		$this->assertSame(
 			array( $claim ),
 			$this->claiming_post_ids( 8110 ),
+			'No second claim may be created.'
+		);
+	}
+
+	/**
+	 * Verifies that a claim held in a status that is no longer registered is
+	 * updated rather than duplicated, as deactivating its plugin leaves it.
+	 */
+	public function test_claim_in_a_deregistered_status_is_updated(): void {
+		// ARRANGE: A claim parked in a custom status, then deregistered.
+		register_post_status( self::GONE_STATUS, array( 'public' => true ) );
+
+		$claim = $this->create_claiming_post( 8111, 'post' );
+		wp_update_post(
+			array(
+				'ID'          => $claim,
+				'post_status' => self::GONE_STATUS,
+			)
+		);
+		$this->assertSame( self::GONE_STATUS, get_post( $claim )->post_status );
+
+		unset( $GLOBALS['wp_post_statuses'][ self::GONE_STATUS ] );
+		$this->assertNull( get_post_status_object( self::GONE_STATUS ) );
+
+		// ACT: Import the source post it claims.
+		$result = $this->import( 8111 );
+
+		// ASSERT: The claim was the update target, not a second post.
+		$this->assertTrue(
+			$result['success'],
+			'Import must succeed: ' . ( $result['error'] ?? '' )
+		);
+		$this->assertTrue( $result['existing'], 'Import must be an update.' );
+		$this->assertSame( $claim, $result['post_id'] );
+		$this->assertSame(
+			array( $claim ),
+			$this->claiming_post_ids( 8111 ),
 			'No second claim may be created.'
 		);
 	}
