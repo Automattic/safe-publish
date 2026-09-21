@@ -1,6 +1,6 @@
 <?php
 /**
- * Block-ID remap integration tests for a subsite source connection.
+ * Block-ID remap integration tests for a subsite source connection
  *
  * @package Safe_Publish
  */

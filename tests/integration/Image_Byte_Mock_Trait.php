@@ -1,6 +1,6 @@
 <?php
 /**
- * HTTP image-byte mocking for integration tests.
+ * HTTP image-byte mocking for integration tests
  *
  * @package Safe_Publish
  */

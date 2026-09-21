@@ -1,6 +1,6 @@
 <?php
 /**
- * Fixture: Invalid HMAC Requests.
+ * Fixture: Invalid HMAC Requests
  *
  * Provides helper functions to build request data arrays that should fail
  * HMAC authentication, covering each distinct failure case.

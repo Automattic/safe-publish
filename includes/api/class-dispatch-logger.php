@@ -1,6 +1,6 @@
 <?php
 /**
- * Dispatch Logger class.
+ * Dispatch Logger class
  *
  * @package Safe_Publish
  */

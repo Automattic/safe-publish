@@ -1,6 +1,6 @@
 <?php
 /**
- * Integration test for off-domain featured-image sideloading.
+ * Integration test for off-domain featured-image sideloading
  *
  * @package Safe_Publish
  */

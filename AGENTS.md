@@ -4,6 +4,7 @@
 
 - Analyze and verify human input before agreeing with it. Prioritize truth over agreement.
 - Never provide answers based on unverified or vague assumptions.
+- Before calling a defect unreachable or not worth fixing, prove the verdict with a throwaway integration test; reading the code establishes the mechanism, not the outcome.
 - Focus on being helpful and accurate. If uncertain about something, ask clarifying questions.
 - Read any provided instruction files in their entirety.
 
@@ -76,9 +77,9 @@ While using `/code-review:code-review`:
 
 The plugin's purpose is migrating data from a source to a destination site, keeping the data's integrity and format to the maximum extent possible. The only acceptable changes are the ones required to make the migrated data operational/correct on the destination site.
 
-## Development state
+## Backward compatibility
 
-Currently in closed beta used by customers, soon to become public; anything introducing breaking changes or threatening backward-compatibility needs to be explicitly reported, and human-approved before implementation.
+Generally available and used by customers; anything introducing breaking changes or threatening backward-compatibility needs to be explicitly reported, and human-approved before implementation.
 
 ## Workflow
 

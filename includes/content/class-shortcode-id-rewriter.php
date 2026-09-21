@@ -1,6 +1,6 @@
 <?php
 /**
- * Shortcode ID Rewriter class.
+ * Shortcode ID Rewriter class
  *
  * @package Safe_Publish
  */

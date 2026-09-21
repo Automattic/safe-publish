@@ -1,6 +1,6 @@
 <?php
 /**
- * URL Validator Test file.
+ * URL Validator Test file
  *
  * @package Safe_Publish
  */

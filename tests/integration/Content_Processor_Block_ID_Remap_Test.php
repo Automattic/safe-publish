@@ -1,6 +1,6 @@
 <?php
 /**
- * Integration tests for Content_Processor's block-ID remap.
+ * Integration tests for Content_Processor's block-ID remap
  *
  * @package Safe_Publish
  */

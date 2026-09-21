@@ -1,6 +1,6 @@
 <?php
 /**
- * Plugin Test.
+ * Plugin Test
  *
  * @package Safe_Publish
  */

@@ -1,6 +1,6 @@
 <?php
 /**
- * Source Posts API test double serving canned catalog pages.
+ * Source Posts API test double serving canned catalog pages
  *
  * @package Safe_Publish
  */

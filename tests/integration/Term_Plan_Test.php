@@ -1,6 +1,6 @@
 <?php
 /**
- * Term plan integration tests.
+ * Term plan integration tests
  *
  * @package Safe_Publish
  */

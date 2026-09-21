@@ -1,6 +1,6 @@
 <?php
 /**
- * Integration tests for history reads and repository compatibility.
+ * Integration tests for history reads and repository compatibility
  *
  * @package Safe_Publish
  */

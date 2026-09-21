@@ -1,6 +1,6 @@
 <?php
 /**
- * Imports Table class.
+ * Imports Table class
  *
  * @package Safe_Publish
  */
