@@ -45,7 +45,7 @@ final class Session_Rollback_Service {
 	 * Rolls back a single import item.
 	 *
 	 * @param int $item_id Item ID to roll back.
-	 * @return array{action: string, post_id: int, post_title: string, omissions?: array}|WP_Error Rollback result or error.
+	 * @return array{action: string, post_id: int, post_title: string, omissions: array}|WP_Error Rollback result or error.
 	 */
 	public function rollback_item( int $item_id ): array|WP_Error {
 		$item = $this->repository->get_item( $item_id );
@@ -75,8 +75,7 @@ final class Session_Rollback_Service {
 		}
 
 		// A failed flag write leaves the revert unrecorded; don't claim success.
-		$omissions = $result['omissions'] ?? array();
-		if ( ! $this->repository->mark_item_rolled_back( $item_id, $omissions ) ) {
+		if ( ! $this->repository->mark_item_rolled_back( $item_id, $result['omissions'] ) ) {
 			return new WP_Error(
 				'rollback_not_recorded',
 				__(
@@ -93,7 +92,7 @@ final class Session_Rollback_Service {
 	 * Rolls back a single item row (internal helper).
 	 *
 	 * @param array $item Item row.
-	 * @return array{action: string, post_id: int, post_title: string, omissions?: array}|WP_Error Rollback result or error.
+	 * @return array{action: string, post_id: int, post_title: string, omissions: array}|WP_Error Rollback result or error.
 	 */
 	private function rollback_item_row( array $item ): array|WP_Error {
 		$post_id = isset( $item['post_id'] ) ? (int) $item['post_id'] : 0;
@@ -144,7 +143,7 @@ final class Session_Rollback_Service {
 	 *
 	 * @param int    $post_id    Post ID to delete.
 	 * @param string $post_title Post title for response.
-	 * @return array{action: string, post_id: int, post_title: string}|WP_Error Result or error.
+	 * @return array{action: string, post_id: int, post_title: string, omissions: array}|WP_Error Result or error.
 	 */
 	private function delete_new_post( int $post_id, string $post_title ): array|WP_Error {
 		// Capture the media this post owns before the delete unlinks it.
@@ -157,11 +156,24 @@ final class Session_Rollback_Service {
 			);
 		}
 
+		$omissions = array();
+
 		foreach ( $imported_media_ids as $attachment_id ) {
 			// A surviving post may still show media parented here, since import
 			// deduplicates by source URL; skip those and delete only what this
 			// post solely owns.
-			if ( $this->attachment_used_by_other_post( $attachment_id ) ) {
+			$used = $this->attachment_used_by_other_post( $attachment_id );
+
+			if ( null === $used ) {
+				$omissions[] = array(
+					'field'         => 'media',
+					'reason'        => 'usage_check_failed',
+					'attachment_id' => $attachment_id,
+				);
+				continue;
+			}
+
+			if ( $used ) {
 				continue;
 			}
 
@@ -174,6 +186,7 @@ final class Session_Rollback_Service {
 			'action'     => 'deleted',
 			'post_id'    => $post_id,
 			'post_title' => $post_title,
+			'omissions'  => $omissions,
 		);
 	}
 
@@ -220,40 +233,72 @@ final class Session_Rollback_Service {
 	 * three ways an import can make a post reference one: Inline in content,
 	 * as a featured image, or by ID in a gallery or playlist shortcode.
 	 *
+	 * Checks span trashed and hidden holders; one that cannot answer withholds
+	 * the deletion.
+	 *
 	 * @param int $attachment_id Attachment considered for deletion.
-	 * @return bool True when another post references it.
+	 * @return bool|null True when another post references it, null when a check
+	 *                   could not answer.
 	 */
-	private function attachment_used_by_other_post( int $attachment_id ): bool {
-		return $this->used_as_featured_image( $attachment_id )
-			|| $this->used_in_post_content( $attachment_id )
-			|| $this->used_in_media_shortcode( $attachment_id );
+	private function attachment_used_by_other_post( int $attachment_id ): ?bool {
+		$featured = $this->used_as_featured_image( $attachment_id );
+
+		if ( true === $featured ) {
+			return true;
+		}
+
+		$content = $this->used_in_post_content( $attachment_id );
+
+		if ( true === $content ) {
+			return true;
+		}
+
+		$shortcode = $this->used_in_media_shortcode( $attachment_id );
+
+		if ( true === $shortcode ) {
+			return true;
+		}
+
+		if ( null === $featured || null === $content || null === $shortcode ) {
+			return null;
+		}
+
+		return false;
 	}
 
 	/**
 	 * Reports whether any post uses the attachment as its featured image.
 	 *
+	 * Direct query: WP_Query's 'any' drops exclude_from_search types and
+	 * statuses, and a posts_where filter narrowing the result would read as
+	 * unreferenced. Auto-drafts are excluded as abandoned editor sessions.
+	 *
 	 * @param int $attachment_id Attachment ID.
-	 * @return bool True when a post's thumbnail points at it.
+	 * @return bool|null True when a post's thumbnail points at it, null when
+	 *                   the query failed.
 	 */
-	private function used_as_featured_image( int $attachment_id ): bool {
-		$posts = get_posts(
-			array(
-				'post_type'        => 'any',
-				'post_status'      => 'any',
-				'posts_per_page'   => 1,
-				'fields'           => 'ids',
-				'suppress_filters' => false,
-				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
-				'meta_query'       => array(
-					array(
-						'key'   => '_thumbnail_id',
-						'value' => (string) $attachment_id,
-					),
-				),
+	private function used_as_featured_image( int $attachment_id ): ?bool {
+		global $wpdb;
+
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$match = $wpdb->get_var(
+			$wpdb->prepare(
+				"SELECT posts.ID FROM {$wpdb->posts} AS posts
+				 INNER JOIN {$wpdb->postmeta} AS meta ON meta.post_id = posts.ID
+				 WHERE meta.meta_key = '_thumbnail_id'
+					 AND meta.meta_value = %s
+					 AND posts.post_status <> 'auto-draft'
+				 LIMIT 1",
+				(string) $attachment_id
 			)
 		);
+		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 
-		return array() !== $posts;
+		if ( '' !== $wpdb->last_error ) {
+			return null;
+		}
+
+		return null !== $match;
 	}
 
 	/**
@@ -261,9 +306,10 @@ final class Session_Rollback_Service {
 	 * sized variants included, by matching the upload-relative path stem.
 	 *
 	 * @param int $attachment_id Attachment ID.
-	 * @return bool True when a post's content contains the file URL.
+	 * @return bool|null True when a post's content contains the file URL, null
+	 *                   when the query failed.
 	 */
-	private function used_in_post_content( int $attachment_id ): bool {
+	private function used_in_post_content( int $attachment_id ): ?bool {
 		$file = get_post_meta( $attachment_id, '_wp_attached_file', true );
 
 		if ( ! is_string( $file ) || '' === $file ) {
@@ -284,12 +330,16 @@ final class Session_Rollback_Service {
 			$wpdb->prepare(
 				"SELECT ID FROM {$wpdb->posts}
 				 WHERE post_content LIKE %s
-					 AND post_status NOT IN ( 'auto-draft', 'trash', 'inherit' )
+					 AND post_status NOT IN ( 'auto-draft', 'inherit' )
 				 LIMIT 1",
 				'%' . $wpdb->esc_like( $stem ) . '%'
 			)
 		);
 		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+
+		if ( '' !== $wpdb->last_error ) {
+			return null;
+		}
 
 		return null !== $match;
 	}
@@ -299,22 +349,27 @@ final class Session_Rollback_Service {
 	 * attachment by ID.
 	 *
 	 * @param int $attachment_id Attachment ID.
-	 * @return bool True when a shortcode references it.
+	 * @return bool|null True when a shortcode references it, null when the
+	 *                   query failed.
 	 */
-	private function used_in_media_shortcode( int $attachment_id ): bool {
+	private function used_in_media_shortcode( int $attachment_id ): ?bool {
 		global $wpdb;
 
 		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 		$contents = $wpdb->get_col(
 			$wpdb->prepare(
 				"SELECT post_content FROM {$wpdb->posts}
-				 WHERE post_status NOT IN ( 'auto-draft', 'trash', 'inherit' )
+				 WHERE post_status NOT IN ( 'auto-draft', 'inherit' )
 					 AND ( post_content LIKE %s OR post_content LIKE %s )",
 				'%' . $wpdb->esc_like( '[gallery' ) . '%',
 				'%' . $wpdb->esc_like( '[playlist' ) . '%'
 			)
 		);
 		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+
+		if ( '' !== $wpdb->last_error ) {
+			return null;
+		}
 
 		if ( array() === $contents ) {
 			return false;
