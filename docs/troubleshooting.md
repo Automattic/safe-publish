@@ -214,6 +214,7 @@ add_filter(
 1. Confirm the post type is still registered on the source with `show_in_rest` set to `true` and `public` set to `true`. Safe Publish also allows `wp_navigation` and `wp_block` despite `public` being false.
 2. A truthy but non-boolean `show_in_rest` value, such as `1`, registers the REST route but excludes the type from the catalog. Use `true`.
 3. Where the source registers the type conditionally, confirm the registration also runs for REST requests.
+4. The source leaves out any type whose REST controller throws. Check the dispatch channel of the source's Audit Log for a `CATALOG_POST_TYPE_SKIPPED` event naming the type.
 
 #### Post creation failed
 
