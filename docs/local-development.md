@@ -127,8 +127,10 @@ npm run test:php -- --filter SomeTestClass
 For e2e tests, ensure the development environment is running, then execute:
 
 ```sh
-WP_BASE_URL=http://host.docker.internal:8888 npm run test:e2e
+npm run test:e2e
 ```
+
+The suite targets this checkout's own development site, resolving its port from `.devports` when present, the same way `npm run dev` does. Set `WP_BASE_URL` to target a different site.
 
 ### Logs
 

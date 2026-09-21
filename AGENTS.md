@@ -90,7 +90,7 @@ Generally available and used by customers; anything introducing breaking changes
 
 ## Worktrees
 
-- Run `bin/setup-worktree` to set up a worktree: it installs dependencies and assigns a free wp-env port pair, recording it in `.devports` (git-ignored) so `npm run dev` loads it automatically — no manual `WP_ENV_PORT` exports. Allocation is locked so simultaneous setups get distinct pairs, and a pre-set `WP_ENV_PORT`/`WP_ENV_TESTS_PORT` (e.g. from an external orchestrator) takes precedence.
+- Run `bin/setup-worktree` to set up a worktree: it installs dependencies and assigns a free wp-env port pair, recording it in `.devports` (git-ignored) so `npm run dev` and `npm run test:e2e` load it automatically — no manual `WP_ENV_PORT` exports. Allocation is locked so simultaneous setups get distinct pairs, and a pre-set `WP_ENV_PORT`/`WP_ENV_TESTS_PORT` (e.g. from an external orchestrator) takes precedence.
 - Before removing a worktree, run `npm run dev:destroy` from inside it to avoid orphan wp-env containers and volumes.
 
 ## Dependencies
