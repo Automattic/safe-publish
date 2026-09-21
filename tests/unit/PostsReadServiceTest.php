@@ -1,6 +1,6 @@
 <?php
 /**
- * Public posts read service contract tests.
+ * Public posts read service contract tests
  *
  * @package Safe_Publish
  */

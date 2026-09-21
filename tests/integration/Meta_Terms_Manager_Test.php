@@ -1,6 +1,6 @@
 <?php
 /**
- * Meta_Terms_Manager integration tests.
+ * Meta_Terms_Manager integration tests
  *
  * @package Safe_Publish
  */

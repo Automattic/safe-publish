@@ -1,0 +1,28 @@
+#!/bin/sh
+#
+# Resolve this checkout's wp-env port pair into WP_ENV_PORT and
+# WP_ENV_TESTS_PORT, so a worktree uses its own environment instead of
+# another checkout's. Precedence: A pre-set WP_ENV_PORT (CI, an external
+# orchestrator) wins, then the pair bin/setup-worktree records in .devports,
+# then the defaults.
+#
+# Sourced, never executed: it sets variables in the calling shell.
+# Usage: . ./bin/lib/devports
+
+if [ -z "$WP_ENV_PORT" ]; then
+	# A bare git rev-parse would exit under set -e off a checkout.
+	sp_root="$(git rev-parse --show-toplevel 2>/dev/null || echo .)"
+	sp_devports="$sp_root/.devports"
+	if [ -f "$sp_devports" ]; then
+		# Sourcing an unreadable file exits the shell; || never runs.
+		if [ -r "$sp_devports" ]; then
+			. "$sp_devports"
+		else
+			echo "warning: cannot read .devports; using defaults" >&2
+		fi
+	fi
+	unset sp_root sp_devports
+fi
+
+export WP_ENV_PORT="${WP_ENV_PORT-8888}"
+export WP_ENV_TESTS_PORT="${WP_ENV_TESTS_PORT-8889}"

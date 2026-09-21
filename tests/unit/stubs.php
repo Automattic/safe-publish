@@ -1,6 +1,6 @@
 <?php
 /**
- * WordPress function stubs for testing.
+ * WordPress function stubs for testing
  *
  * @package Safe_Publish
  */

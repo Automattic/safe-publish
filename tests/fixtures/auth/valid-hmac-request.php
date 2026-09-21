@@ -1,6 +1,6 @@
 <?php
 /**
- * Fixture: Valid HMAC Request.
+ * Fixture: Valid HMAC Request
  *
  * Provides a helper function to build a complete, valid HMAC-authenticated
  * request data array for use in auth unit tests.

@@ -1,6 +1,6 @@
 <?php
 /**
- * Tests the destination's shape validation of the safe_publish_terms field.
+ * Tests the destination's shape validation of the safe_publish_terms field
  *
  * @package Safe_Publish
  */

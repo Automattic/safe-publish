@@ -1,6 +1,6 @@
 <?php
 /**
- * Diff renderer taxonomy integration tests.
+ * Diff renderer taxonomy integration tests
  *
  * @package Safe_Publish
  */

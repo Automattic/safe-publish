@@ -1,6 +1,6 @@
 <?php
 /**
- * Shared AJAX harness for bulk-import integration tests.
+ * Shared AJAX harness for bulk-import integration tests
  *
  * @package Safe_Publish
  */

@@ -1,6 +1,6 @@
 <?php
 /**
- * Reference implementation of the ACF/SCF meta extension recipe.
+ * Reference implementation of the ACF/SCF meta extension recipe
  *
  * @package Safe_Publish
  */

@@ -6,6 +6,10 @@ const baseConfig =
 const config = defineConfig( {
 	...baseConfig,
 	testDir: './tests/e2e',
+	// The suite targets an already-running environment. The base config
+	// auto-starts one with a command this project does not define, on
+	// default ports that collide in worktrees.
+	webServer: undefined,
 } );
 
 export default config;

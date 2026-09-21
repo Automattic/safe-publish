@@ -1,6 +1,6 @@
 <?php
 /**
- * Attention inbox read service.
+ * Attention inbox read service
  *
  * @package Safe_Publish
  */
