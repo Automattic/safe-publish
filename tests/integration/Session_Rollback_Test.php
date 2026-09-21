@@ -538,6 +538,34 @@ class Session_Rollback_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that a holder past the first scan page still keeps its media,
+	 * so paging does not truncate the usage checks.
+	 */
+	public function test_rollback_keeps_media_held_beyond_the_first_scan_page(): void {
+		// ARRANGE: 600 gallery posts precede the one holding the attachment.
+		$seed = $this->create_shared_media_item();
+		for ( $i = 0; $i < 600; $i++ ) {
+			$this->factory()->post->create(
+				array( 'post_content' => '[gallery ids="9001"]' )
+			);
+		}
+		$post_b = $this->factory()->post->create(
+			array(
+				'post_title'   => 'B',
+				'post_content' => '[gallery ids="' . $seed['attachment_id'] . '"]',
+			)
+		);
+
+		// ACT: Roll back A.
+		$this->rollback_service->rollback_item( $seed['item_id'] );
+
+		// ASSERT: A is gone but the late holder's attachment survives.
+		$this->assertNull( get_post( $seed['post_id'] ) );
+		$this->assertNotNull( get_post( $seed['attachment_id'] ) );
+		$this->assertGreaterThan( 500, $post_b - $seed['post_id'] );
+	}
+
+	/**
 	 * Verifies that an auto-draft holding the attachment does not keep it,
 	 * an abandoned editor session core garbage-collects on its own.
 	 */

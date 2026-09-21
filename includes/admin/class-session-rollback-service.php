@@ -26,6 +26,11 @@ if ( ! defined( 'ABSPATH' ) ) {
 final class Session_Rollback_Service {
 
 	/**
+	 * Posts read per page when scanning content for media references.
+	 */
+	private const SCAN_PAGE_SIZE = 500;
+
+	/**
 	 * History repository instance.
 	 *
 	 * @var History_Repository
@@ -351,33 +356,21 @@ final class Session_Rollback_Service {
 			array_keys( $prefixes )
 		);
 
-		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
-		// TODO: Paginate this scan; it reads every matching post's content.
-		$contents = $wpdb->get_col(
-			$wpdb->prepare(
-				"SELECT post_content FROM {$wpdb->posts}
-				 WHERE post_status NOT IN ( 'auto-draft', 'inherit' )
-					 AND ( " . implode( ' OR ', $clauses ) . ' )',
-				$likes
-			)
-		);
-		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
-
-		if ( '' !== $wpdb->last_error ) {
-			return null;
-		}
-
 		$used = array();
 
-		foreach ( $contents as $content ) {
-			foreach ( $stems as $attachment_id => $stem ) {
-				if ( str_contains( (string) $content, $stem ) ) {
-					$used[ $attachment_id ] = true;
+		$completed = $this->scan_post_contents(
+			implode( ' OR ', $clauses ),
+			$likes,
+			static function ( string $content ) use ( $stems, &$used ): void {
+				foreach ( $stems as $attachment_id => $stem ) {
+					if ( str_contains( $content, $stem ) ) {
+						$used[ $attachment_id ] = true;
+					}
 				}
 			}
-		}
+		);
 
-		return array_keys( $used );
+		return $completed ? array_keys( $used ) : null;
 	}
 
 	/**
@@ -388,33 +381,76 @@ final class Session_Rollback_Service {
 	private function shortcode_attachment_ids(): ?array {
 		global $wpdb;
 
-		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
-		// TODO: Paginate this scan; it reads every shortcode-bearing post.
-		$contents = $wpdb->get_col(
-			$wpdb->prepare(
-				"SELECT post_content FROM {$wpdb->posts}
-				 WHERE post_status NOT IN ( 'auto-draft', 'inherit' )
-					 AND ( post_content LIKE %s OR post_content LIKE %s )",
-				'%' . $wpdb->esc_like( '[gallery' ) . '%',
-				'%' . $wpdb->esc_like( '[playlist' ) . '%'
-			)
-		);
-		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
-
-		if ( '' !== $wpdb->last_error ) {
-			return null;
-		}
-
 		$rewriter = new Shortcode_ID_Rewriter();
 		$ids      = array();
 
-		foreach ( $contents as $content ) {
-			foreach ( $rewriter->collect_shortcode_attachment_ids( (string) $content ) as $id ) {
-				$ids[ $id ] = true;
+		$completed = $this->scan_post_contents(
+			'post_content LIKE %s OR post_content LIKE %s',
+			array(
+				'%' . $wpdb->esc_like( '[gallery' ) . '%',
+				'%' . $wpdb->esc_like( '[playlist' ) . '%',
+			),
+			static function ( string $content ) use ( $rewriter, &$ids ): void {
+				foreach ( $rewriter->collect_shortcode_attachment_ids( $content ) as $id ) {
+					$ids[ $id ] = true;
+				}
 			}
-		}
+		);
 
-		return array_keys( $ids );
+		return $completed ? array_keys( $ids ) : null;
+	}
+
+	/**
+	 * Passes each matching post's content to a callback, a page at a time.
+	 *
+	 * Paged by ascending ID rather than by offset, which would rescan the
+	 * matched set for every page. Holding the whole set instead costs upwards
+	 * of a gigabyte on a site with many long shortcode-bearing posts.
+	 *
+	 * @param string   $where   Content clause, already carrying placeholders.
+	 * @param string[] $args    Placeholder values for the clause.
+	 * @param callable $collect Receives each matching post_content.
+	 * @return bool True when the scan finished, false when a query failed.
+	 */
+	private function scan_post_contents(
+		string $where,
+		array $args,
+		callable $collect
+	): bool {
+		global $wpdb;
+
+		$last = 0;
+
+		do {
+			// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber
+			$rows = $wpdb->get_results(
+				$wpdb->prepare(
+					"SELECT ID, post_content FROM {$wpdb->posts}
+					 WHERE post_status NOT IN ( 'auto-draft', 'inherit' )
+						 AND ( " . $where . ' )
+						 AND ID > %d
+					 ORDER BY ID
+					 LIMIT %d',
+					array_merge( $args, array( $last, self::SCAN_PAGE_SIZE ) )
+				)
+			);
+			// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber
+
+			// get_results() answers null for a query prepare() rejected.
+			if ( '' !== $wpdb->last_error || ! is_array( $rows ) ) {
+				return false;
+			}
+
+			foreach ( $rows as $row ) {
+				$last = (int) $row->ID;
+				$collect( (string) $row->post_content );
+			}
+
+			$page_count = count( $rows );
+			unset( $rows );
+		} while ( self::SCAN_PAGE_SIZE === $page_count );
+
+		return true;
 	}
 
 	/**
