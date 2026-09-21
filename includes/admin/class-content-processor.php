@@ -307,6 +307,11 @@ class Content_Processor {
 			$this->content_media_processor->get_unprocessable_media()
 		);
 
+		// Re-key on the normalized URL so messages name what a browser fetches,
+		// and the dedup below matches the markup pass's already-trimmed keys.
+		$this->failed_media        = self::normalize_media_map_keys( $this->failed_media );
+		$this->unprocessable_media = self::normalize_media_map_keys( $this->unprocessable_media );
+
 		// The per-block markup pass can't see block-level download failures.
 		$this->unprocessable_media = array_diff_key(
 			$this->unprocessable_media,
@@ -929,6 +934,26 @@ class Content_Processor {
 	}
 
 	/**
+	 * Re-keys a media map on the normalized form of each URL.
+	 *
+	 * @param array<string, string> $map Media map, URL => block name.
+	 * @return array<string, string> Map keyed by normalized URL.
+	 */
+	private static function normalize_media_map_keys( array $map ): array {
+		$normalized = array();
+
+		foreach ( $map as $url => $block_name ) {
+			$key        = URL_Validator::normalize_url_whitespace( (string) $url );
+			$normalized = self::merge_media_map(
+				$normalized,
+				array( $key => $block_name )
+			);
+		}
+
+		return $normalized;
+	}
+
+	/**
 	 * Formats a media map as a comma-separated list. Each URL is followed by its
 	 * originating block name in parentheses, or left bare when the name is empty.
 	 *
@@ -1459,6 +1484,9 @@ class Content_Processor {
 	/**
 	 * Extracts image src attribute from HTML content.
 	 *
+	 * Returns the attribute verbatim so it still matches the markup when used
+	 * as a replacement needle; callers normalize it for any other use.
+	 *
 	 * @param string $html HTML content.
 	 * @return string Extracted src URL or empty string if not found.
 	 */
@@ -1483,14 +1511,14 @@ class Content_Processor {
 				$src = $img->getAttribute( 'src' );
 
 				if ( ! empty( $src ) ) {
-					return trim( $src );
+					return $src;
 				}
 			}
 		}
 
 		// Fallback to regex if DOMDocument fails.
 		if ( preg_match( '/<img[^>]+src=["\']([^"\']+)["\'][^>]*>/i', $html, $matches ) ) {
-			return trim( $matches[1] );
+			return $matches[1];
 		}
 
 		return '';

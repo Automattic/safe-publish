@@ -878,7 +878,10 @@ class Media_Importer {
 	 * @return string The target URL with the source query parameters appended.
 	 */
 	public static function reapply_query_parameters( string $original_url, string $clean_url ): string {
-		$query = (string) wp_parse_url( $original_url, PHP_URL_QUERY );
+		$query = (string) wp_parse_url(
+			URL_Validator::normalize_url_whitespace( $original_url ),
+			PHP_URL_QUERY
+		);
 
 		if ( ! $query ) {
 			return $clean_url;
