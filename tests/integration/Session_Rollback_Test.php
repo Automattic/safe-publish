@@ -452,6 +452,92 @@ class Session_Rollback_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that a query filter narrowing the featured-image lookup cannot
+	 * cause a deletion, since a hidden holder would otherwise read as none.
+	 */
+	public function test_rollback_keeps_media_a_query_filter_would_hide(): void {
+		// ARRANGE: A owns a held attachment and an unheld one; a filter would
+		// narrow any featured-image lookup made through WP_Query to nothing.
+		$session_id = $this->repository->create_session( 'https://example.com', 'bulk' );
+		$post_a     = $this->factory()->post->create( array( 'post_title' => 'A' ) );
+		$held       = $this->seed_imported_attachment( $post_a );
+		$unheld     = $this->seed_imported_attachment( $post_a );
+		$post_b     = $this->factory()->post->create( array( 'post_title' => 'B' ) );
+		set_post_thumbnail( $post_b, $held );
+		$item_a = $this->repository->log_import_action(
+			$session_id,
+			1,
+			'A',
+			'success',
+			$post_a
+		);
+
+		$narrow = static fn ( string $where ): string => str_contains( $where, '_thumbnail_id' )
+			? $where . ' AND 1=0'
+			: $where;
+		add_filter( 'posts_where', $narrow );
+
+		try {
+			// ACT: Roll back A.
+			$this->rollback_service->rollback_item( $item_a );
+		} finally {
+			remove_filter( 'posts_where', $narrow );
+		}
+
+		// ASSERT: The held attachment survives the filter that would hide it.
+		$this->assertNull( get_post( $post_a ) );
+		$this->assertSame( $held, get_post_thumbnail_id( $post_b ) );
+
+		// ASSERT: The unheld one is still deleted, so the filter did not simply
+		// stop the rollback from collecting the post's media.
+		$this->assertNull( get_post( $unheld ) );
+	}
+
+	/**
+	 * Verifies that one rollback both keeps a referenced attachment and deletes
+	 * an unreferenced one, so the batched usage checks stay per-attachment.
+	 */
+	public function test_rollback_separates_referenced_media_within_one_batch(): void {
+		// ARRANGE: A owns four attachments; three are held by surviving posts,
+		// one by each reference kind, and the fourth is held by nothing.
+		$session_id = $this->repository->create_session( 'https://example.com', 'bulk' );
+		$post_a     = $this->factory()->post->create( array( 'post_title' => 'A' ) );
+		$featured   = $this->seed_imported_attachment( $post_a );
+		$inlined    = $this->seed_imported_attachment( $post_a );
+		$listed     = $this->seed_imported_attachment( $post_a );
+		$orphan     = $this->seed_imported_attachment( $post_a );
+
+		$holder = $this->factory()->post->create(
+			array(
+				'post_title'   => 'B',
+				'post_content' => '<img src="' . wp_get_attachment_url( $inlined ) . '">'
+					. '[gallery ids="' . $listed . '"]',
+			)
+		);
+		set_post_thumbnail( $holder, $featured );
+
+		$item_a = $this->repository->log_import_action(
+			$session_id,
+			1,
+			'A',
+			'success',
+			$post_a
+		);
+
+		// ACT: Roll back A.
+		$result = $this->rollback_service->rollback_item( $item_a );
+
+		// ASSERT: Each held attachment survives and the unheld one is deleted.
+		$this->assertIsArray( $result );
+		$this->assertNull( get_post( $post_a ) );
+		$this->assertNotNull( get_post( $featured ) );
+		$this->assertNotNull( get_post( $inlined ) );
+		$this->assertNotNull( get_post( $listed ) );
+		$this->assertNull( get_post( $orphan ) );
+		$this->assertSame( array(), $result['omissions'] );
+	}
+
+	/**
 	 * Verifies that an auto-draft holding the attachment does not keep it,
 	 * an abandoned editor session core garbage-collects on its own.
 	 */
@@ -511,8 +597,8 @@ class Session_Rollback_Test extends Integration_Test_Case {
 	public function usage_check_query_provider(): array {
 		return array(
 			'featured image'  => array( "meta.meta_key = '_thumbnail_id'" ),
-			'post content'    => array( 'WHERE post_content LIKE' ),
-			'media shortcode' => array( 'SELECT post_content FROM' ),
+			'post content'    => array( '2026/08/' ),
+			'media shortcode' => array( '[gallery' ),
 		);
 	}
 
