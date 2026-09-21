@@ -1,7 +1,7 @@
 <?php
 /**
  * Integration tests for the Audit_Log_Table query extensions used by the
- * Audit Log UI: array channel/level filters and date-range filters.
+ * Audit Log UI: array channel/level filters and date-range filters
  *
  * @package Safe_Publish
  */

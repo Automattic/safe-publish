@@ -1,6 +1,6 @@
 <?php
 /**
- * Integration tests for importing a bare [gallery] attached-media set.
+ * Integration tests for importing a bare [gallery] attached-media set
  *
  * @package Safe_Publish
  */

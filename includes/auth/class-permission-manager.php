@@ -1,6 +1,6 @@
 <?php
 /**
- * Permission Manager class.
+ * Permission Manager class
  *
  * @package Safe_Publish
  */

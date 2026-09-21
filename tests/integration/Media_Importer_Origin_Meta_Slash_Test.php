@@ -1,6 +1,6 @@
 <?php
 /**
- * Integration test for backslashes in attachment origin meta.
+ * Integration test for backslashes in attachment origin meta
  *
  * @package Safe_Publish
  */

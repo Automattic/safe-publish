@@ -27,6 +27,8 @@ const [ , wordpressJsdocOptions ] =
 module.exports = [
 	{
 		ignores: [
+			'.playwright-mcp/**',
+			'.scratch/**',
 			'.vscode/**',
 			'artifacts/**',
 			'build/**',

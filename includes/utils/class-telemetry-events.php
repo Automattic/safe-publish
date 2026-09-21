@@ -1,6 +1,6 @@
 <?php
 /**
- * Telemetry Events constants class.
+ * Telemetry Events constants class
  *
  * @package Safe_Publish
  */

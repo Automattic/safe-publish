@@ -1,6 +1,6 @@
 <?php
 /**
- * Integration tests for auth-channel server-log routing.
+ * Integration tests for auth-channel server-log routing
  *
  * @package Safe_Publish
  */

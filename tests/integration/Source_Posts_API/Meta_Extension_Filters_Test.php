@@ -1,6 +1,6 @@
 <?php
 /**
- * Tests for the source-fetch query-args and post-meta extension filters.
+ * Tests for the source-fetch query-args and post-meta extension filters
  *
  * @package Safe_Publish
  */

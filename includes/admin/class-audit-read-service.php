@@ -1,6 +1,6 @@
 <?php
 /**
- * Audit event read service.
+ * Audit event read service
  *
  * @package Safe_Publish
  */

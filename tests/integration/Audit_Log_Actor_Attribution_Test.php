@@ -1,6 +1,6 @@
 <?php
 /**
- * Integration tests for actor attribution in audit log events.
+ * Integration tests for actor attribution in audit log events
  *
  * @package Safe_Publish
  */

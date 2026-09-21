@@ -1,5 +1,5 @@
 /**
- * Tests for TypeScript type definitions and interfaces
+ * Tests for TypeScript type definitions and interfaces.
  */
 import { describe, expect, it } from 'vitest';
 import type { UnifiedPostRow } from '@/types';

@@ -1,6 +1,6 @@
 <?php
 /**
- * Integration tests for the attention issues store and detection wiring.
+ * Integration tests for the attention issues store and detection wiring
  *
  * @package Safe_Publish
  */
