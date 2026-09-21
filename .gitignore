@@ -46,7 +46,7 @@ coverage
 # Playwright MCP scratch output
 /.playwright-mcp/
 
-# Scratch directories and ad-hoc diff files at repo root.
+# Ad-hoc diff files and the scratch directory at repo root. The linters and
+# vitest carry matching ignore lists; grep for .scratch to keep them in step.
 /*.diff
-/scratch/
 /.scratch/
