@@ -18,7 +18,6 @@ use Safe_Publish\API\Diff_Renderer;
 use Safe_Publish\API\HTTP_Client;
 use Safe_Publish\API\Meta_Terms_Manager;
 use Safe_Publish\API\Source_Posts_API;
-use Safe_Publish\API\Source_Post_Type_Resolver;
 use Safe_Publish\Content\Content_Media_Processor;
 use Safe_Publish\Content\Shortcode_ID_Rewriter;
 use Safe_Publish\Media\Media_Importer;
@@ -69,8 +68,6 @@ class Source_Identity_Lookup_Test extends Source_Posts_API_Test_Base {
 	#[\Override]
 	protected function setUp(): void {
 		parent::setUp();
-
-		Source_Post_Type_Resolver::reset_cache();
 
 		add_filter(
 			'pre_http_request',

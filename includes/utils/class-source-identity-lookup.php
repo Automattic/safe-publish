@@ -21,7 +21,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  *
  * A source post ID identifies a source-side post irrespective of type, so
  * these lookups must span every post type. WP_Query's 'any' token cannot:
- * it expands to types registered exclude_from_search=false, omitting
+ * It expands to types registered exclude_from_search=false, omitting
  * patterns, navigation menus, and custom types kept out of site search.
  *
  * Defaults return the newest claim by ID; callers override status, ordering,
@@ -32,7 +32,7 @@ class Source_Identity_Lookup {
 	/**
 	 * Returns every post type a destination post can be imported as.
 	 *
-	 * Revisions are excluded: a revision is never an import target, and it
+	 * Revisions are excluded: A revision is never an import target, and it
 	 * always outranks its own parent under the newest-by-ID order.
 	 *
 	 * @return string[] Post type slugs.
@@ -49,9 +49,9 @@ class Source_Identity_Lookup {
 	 * to one source site so destinations connected to different sources can't
 	 * collide on overlapping source post IDs.
 	 *
-	 * @param int|int[] $source_ids      One source post ID, or a list.
-	 * @param string    $source_site_url Path-bearing source site identity.
-	 * @param array     $args            WP_Query args merged over the defaults.
+	 * @param int|int[]            $source_ids      One source post ID, or a list.
+	 * @param string               $source_site_url Path-bearing source site identity.
+	 * @param array<string, mixed> $args            WP_Query args merged over the defaults.
 	 * @return WP_Post[] Matching posts, newest first by ID unless overridden.
 	 */
 	public static function find(

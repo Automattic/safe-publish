@@ -1084,7 +1084,7 @@ class Post_Import_Service {
 			$source_ids,
 			$source_site_url,
 			array(
-				// Uncapped: a duplicate claim must not evict another source ID.
+				// Uncapped: A duplicate claim must not evict another source ID.
 				// phpcs:ignore WordPressVIPMinimum.Performance.NoPaging
 				'posts_per_page'         => -1,
 				'update_post_term_cache' => false,
@@ -1118,7 +1118,7 @@ class Post_Import_Service {
 	 * the lowest ID (the one inserted first); when this returns non-null, the
 	 * just-inserted post is the loser and should be discarded.
 	 *
-	 * Lowest, inverting the newest-wins rule elsewhere: nothing older can
+	 * Lowest, inverting the newest-wins rule elsewhere: Nothing older can
 	 * appear later, so racers agree on the winner. Newest-wins keeps both.
 	 *
 	 * Bypasses the WP_Query result cache so this lookup sees INSERTs
@@ -1141,7 +1141,7 @@ class Post_Import_Service {
 			$source_post_id,
 			$source_site_url,
 			array(
-				// Against the shared default: the oldest claim wins the race.
+				// Against the shared default: The oldest claim wins the race.
 				'order'                  => 'ASC',
 				'no_found_rows'          => true,
 				'cache_results'          => false,
@@ -1917,10 +1917,14 @@ class Post_Import_Service {
 			return Reconcile_Outcome::target_absent( 'Source identity is empty.' );
 		}
 
-		$dest_nav = $this->find_imported_post(
+		// Type-scoped; the rewriter writes this ID without checking its type.
+		$menus = Source_Identity_Lookup::find(
 			$source_nav_id,
-			$source_site_url
+			$source_site_url,
+			array( 'post_type' => 'wp_navigation' )
 		);
+
+		$dest_nav = $menus[0] ?? null;
 
 		if ( ! $dest_nav instanceof WP_Post ) {
 			return Reconcile_Outcome::target_absent(

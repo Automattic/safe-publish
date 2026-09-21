@@ -2233,7 +2233,7 @@ class Content_Processor {
 			$ids,
 			$source_site_url,
 			array(
-				// Uncapped: a duplicate claim must not evict another source ID.
+				// Uncapped: A duplicate claim must not evict another source ID.
 				// phpcs:ignore WordPressVIPMinimum.Performance.NoPaging
 				'posts_per_page'         => -1,
 				'update_post_term_cache' => false,
