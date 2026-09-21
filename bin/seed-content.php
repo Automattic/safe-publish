@@ -1,6 +1,6 @@
 <?php
 /**
- * Content seeder for development and integration testing.
+ * Content seeder for development and integration testing
  *
  * Generates posts, pages, or CPTs with optional media for testing the import
  * process.

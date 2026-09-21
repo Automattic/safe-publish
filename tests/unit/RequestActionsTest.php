@@ -1,6 +1,6 @@
 <?php
 /**
- * Request_Actions Test.
+ * Request_Actions Test
  *
  * @package Safe_Publish
  */

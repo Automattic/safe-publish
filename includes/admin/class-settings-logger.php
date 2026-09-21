@@ -1,6 +1,6 @@
 <?php
 /**
- * Settings Logger class.
+ * Settings Logger class
  *
  * @package Safe_Publish
  */

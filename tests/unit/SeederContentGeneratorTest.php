@@ -1,6 +1,6 @@
 <?php
 /**
- * Seeder Content Generator Test.
+ * Seeder Content Generator Test
  *
  * @package Safe_Publish
  */

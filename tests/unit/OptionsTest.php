@@ -1,6 +1,6 @@
 <?php
 /**
- * Options Test.
+ * Options Test
  *
  * @package Safe_Publish
  */

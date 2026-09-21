@@ -1,6 +1,6 @@
 <?php
 /**
- * Post_Import_Service integration tests.
+ * Post_Import_Service integration tests
  *
  * @package Safe_Publish
  */

@@ -1,6 +1,6 @@
 <?php
 /**
- * Integration tests for domain-failure server-log suppression.
+ * Integration tests for domain-failure server-log suppression
  *
  * @package Safe_Publish
  */

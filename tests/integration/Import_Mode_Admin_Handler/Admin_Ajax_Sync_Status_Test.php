@@ -1,6 +1,6 @@
 <?php
 /**
- * Integration tests for the safe_publish_sync_status_batch AJAX handler.
+ * Integration tests for the safe_publish_sync_status_batch AJAX handler
  *
  * @package Safe_Publish
  */

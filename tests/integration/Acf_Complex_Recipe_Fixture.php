@@ -1,6 +1,6 @@
 <?php
 /**
- * Reference implementation of the ACF/SCF complex-field recipe.
+ * Reference implementation of the ACF/SCF complex-field recipe
  *
  * @package Safe_Publish
  */

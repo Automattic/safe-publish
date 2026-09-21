@@ -1,6 +1,6 @@
 <?php
 /**
- * Tests the destination's shape validation of safe_publish_attached_media.
+ * Tests the destination's shape validation of safe_publish_attached_media
  *
  * @package Safe_Publish
  */

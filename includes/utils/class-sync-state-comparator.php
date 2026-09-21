@@ -1,6 +1,6 @@
 <?php
 /**
- * Sync_State_Comparator utility class.
+ * Sync_State_Comparator utility class
  *
  * @package Safe_Publish
  */
