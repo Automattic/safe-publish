@@ -1,6 +1,6 @@
 <?php
 /**
- * Integration tests for the source-side Catalog_REST_Controller.
+ * Integration tests for the source-side Catalog_REST_Controller
  *
  * @package Safe_Publish
  */

@@ -1,7 +1,7 @@
 <?php
 /**
  * Tests that fetch_fresh_post_content returns a distinct WP_Error per cause
- * instead of collapsing every failure into a single generic return.
+ * instead of collapsing every failure into a single generic return
  *
  * @package Safe_Publish
  */

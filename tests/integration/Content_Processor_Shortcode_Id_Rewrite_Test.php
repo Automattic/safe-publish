@@ -1,7 +1,7 @@
 <?php
 /**
  * Integration tests for gallery/playlist shortcode ID rewriting through
- * Content_Processor::process_content().
+ * Content_Processor::process_content()
  *
  * @package Safe_Publish
  */

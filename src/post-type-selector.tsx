@@ -15,8 +15,8 @@ import {
 } from '@wordpress/element';
 import { __ } from '@wordpress/i18n';
 
-import { ApiResponse } from './types';
-import { getErrorMessage } from './utils';
+import { ApiResponse, DisplayError } from './types';
+import { getErrorMessage, getSourceError } from './utils';
 
 /**
  * Represents a post type option from the source site.
@@ -46,7 +46,7 @@ interface PostTypeOption {
 interface PostTypeSelectorProps {
 	sourceSiteUrl: string;
 	onPostTypeChange?: ( postType: string ) => void;
-	onError?: ( error: string | null ) => void;
+	onError?: ( error: DisplayError | null ) => void;
 	selectedPostType?: string;
 }
 
@@ -72,7 +72,7 @@ export function PostTypeSelector( {
 }: PostTypeSelectorProps ): JSX.Element {
 	const [ postTypes, setPostTypes ] = useState< PostTypeOption[] >( [] );
 	const [ isLoading, setIsLoading ] = useState( false );
-	const [ error, setError ] = useState< string | null >( null );
+	const [ error, setError ] = useState< DisplayError | null >( null );
 	const [ currentPostType, setCurrentPostType ] = useState( selectedPostType );
 
 	/**
@@ -149,7 +149,13 @@ export function PostTypeSelector( {
 			} else {
 				// eslint-disable-next-line no-console
 				console.error( 'Safe Publish PostTypeSelector: API error:', response );
-				setError( getErrorMessage( response, __( 'Failed to load post types.', 'safe-publish' ) ) );
+				setError(
+					getSourceError( response.data ) ??
+						getErrorMessage(
+							response,
+							__( 'Failed to load post types.', 'safe-publish' )
+						)
+				);
 				setPostTypes( [] );
 			}
 		} catch ( err ) {

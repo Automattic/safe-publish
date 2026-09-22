@@ -87,14 +87,24 @@ class Post_Type_Fetcher {
 		}
 
 		if ( ! is_array( $post_types_data ) || array() === $post_types_data ) {
-			$error_msg = sprintf(
-				/* translators: %s: Response body snippet */
-				__( 'No post types found. Response: %s', 'safe-publish' ),
-				substr( $response_body, 0, 200 ) . ( strlen( $response_body ) > 200 ? '…' : '' )
+			/* translators: %s: Response body snippet */
+			$message_template = __(
+				'No post types found. Response: %s',
+				'safe-publish'
 			);
+			$snippet          = $this->http_client->truncate_error_detail(
+				$response_body
+			);
+
 			return new WP_Error(
 				'no_post_types',
-				$error_msg
+				sprintf( $message_template, $snippet ),
+				array(
+					HTTP_Client::ERROR_DATA_SOURCE_ERROR => array(
+						'message'  => $snippet,
+						'template' => sprintf( $message_template, '<reason />' ),
+					),
+				)
 			);
 		}
 

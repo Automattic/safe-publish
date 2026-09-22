@@ -1,6 +1,6 @@
 <?php
 /**
- * Public posts reader integration contracts.
+ * Public posts reader integration contracts
  *
  * @package Safe_Publish
  */

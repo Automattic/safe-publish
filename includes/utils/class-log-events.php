@@ -1,6 +1,6 @@
 <?php
 /**
- * Log Events constants class.
+ * Log Events constants class
  *
  * @package Safe_Publish
  */

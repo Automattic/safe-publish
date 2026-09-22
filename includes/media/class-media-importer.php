@@ -16,6 +16,7 @@ use Safe_Publish\API\Source_Post_Type_Resolver;
 use Safe_Publish\Auth\VIP_Safe_Auth;
 use Safe_Publish\Media\Media_Logger;
 use Safe_Publish\Utils\Options;
+use Safe_Publish\Validators\URL_Validator;
 
 // Prevent direct access.
 if ( ! defined( 'ABSPATH' ) ) {
@@ -98,10 +99,10 @@ class Media_Importer {
 	): string|false|null {
 		$imported_id = null;
 
-		// Make URL absolute if it's relative.
-		if ( ! filter_var( $media_url, FILTER_VALIDATE_URL ) ) {
-			$media_url = rtrim( $source_site_url, '/' ) . '/' . ltrim( $media_url, '/' );
-		}
+		$media_url = URL_Validator::resolve_relative_url(
+			$media_url,
+			$source_site_url
+		);
 
 		// Already localized by a previous pass; skip to avoid duplicating it.
 		if ( $this->is_local_media_url( $media_url ) ) {
@@ -245,10 +246,10 @@ class Media_Importer {
 		string $source_site_url,
 		bool $skip_if_not_media = false
 	): int|false|null {
-		// Make URL absolute if it's relative.
-		if ( ! filter_var( $media_url, FILTER_VALIDATE_URL ) ) {
-			$media_url = rtrim( $source_site_url, '/' ) . '/' . ltrim( $media_url, '/' );
-		}
+		$media_url = URL_Validator::resolve_relative_url(
+			$media_url,
+			$source_site_url
+		);
 
 		// Already localized by a previous pass; skip to avoid duplicating it.
 		if ( $this->is_local_media_url( $media_url ) ) {
@@ -291,10 +292,10 @@ class Media_Importer {
 		string $media_url,
 		string $source_site_url
 	): int|false {
-		// Make URL absolute if it's relative.
-		if ( ! filter_var( $media_url, FILTER_VALIDATE_URL ) ) {
-			$media_url = rtrim( $source_site_url, '/' ) . '/' . ltrim( $media_url, '/' );
-		}
+		$media_url = URL_Validator::resolve_relative_url(
+			$media_url,
+			$source_site_url
+		);
 
 		return $this->sideload_media( $media_url, $source_site_url ) ?? false;
 	}
@@ -1119,6 +1120,8 @@ class Media_Importer {
 				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
 				'meta_value'       => $original_url,
 				'posts_per_page'   => 1,
+				'orderby'          => 'ID',
+				'order'            => 'DESC',
 				// Don't suppress posts_* filters; required for cache plugins.
 				'suppress_filters' => false,
 			)
@@ -1154,6 +1157,8 @@ class Media_Importer {
 					),
 				),
 				'posts_per_page'   => 1,
+				'orderby'          => 'ID',
+				'order'            => 'DESC',
 				// Don't suppress posts_* filters; required for cache plugins.
 				'suppress_filters' => false,
 			)

@@ -48,8 +48,8 @@ final class HTTP_Client {
 	public const ERROR_DATA_SOURCE_ERROR = 'source_error';
 
 	/**
-	 * Caps the source-supplied error detail appended to an HTTP-error message,
-	 * keeping the surfaced message a sane length for display.
+	 * Caps the source-supplied detail appended to a surfaced error message,
+	 * keeping it a sane length for display.
 	 */
 	private const MAX_ERROR_DETAIL_LENGTH = 300;
 
@@ -256,10 +256,10 @@ final class HTTP_Client {
 	 * partial multibyte sequence, which would make the surfaced message
 	 * invalid UTF-8 (dropped by esc_html, rejected by json_encode).
 	 *
-	 * @param string $detail Trimmed, non-empty error detail.
+	 * @param string $detail Error detail to bound.
 	 * @return string Detail unchanged, or truncated with an ellipsis.
 	 */
-	private function truncate_error_detail( string $detail ): string {
+	public function truncate_error_detail( string $detail ): string {
 		$pattern = sprintf( '/^.{0,%d}/su', self::MAX_ERROR_DETAIL_LENGTH );
 		preg_match( $pattern, $detail, $matches );
 		$truncated = $matches[0] ?? substr( $detail, 0, self::MAX_ERROR_DETAIL_LENGTH );

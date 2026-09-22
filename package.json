@@ -51,8 +51,8 @@
     "seed:update:destination": "./bin/seed mode=update site=destination",
     "start": "wp-scripts start --webpack-src-dir=src --output-path=build",
     "test": "npm run test:php && npm run test:js",
-    "test:e2e": "wp-scripts test-playwright",
-    "test:e2e:debug": "wp-scripts test-playwright --debug",
+    "test:e2e": "./bin/test-e2e",
+    "test:e2e:debug": "./bin/test-e2e --debug",
     "test:e2e:help": "wp-scripts test-playwright --help",
     "test:php": "composer test",
     "test:php:coverage": "composer test-coverage",
@@ -103,7 +103,11 @@
     "vitest": "4.1.11"
   },
   "stylelint": {
-    "extends": "./node_modules/@wordpress/scripts/config/.stylelintrc.json"
+    "extends": "./node_modules/@wordpress/scripts/config/.stylelintrc.json",
+    "ignoreFiles": [
+      ".playwright-mcp/**",
+      ".scratch/**"
+    ]
   },
   "lint-staged": {
     "*.{js,jsx,ts,tsx}": [

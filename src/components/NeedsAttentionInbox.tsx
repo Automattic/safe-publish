@@ -25,6 +25,7 @@ import {
 	getErrorMessage,
 	renderIssueMessage,
 } from '../utils';
+import { useRowActions } from './hooks/useRowActions';
 import { useStepBackWhenPageEmpties } from './hooks/useStepBackWhenPageEmpties';
 
 import type {
@@ -307,15 +308,17 @@ const NeedsAttentionInbox = ( {
 		currentPage
 	);
 
-	const actions = createNeedsAttentionActions(
-		refresh,
-		{
-			ajaxurl,
-			nonce,
-			onNotice: setActionNotice,
-			inFlight: inFlightRetries.current,
-		},
-		viewMode
+	const actions = useRowActions(
+		createNeedsAttentionActions(
+			refresh,
+			{
+				ajaxurl,
+				nonce,
+				onNotice: setActionNotice,
+				inFlight: inFlightRetries.current,
+			},
+			viewMode
+		)
 	);
 
 	return (

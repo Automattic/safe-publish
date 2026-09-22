@@ -1,6 +1,6 @@
 <?php
 /**
- * Reconcile Outcome value object.
+ * Reconcile Outcome value object
  *
  * @package Safe_Publish
  */

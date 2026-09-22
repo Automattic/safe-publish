@@ -1,7 +1,7 @@
 <?php
 /**
  * Tests that the destination rejects an oversized source response with a
- * clear, size-specific error instead of a generic failure.
+ * clear, size-specific error instead of a generic failure
  *
  * @package Safe_Publish
  */

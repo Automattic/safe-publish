@@ -1,6 +1,6 @@
 <?php
 /**
- * Integration tests for source scoping on the Posts listing AJAX endpoint.
+ * Integration tests for source scoping on the Posts listing AJAX endpoint
  *
  * @package Safe_Publish
  */

@@ -1,6 +1,6 @@
 <?php
 /**
- * Post Import Service test double for import-status annotation.
+ * Post Import Service test double for import-status annotation
  *
  * @package Safe_Publish
  */
