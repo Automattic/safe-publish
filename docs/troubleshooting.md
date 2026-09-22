@@ -283,7 +283,7 @@ If duplicates still occur:
 
 **Solutions**:
 
-The destination post that was linked to this source post is in the trash. Importing would create a second post linked to the same source post, so Safe Publish refuses instead. The row's Local Status reads **Trashed**.
+The destination post that was linked to this source post is in the trash. Importing would create a second post linked to the same source post, so Safe Publish refuses instead. The row's Local Status usually reads **Trashed**, but the refusal follows the source post ID stored in post metadata, not the row: a trashed post of any type carrying that ID refuses the import even when the row reads **Not imported**. The message names the post's title and ID so you can find it.
 
 Open the trash for that post's type in WordPress, then choose the outcome you want:
 
