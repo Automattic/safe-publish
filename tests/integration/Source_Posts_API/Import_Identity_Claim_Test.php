@@ -30,7 +30,7 @@ use Safe_Publish\Utils\Telemetry_Service;
  *
  * WP_Query's 'any' token hides every status registered exclude_from_search,
  * so an import used to create a second post claiming the same identity. The
- * lookup now spans all statuses: a claim outside the trash is updated, and a
+ * lookup now spans all statuses: A claim outside the trash is updated, and a
  * trashed claim standing alone refuses rather than duplicating.
  */
 class Import_Identity_Claim_Test extends Source_Posts_API_Test_Base {
