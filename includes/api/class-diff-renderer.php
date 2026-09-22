@@ -143,24 +143,18 @@ final class Diff_Renderer {
 		// Generate block-level diffs if content has blocks.
 		$block_diffs = $this->generate_block_diffs( $current['content'], $incoming['content'] );
 
-		// Generate rendered previews.
-		$current_rendered  = $this->render_content( $current['content'] );
-		$incoming_rendered = $this->render_content( $incoming['content'] );
-
 		$non_content_diffs['featuredMedia'] = $featured_media_html;
 
 		return array(
-			'contentDiffHtml'      => $content_diff_html,
-			'blockDiffs'           => $block_diffs,
-			'nonContentDiffs'      => $non_content_diffs,
-			'current'              => array(
+			'contentDiffHtml' => $content_diff_html,
+			'blockDiffs'      => $block_diffs,
+			'nonContentDiffs' => $non_content_diffs,
+			'current'         => array(
 				'title'   => $current['title'] ?? null,
 				'excerpt' => $current['excerpt'] ?? null,
 				'meta'    => $current['meta'] ?? null,
 				'terms'   => $current['terms'] ?? null,
 			),
-			'incomingRenderedHtml' => $incoming_rendered,
-			'currentRenderedHtml'  => $current_rendered,
 		);
 	}
 
@@ -689,43 +683,6 @@ final class Diff_Renderer {
 		}
 
 		return $block_diffs;
-	}
-
-	/**
-	 * Renders content with WordPress filters and block rendering, then
-	 * filters the result for safe output.
-	 *
-	 * The content comes from the source site, so the rendered result passes
-	 * through wp_kses_post() before it reaches the response, matching the
-	 * filtering the block-level rendered output already receives.
-	 *
-	 * @param string $content Content to render.
-	 *
-	 * @return string Rendered content, filtered for safe output.
-	 */
-	private function render_content( string $content ): string {
-		$rendered = $content;
-
-		// Render blocks if present.
-		if ( function_exists( 'has_blocks' ) && function_exists( 'do_blocks' ) ) {
-			if ( has_blocks( $rendered ) ) {
-				$rendered = do_blocks( $rendered );
-			}
-		}
-
-		// Apply standard content filters (shortcodes, embeds, formatting).
-		if ( function_exists( 'apply_filters' ) ) {
-			// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound
-			$rendered = apply_filters( 'the_content', $rendered );
-		}
-
-		// The rendered result carries source markup, so filter it the same
-		// way the block-level rendered output is filtered.
-		if ( function_exists( 'wp_kses_post' ) ) {
-			$rendered = wp_kses_post( $rendered );
-		}
-
-		return $rendered;
 	}
 
 	/**
