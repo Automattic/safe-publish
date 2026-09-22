@@ -16,6 +16,7 @@ use Safe_Publish\Auth\Auth_Logger;
 use Safe_Publish\Auth\HMAC_Authenticator;
 use Safe_Publish\Auth\Permission_Manager;
 use ReflectionClass;
+use RuntimeException;
 use WP_Query;
 use WP_REST_Request;
 use WP_REST_Response;
@@ -30,6 +31,11 @@ use WP_UnitTestCase;
  * restriction, and the listing payload shape.
  */
 class Catalog_REST_Controller_Test extends WP_UnitTestCase {
+
+	/**
+	 * Slug of the post type registered with a throwing REST controller.
+	 */
+	private const PROBE_POST_TYPE = 'sp_probe_throwing';
 
 	/**
 	 * REST server used to dispatch routes.
@@ -1153,6 +1159,109 @@ class Catalog_REST_Controller_Test extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Verifies that a post type whose REST controller throws on get_item_schema
+	 * is left out while the remaining types keep serving.
+	 */
+	public function test_post_types_endpoint_skips_type_with_throwing_schema(): void {
+		// ARRANGE: A catalog-eligible CPT whose item schema throws.
+		$this->register_probe_post_type( Throwing_Schema_Controller::class );
+		$this->force_hmac_authenticated( true );
+
+		try {
+			// ACT: Hit the post-types route.
+			$response = $this->dispatch_post_types();
+
+			// ASSERT: 200, probe omitted, built-ins listed and intact.
+			$this->assertSame( 200, $response->get_status() );
+			$items = $response->get_data();
+			$slugs = array_column( $items, 'slug' );
+			$this->assertNotContains( self::PROBE_POST_TYPE, $slugs );
+			$this->assertContains( 'post', $slugs );
+			$this->assertContains( 'page', $slugs );
+			$this->assertSame(
+				array( 'title', 'content', 'excerpt' ),
+				$items[ array_search( 'post', $slugs, true ) ]['raw_fields']
+			);
+		} finally {
+			unregister_post_type( self::PROBE_POST_TYPE );
+		}
+	}
+
+	/**
+	 * Verifies that a post type whose REST controller throws on construction is
+	 * left out too — core defers instantiation into our request.
+	 */
+	public function test_post_types_endpoint_skips_type_with_throwing_constructor(): void {
+		// ARRANGE: A catalog-eligible CPT whose controller cannot be built.
+		$this->register_probe_post_type( Throwing_Constructor_Controller::class );
+		$this->force_hmac_authenticated( true );
+
+		try {
+			// ACT: Hit the post-types route.
+			$response = $this->dispatch_post_types();
+
+			// ASSERT: 200, probe omitted, built-ins still listed.
+			$this->assertSame( 200, $response->get_status() );
+			$slugs = array_column( $response->get_data(), 'slug' );
+			$this->assertNotContains( self::PROBE_POST_TYPE, $slugs );
+			$this->assertContains( 'post', $slugs );
+		} finally {
+			unregister_post_type( self::PROBE_POST_TYPE );
+		}
+	}
+
+	/**
+	 * Verifies that omitting a post type writes one CATALOG_POST_TYPE_SKIPPED
+	 * row to the dispatch audit channel, naming the type and the thrown error.
+	 */
+	public function test_skipped_post_type_writes_dispatch_audit_row(): void {
+		// ARRANGE: A catalog-eligible CPT whose item schema throws.
+		$this->register_probe_post_type( Throwing_Schema_Controller::class );
+		$this->force_hmac_authenticated( true );
+
+		try {
+			// ACT: Dispatch with the Safe Publish action + User-Agent headers.
+			$response = $this->dispatch_post_types(
+				array(
+					'X-Safe-Publish-Action' => 'list',
+					'User-Agent'            => 'Safe Publish/1.0.0; https://dest.example.com',
+				)
+			);
+
+			// ASSERT: The response succeeds and one row describes the skip.
+			$this->assertSame( 200, $response->get_status() );
+			$dispatch_events = $this->dispatch_channel_events();
+			$this->assertCount( 1, $dispatch_events );
+
+			$event = $dispatch_events[0];
+			$this->assertSame( 'CATALOG_POST_TYPE_SKIPPED', $event['event'] );
+			$this->assertSame(
+				'/safe-publish/v1/catalog/post-types',
+				$event['data']['route']
+			);
+			$this->assertSame( 'list', $event['data']['action'] );
+			$this->assertSame(
+				'https://dest.example.com',
+				$event['data']['destination_site_url']
+			);
+			$this->assertSame(
+				self::PROBE_POST_TYPE,
+				$event['data']['post_type']
+			);
+			$this->assertSame(
+				RuntimeException::class,
+				$event['data']['error_code']
+			);
+			$this->assertSame(
+				Throwing_Schema_Controller::MESSAGE,
+				$event['data']['error_message']
+			);
+		} finally {
+			unregister_post_type( self::PROBE_POST_TYPE );
+		}
+	}
+
+	/**
 	 * Verifies that a catalog request failing with a WP_Error writes a
 	 * DISPATCH_REQUEST_ERROR row to the dispatch audit channel, carrying the
 	 * route, declared action, destination URL, and error code.
@@ -1256,6 +1365,47 @@ class Catalog_REST_Controller_Test extends WP_UnitTestCase {
 	 */
 	private function dispatch_items( array $params = array() ): array {
 		return $this->dispatch( $params )->get_data()['items'];
+	}
+
+	/**
+	 * Dispatches the post-types route as an authenticated destination.
+	 *
+	 * @param array $headers Headers to set on the request.
+	 * @return WP_REST_Response
+	 */
+	private function dispatch_post_types(
+		array $headers = array()
+	): WP_REST_Response {
+		$request = new WP_REST_Request(
+			'GET',
+			'/safe-publish/v1/catalog/post-types'
+		);
+		foreach ( $headers as $name => $value ) {
+			$request->set_header( $name, $value );
+		}
+
+		return $this->server->dispatch( $request );
+	}
+
+	/**
+	 * Registers the probe post type behind a given REST controller.
+	 *
+	 * Registering after setUp() boots the REST server keeps core's route
+	 * registration away from the controller, so only the catalog touches it.
+	 *
+	 * @param string $controller_class REST controller class to register with.
+	 */
+	private function register_probe_post_type(
+		string $controller_class
+	): void {
+		register_post_type(
+			self::PROBE_POST_TYPE,
+			array(
+				'public'                => true,
+				'show_in_rest'          => true,
+				'rest_controller_class' => $controller_class,
+			)
+		);
 	}
 
 	/**

@@ -1178,6 +1178,8 @@ final class Meta_Terms_Manager {
 				'taxonomy'   => $tax,
 				'hide_empty' => false,
 				'fields'     => 'ids',
+				'orderby'    => 'term_id',
+				'order'      => 'DESC',
 				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
 				'meta_query' => array(
 					'relation' => 'AND',
@@ -1218,8 +1220,7 @@ final class Meta_Terms_Manager {
 					)
 				);
 
-				// Ordered by name, so first-wins picks the same term the
-				// per-record lookup returned.
+				// Newest first, so first-wins matches the block-reference remap.
 				if ( $source_id > 0 && ! isset( $resolved[ $source_id ] ) ) {
 					$resolved[ $source_id ] = $term_id;
 				}

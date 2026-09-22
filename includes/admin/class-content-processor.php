@@ -16,6 +16,7 @@ use Safe_Publish\Media\Media_Importer;
 use Safe_Publish\Utils\Auth_Credential_Provider;
 use Safe_Publish\Utils\Options;
 use Safe_Publish\Utils\Reconcile_Outcome;
+use Safe_Publish\Utils\Source_Identity_Lookup;
 use Safe_Publish\Validators\URL_Validator;
 use WP_Error;
 use WP_HTML_Tag_Processor;
@@ -306,6 +307,11 @@ class Content_Processor {
 			$this->unprocessable_media,
 			$this->content_media_processor->get_unprocessable_media()
 		);
+
+		// Re-key on the normalized URL so messages name what a browser fetches,
+		// and the dedup below matches the markup pass's already-trimmed keys.
+		$this->failed_media        = self::normalize_media_map_keys( $this->failed_media );
+		$this->unprocessable_media = self::normalize_media_map_keys( $this->unprocessable_media );
 
 		// The per-block markup pass can't see block-level download failures.
 		$this->unprocessable_media = array_diff_key(
@@ -929,6 +935,26 @@ class Content_Processor {
 	}
 
 	/**
+	 * Re-keys a media map on the normalized form of each URL.
+	 *
+	 * @param array<string, string> $map Media map, URL => block name.
+	 * @return array<string, string> Map keyed by normalized URL.
+	 */
+	private static function normalize_media_map_keys( array $map ): array {
+		$normalized = array();
+
+		foreach ( $map as $url => $block_name ) {
+			$key        = URL_Validator::normalize_url_whitespace( (string) $url );
+			$normalized = self::merge_media_map(
+				$normalized,
+				array( $key => $block_name )
+			);
+		}
+
+		return $normalized;
+	}
+
+	/**
 	 * Formats a media map as a comma-separated list. Each URL is followed by its
 	 * originating block name in parentheses, or left bare when the name is empty.
 	 *
@@ -1459,6 +1485,9 @@ class Content_Processor {
 	/**
 	 * Extracts image src attribute from HTML content.
 	 *
+	 * Returns the attribute verbatim so it still matches the markup when used
+	 * as a replacement needle; callers normalize it for any other use.
+	 *
 	 * @param string $html HTML content.
 	 * @return string Extracted src URL or empty string if not found.
 	 */
@@ -1483,14 +1512,14 @@ class Content_Processor {
 				$src = $img->getAttribute( 'src' );
 
 				if ( ! empty( $src ) ) {
-					return trim( $src );
+					return $src;
 				}
 			}
 		}
 
 		// Fallback to regex if DOMDocument fails.
 		if ( preg_match( '/<img[^>]+src=["\']([^"\']+)["\'][^>]*>/i', $html, $matches ) ) {
-			return trim( $matches[1] );
+			return $matches[1];
 		}
 
 		return '';
@@ -2212,6 +2241,9 @@ class Content_Processor {
 	 * caller's source site via paired META_SOURCE_POST_ID/META_SOURCE_SITE_URL
 	 * postmeta. Returns a source-ID => destination-ID map.
 	 *
+	 * Shares find_imported_post's newest-by-ID tie-break so a reference always
+	 * points at the copy the import writes to.
+	 *
 	 * @param array<int, true> $source_ids      Set of source post IDs (keys).
 	 * @param string           $source_site_url Path-bearing source site identity.
 	 * @return array<int, int> Source-ID => destination-ID.
@@ -2225,26 +2257,13 @@ class Content_Processor {
 		}
 
 		$ids   = array_keys( $source_ids );
-		$posts = get_posts(
+		$posts = Source_Identity_Lookup::find(
+			$ids,
+			$source_site_url,
 			array(
-				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
-				'meta_query'             => array(
-					'relation' => 'AND',
-					array(
-						'key'     => Options::META_SOURCE_POST_ID,
-						'value'   => $ids,
-						'compare' => 'IN',
-					),
-					array(
-						'key'   => Options::META_SOURCE_SITE_URL,
-						'value' => $source_site_url,
-					),
-				),
-				// Not 'any': It omits exclude_from_search post types.
-				'post_type'              => array_keys( get_post_types() ),
-				'post_status'            => 'any',
-				'posts_per_page'         => count( $ids ),
-				'suppress_filters'       => false,
+				// Uncapped: A duplicate claim must not evict another source ID.
+				// phpcs:ignore WordPressVIPMinimum.Performance.NoPaging
+				'posts_per_page'         => -1,
 				'update_post_term_cache' => false,
 			)
 		);
@@ -2305,7 +2324,8 @@ class Content_Processor {
 				 WHERE tm_id.meta_key = %s
 					 AND tm_id.meta_value IN ($placeholders)
 					 AND tm_url.meta_key = %s
-					 AND tm_url.meta_value = %s",
+					 AND tm_url.meta_value = %s
+				 ORDER BY tm_id.term_id DESC",
 				...$prepare_args
 			)
 		);

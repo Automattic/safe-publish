@@ -419,6 +419,42 @@ class URLValidatorTest extends TestCase {
 				'url'      => '',
 				'expected' => false,
 			),
+			'leading space'      => array(
+				'url'      => ' https://example.com/image.png',
+				'expected' => true,
+			),
+			'trailing space'     => array(
+				'url'      => 'https://example.com/image.png ',
+				'expected' => true,
+			),
+			'leading tab'        => array(
+				'url'      => "\thttps://example.com/image.png",
+				'expected' => true,
+			),
+			'leading newline'    => array(
+				'url'      => "\nhttps://example.com/image.png",
+				'expected' => true,
+			),
+			'leading form feed'  => array(
+				'url'      => "\x0Chttps://example.com/image.png",
+				'expected' => true,
+			),
+			'leading NUL'        => array(
+				'url'      => "\x00https://example.com/image.png",
+				'expected' => true,
+			),
+			'internal newline'   => array(
+				'url'      => "https://example.com/ima\nge.png",
+				'expected' => true,
+			),
+			'leading NBSP'       => array(
+				'url'      => "\u{00A0}https://example.com/image.png",
+				'expected' => false,
+			),
+			'whitespace only'    => array(
+				'url'      => " \t\n",
+				'expected' => false,
+			),
 		);
 	}
 
@@ -485,6 +521,136 @@ class URLValidatorTest extends TestCase {
 				'url'      => '/wp-content/image.png',
 				'base'     => 'https://example.com/blog',
 				'expected' => 'https://example.com/blog/wp-content/image.png',
+			),
+			'leading space stays absolute'  => array(
+				'url'      => ' https://example.com/image.png',
+				'base'     => 'https://example.com',
+				'expected' => 'https://example.com/image.png',
+			),
+			'trailing space stays absolute' => array(
+				'url'      => 'https://example.com/image.png ',
+				'base'     => 'https://example.com',
+				'expected' => 'https://example.com/image.png',
+			),
+			'internal newline removed'      => array(
+				'url'      => "https://example.com/ima\n\tge.png",
+				'base'     => 'https://example.com',
+				'expected' => 'https://example.com/image.png',
+			),
+			'leading space root-relative'   => array(
+				'url'      => ' /wp-content/image.png',
+				'base'     => 'https://example.com',
+				'expected' => 'https://example.com/wp-content/image.png',
+			),
+			'leading space protocol-rel'    => array(
+				'url'      => ' //cdn.example.com/image.png',
+				'base'     => 'https://example.com',
+				'expected' => 'https://cdn.example.com/image.png',
+			),
+			'NBSP stays relative'           => array(
+				'url'      => "\u{00A0}https://example.com/image.png",
+				'base'     => 'https://example.com',
+				'expected' => "https://example.com/\u{00A0}https://example.com/image.png",
+			),
+		);
+	}
+
+	/**
+	 * Verifies that only the whitespace a URL parser discards is removed, so a
+	 * normalized value names the target the source site serves.
+	 *
+	 * @dataProvider url_whitespace_provider
+	 *
+	 * @param string $url      URL under test.
+	 * @param string $expected Expected normalized URL.
+	 */
+	public function test_normalize_url_whitespace(
+		string $url,
+		string $expected
+	): void {
+		// ACT & ASSERT: Only parser-discarded whitespace is removed.
+		$this->assertSame(
+			$expected,
+			URL_Validator::normalize_url_whitespace( $url )
+		);
+	}
+
+	/**
+	 * Data provider for normalize_url_whitespace().
+	 *
+	 * @return array<string, array{url: string, expected: string}>
+	 */
+	public static function url_whitespace_provider(): array {
+		$url = 'https://example.com/a.png';
+
+		return array(
+			'clean URL untouched'      => array(
+				'url'      => $url,
+				'expected' => $url,
+			),
+			'leading space'            => array(
+				'url'      => ' ' . $url,
+				'expected' => $url,
+			),
+			'trailing space'           => array(
+				'url'      => $url . ' ',
+				'expected' => $url,
+			),
+			'leading tab'              => array(
+				'url'      => "\t" . $url,
+				'expected' => $url,
+			),
+			'trailing newline'         => array(
+				'url'      => $url . "\n",
+				'expected' => $url,
+			),
+			'leading carriage return'  => array(
+				'url'      => "\r" . $url,
+				'expected' => $url,
+			),
+			'leading form feed'        => array(
+				'url'      => "\x0C" . $url,
+				'expected' => $url,
+			),
+			'leading vertical tab'     => array(
+				'url'      => "\x0B" . $url,
+				'expected' => $url,
+			),
+			'leading NUL'              => array(
+				'url'      => "\x00" . $url,
+				'expected' => $url,
+			),
+			'internal tab removed'     => array(
+				'url'      => "https://example.com/a\t.png",
+				'expected' => $url,
+			),
+			'internal newline removed' => array(
+				'url'      => "https://example.com/a\n.png",
+				'expected' => $url,
+			),
+			'internal CR removed'      => array(
+				'url'      => "https://example.com/a\r.png",
+				'expected' => $url,
+			),
+			'internal form feed kept'  => array(
+				'url'      => "https://example.com/a\x0C.png",
+				'expected' => "https://example.com/a\x0C.png",
+			),
+			'internal space kept'      => array(
+				'url'      => 'https://example.com/a .png',
+				'expected' => 'https://example.com/a .png',
+			),
+			'NBSP kept'                => array(
+				'url'      => "\u{00A0}" . $url,
+				'expected' => "\u{00A0}" . $url,
+			),
+			'percent-encoded tab kept' => array(
+				'url'      => 'https://example.com/a%09.png',
+				'expected' => 'https://example.com/a%09.png',
+			),
+			'whitespace only'          => array(
+				'url'      => " \t\n\r ",
+				'expected' => '',
 			),
 		);
 	}
