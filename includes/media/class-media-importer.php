@@ -1120,6 +1120,8 @@ class Media_Importer {
 				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
 				'meta_value'       => $original_url,
 				'posts_per_page'   => 1,
+				'orderby'          => 'ID',
+				'order'            => 'DESC',
 				// Don't suppress posts_* filters; required for cache plugins.
 				'suppress_filters' => false,
 			)
@@ -1155,6 +1157,8 @@ class Media_Importer {
 					),
 				),
 				'posts_per_page'   => 1,
+				'orderby'          => 'ID',
+				'order'            => 'DESC',
 				// Don't suppress posts_* filters; required for cache plugins.
 				'suppress_filters' => false,
 			)

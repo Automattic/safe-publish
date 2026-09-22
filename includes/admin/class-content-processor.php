@@ -16,6 +16,7 @@ use Safe_Publish\Media\Media_Importer;
 use Safe_Publish\Utils\Auth_Credential_Provider;
 use Safe_Publish\Utils\Options;
 use Safe_Publish\Utils\Reconcile_Outcome;
+use Safe_Publish\Utils\Source_Identity_Lookup;
 use Safe_Publish\Validators\URL_Validator;
 use WP_Error;
 use WP_HTML_Tag_Processor;
@@ -2212,6 +2213,9 @@ class Content_Processor {
 	 * caller's source site via paired META_SOURCE_POST_ID/META_SOURCE_SITE_URL
 	 * postmeta. Returns a source-ID => destination-ID map.
 	 *
+	 * Shares find_imported_post's newest-by-ID tie-break so a reference always
+	 * points at the copy the import writes to.
+	 *
 	 * @param array<int, true> $source_ids      Set of source post IDs (keys).
 	 * @param string           $source_site_url Path-bearing source site identity.
 	 * @return array<int, int> Source-ID => destination-ID.
@@ -2225,26 +2229,13 @@ class Content_Processor {
 		}
 
 		$ids   = array_keys( $source_ids );
-		$posts = get_posts(
+		$posts = Source_Identity_Lookup::find(
+			$ids,
+			$source_site_url,
 			array(
-				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
-				'meta_query'             => array(
-					'relation' => 'AND',
-					array(
-						'key'     => Options::META_SOURCE_POST_ID,
-						'value'   => $ids,
-						'compare' => 'IN',
-					),
-					array(
-						'key'   => Options::META_SOURCE_SITE_URL,
-						'value' => $source_site_url,
-					),
-				),
-				// Not 'any': It omits exclude_from_search post types.
-				'post_type'              => array_keys( get_post_types() ),
-				'post_status'            => 'any',
-				'posts_per_page'         => count( $ids ),
-				'suppress_filters'       => false,
+				// Uncapped: A duplicate claim must not evict another source ID.
+				// phpcs:ignore WordPressVIPMinimum.Performance.NoPaging
+				'posts_per_page'         => -1,
 				'update_post_term_cache' => false,
 			)
 		);
@@ -2305,7 +2296,8 @@ class Content_Processor {
 				 WHERE tm_id.meta_key = %s
 					 AND tm_id.meta_value IN ($placeholders)
 					 AND tm_url.meta_key = %s
-					 AND tm_url.meta_value = %s",
+					 AND tm_url.meta_value = %s
+				 ORDER BY tm_id.term_id DESC",
 				...$prepare_args
 			)
 		);
