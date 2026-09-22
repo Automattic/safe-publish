@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace Safe_Publish\Tests\Integration;
 
+use Safe_Publish\Utils\Options;
 use WP_Ajax_UnitTestCase;
 
 /**
@@ -106,6 +107,38 @@ class Bulk_Import_Trashed_Claim_Test extends WP_Ajax_UnitTestCase {
 
 		$imported = $this->result_for( $data, self::FRESH_SOURCE_ID );
 		$this->assertTrue( $imported['success'] );
+
+		// ASSERT: The refusal created no second claim, which is the point of
+		// refusing rather than importing.
+		$this->assertSame(
+			array( $trashed_id ),
+			$this->claiming_post_ids( self::TRASHED_SOURCE_ID ),
+			'The trashed post must remain the only claim.'
+		);
+	}
+
+	/**
+	 * Returns every post claiming a source ID, ascending, without relying on
+	 * the lookups under test.
+	 *
+	 * @param int $source_id Source post ID to count claims for.
+	 * @return int[] Claiming post IDs.
+	 */
+	private function claiming_post_ids( int $source_id ): array {
+		global $wpdb;
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$ids = $wpdb->get_col(
+			$wpdb->prepare(
+				"SELECT post_id FROM {$wpdb->postmeta}
+				 WHERE meta_key = %s AND meta_value = %s
+				 ORDER BY post_id ASC",
+				Options::META_SOURCE_POST_ID,
+				(string) $source_id
+			)
+		);
+
+		return array_map( 'intval', $ids );
 	}
 
 	/**

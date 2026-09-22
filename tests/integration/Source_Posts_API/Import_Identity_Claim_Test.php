@@ -375,8 +375,7 @@ class Import_Identity_Claim_Test extends Source_Posts_API_Test_Base {
 		$this->assertSame( 'error', $items[0]['status'] );
 		$this->assertSame( $refused['error'], $items[0]['error_message'] );
 
-		// ASSERT: Telemetry classifies the failure rather than reporting it as
-		// unknown, which an unlisted error code would.
+		// ASSERT: The audit row carries the refusal's raw error code.
 		$events = Audit_Log_Table::get_events(
 			array(
 				'channel'    => 'import',
