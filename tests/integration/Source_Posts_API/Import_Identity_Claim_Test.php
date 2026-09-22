@@ -103,12 +103,18 @@ class Import_Identity_Claim_Test extends Source_Posts_API_Test_Base {
 		// ACT: Import the same source post again.
 		$refused = $this->import( 8101 );
 
-		// ASSERT: The import is refused and names the trashed post.
+		// ASSERT: The import is refused and names the trashed post by title and
+		// ID, so an untitled or duplicate-titled post is still findable.
 		$this->assertFalse( $refused['success'], 'Import must be refused.' );
 		$this->assertStringContainsString(
 			get_post( $imported['post_id'] )->post_title,
 			(string) $refused['error'],
 			'The refusal must name the trashed post.'
+		);
+		$this->assertStringContainsString(
+			'ID ' . $imported['post_id'],
+			(string) $refused['error'],
+			'The refusal must carry the trashed post ID.'
 		);
 
 		// ASSERT: No second claim was created.
@@ -116,6 +122,33 @@ class Import_Identity_Claim_Test extends Source_Posts_API_Test_Base {
 			array( $imported['post_id'] ),
 			$this->claiming_post_ids( 8101 ),
 			'The trashed post must remain the only claim.'
+		);
+	}
+
+	/**
+	 * Verifies that a refusal over an untitled trashed claim names it with the
+	 * no-title placeholder rather than an empty quote.
+	 */
+	public function test_refusal_over_an_untitled_claim_reads_no_title(): void {
+		// ARRANGE: An untitled trashed post claiming the source identity.
+		$claim = $this->create_claiming_post( 8112, 'post' );
+		wp_update_post(
+			array(
+				'ID'         => $claim,
+				'post_title' => '',
+			)
+		);
+		$this->trash( $claim );
+
+		// ACT: Import the source post it claims.
+		$refused = $this->import( 8112 );
+
+		// ASSERT: The placeholder stands in for the missing title.
+		$this->assertFalse( $refused['success'], 'Import must be refused.' );
+		$this->assertStringContainsString(
+			'"(no title)", ID ' . $claim,
+			(string) $refused['error'],
+			'An untitled claim must read as (no title).'
 		);
 	}
 

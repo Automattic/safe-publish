@@ -1255,13 +1255,18 @@ class Post_Import_Service {
 		array $fields,
 		?int $session_id
 	): array {
+		$title = '' !== $trashed_post->post_title
+			? $trashed_post->post_title
+			: __( '(no title)', 'safe-publish' );
+
 		$error_message = sprintf(
-			/* translators: %s: title of the trashed destination post. */
+			/* translators: 1: trashed post title, 2: its post ID. */
 			__(
-				'A trashed post ("%s") is still linked to this source post. Restore it to update it, or delete it permanently to import a fresh copy.',
+				'A trashed post ("%1$s", ID %2$d) is still linked to this source post. Restore it to update it, or delete it permanently to import a fresh copy.',
 				'safe-publish'
 			),
-			$trashed_post->post_title
+			$title,
+			$trashed_post->ID
 		);
 
 		$this->log_import_if_session(
