@@ -1203,7 +1203,7 @@ class Post_Import_Service {
 	 * @param string $source_site_url Source site identity of the import.
 	 * @return array{present: WP_Post|null, trashed: WP_Post|null} Newest of each.
 	 */
-	private function resolve_identity_claims(
+	public function resolve_identity_claims(
 		int $source_post_id,
 		string $source_site_url
 	): array {

@@ -40,6 +40,11 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 	private const FALLBACK_SECRET = 'integration-test-secret-key-32chars-ok';
 
 	/**
+	 * Editorial status core derives exclude_from_search from.
+	 */
+	private const HIDDEN_STATUS = 'sp_archived';
+
+	/**
 	 * Admin user ID for privileged test requests.
 	 *
 	 * @var int
@@ -103,6 +108,8 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 		);
 		delete_option( Options::OPTION_CONNECTED_SITE_URL );
 		delete_site_transient( Admin_Ajax_Controller::AUTH_STATUS_TRANSIENT );
+		// Core keeps registered statuses in a global.
+		unset( $GLOBALS['wp_post_statuses'][ self::HIDDEN_STATUS ] );
 		parent::tearDown();
 	}
 
@@ -607,6 +614,70 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 			0,
 			$this->count_open_sessions(),
 			'No open session should remain after the confirmation prompt'
+		);
+	}
+
+	/**
+	 * Verifies that a claim parked in a status registered exclude_from_search
+	 * still returns the confirmation prompt, since the import updates it.
+	 */
+	public function test_ajax_create_draft_confirms_claim_in_a_hidden_status(): void {
+		// ARRANGE: A claim in an internal editorial status, which 'any' omits.
+		register_post_status( self::HIDDEN_STATUS, array( 'internal' => true ) );
+		$this->assertTrue(
+			get_post_status_object( self::HIDDEN_STATUS )->exclude_from_search
+		);
+
+		$existing_post_id = wp_insert_post(
+			array(
+				'post_title'  => 'Archived Copy',
+				'post_status' => self::HIDDEN_STATUS,
+				'post_type'   => 'post',
+			)
+		);
+		update_post_meta(
+			$existing_post_id,
+			Options::META_SOURCE_POST_ID,
+			'8011'
+		);
+		update_post_meta(
+			$existing_post_id,
+			Options::META_SOURCE_SITE_URL,
+			'https://source.example.com'
+		);
+
+		wp_set_current_user( $this->admin_user_id );
+		$_POST = array(
+			'nonce'          => wp_create_nonce( 'safe_publish_ajax_nonce' ),
+			'source_post_id' => '8011',
+			'title'          => 'Archived Copy',
+			'content'        => '<p>Same content.</p>',
+			'source_link'    => 'https://source.example.com/archived-copy',
+			'post_type'      => 'post',
+		);
+
+		// ACT: Trigger the handler without force_update.
+		$this->dispatch_ajax_expecting_die( 'safe_publish_create_draft' );
+
+		// ASSERT: The prompt names the hidden claim rather than importing past
+		// it. An update reports existing too, so confirm_action is what
+		// separates a deferred request from a completed one.
+		$response = json_decode( $this->_last_response, true );
+		$this->assertIsArray( $response, 'Response should be a JSON object' );
+		$this->assertSame(
+			'update_existing',
+			$response['data']['confirm_action'] ?? '',
+			'Hidden claim must prompt, not import'
+		);
+		$this->assertSame(
+			$existing_post_id,
+			$response['data']['post_id'],
+			'Prompt must name the hidden claim'
+		);
+		$this->assertSame(
+			0,
+			$this->count_open_sessions(),
+			'A deferred request must not open a session'
 		);
 	}
 
