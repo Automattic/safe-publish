@@ -831,9 +831,8 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 	 * confirmation prompt cannot mask a basic validation error.
 	 */
 	public function test_ajax_create_draft_rejects_empty_title_when_post_already_imported(): void {
-		// ARRANGE: Pre-create a post tagged with the source ID under test so
-		// that find_imported_post() would otherwise return it and trigger the
-		// confirm-prompt branch.
+		// ARRANGE: Pre-create a post tagged with the source ID under test, so
+		// the claim lookup would otherwise trigger the confirm-prompt branch.
 		$existing_post_id = wp_insert_post(
 			array(
 				'post_title'  => 'Pre-existing Import',
@@ -900,9 +899,8 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 	 * tracking row is written.
 	 */
 	public function test_ajax_create_draft_rejects_invalid_post_type_when_post_already_imported(): void {
-		// ARRANGE: Pre-create a post tagged with the source ID under test so
-		// that find_imported_post() would otherwise return it and trigger the
-		// confirm-prompt branch.
+		// ARRANGE: Pre-create a post tagged with the source ID under test, so
+		// the claim lookup would otherwise trigger the confirm-prompt branch.
 		$existing_post_id = wp_insert_post(
 			array(
 				'post_title'  => 'Pre-existing Import',
