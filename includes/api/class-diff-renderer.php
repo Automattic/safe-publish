@@ -195,6 +195,10 @@ final class Diff_Renderer {
 				'post_type'      => $post_type,
 				'post_status'    => 'any',
 				'posts_per_page' => 1,
+				// Match the import lookup's tie-break so the diff shows the
+				// copy an import would write to.
+				'orderby'        => 'ID',
+				'order'          => 'DESC',
 				'fields'         => 'all',
 			)
 		);
