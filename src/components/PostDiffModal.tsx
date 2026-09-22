@@ -18,7 +18,7 @@ import {
 import { useState } from '@wordpress/element';
 import { __ } from '@wordpress/i18n';
 
-import BlockDiffViewer, { resolveStatus } from './BlockDiffViewer';
+import BlockDiffViewer from './BlockDiffViewer';
 import DiffViewSelector from './DiffViewSelector';
 import IsolatedErrorMessage from './IsolatedErrorMessage';
 import NonContentDiffSections from './NonContentDiffSections';
@@ -242,7 +242,7 @@ function DiffBody( {
 	showLabels,
 }: DiffBodyProps ): JSX.Element {
 	const blockHasChanges = blockDiffs.some(
-		( block ) => resolveStatus( block ) !== 'unchanged'
+		( block ) => block.status !== 'unchanged'
 	);
 	const showPostDetails =
 		hasAnyNonContentDiff( nonContentDiffs ) || showUnchanged;
@@ -420,7 +420,7 @@ export default function PostDiffModal( {
 
 	const hasAnyChanges =
 		Boolean( diffHtml ) ||
-		blockDiffs.some( ( block ) => resolveStatus( block ) !== 'unchanged' ) ||
+		blockDiffs.some( ( block ) => block.status !== 'unchanged' ) ||
 		hasAnyNonContentDiff( nonContentDiffs );
 	const hasImages =
 		Boolean( nonContentDiffs?.featuredMedia ) ||

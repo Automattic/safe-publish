@@ -107,23 +107,140 @@ function linkifyImages( html: string ): string {
 }
 
 /**
- * Resolves the effective status for a block diff, downgrading false modified
- * flags to unchanged when normalized HTML matches.
+ * Reports whether a modified block's two previews render identically.
+ *
+ * Filtering for safe output drops the markup a change can be confined to.
  *
  * @param {BlockDiff} block Block diff entry.
  *
- * @return {BlockDiff['status']} Effective status.
+ * @return {boolean} True when neither preview can show the change.
  */
-export function resolveStatus( block: BlockDiff ): BlockDiff['status'] {
+export function isPreviewUnavailable( block: BlockDiff ): boolean {
     if ( block.status !== 'modified' ) {
-        return block.status;
+        return false;
     }
-    const currentHtml = block.current?.rendered || '';
-    const incomingHtml = block.incoming?.rendered || '';
-    if ( normalizeHtml( currentHtml ) === normalizeHtml( incomingHtml ) ) {
-        return 'unchanged';
+    return (
+        normalizeHtml( block.current?.rendered || '' ) ===
+        normalizeHtml( block.incoming?.rendered || '' )
+    );
+}
+
+/**
+ * Props for the BlockDiffBody component.
+ *
+ * @property {BlockDiff} block              Block diff entry to render.
+ * @property {boolean}   highlight          Enable inline word-level highlighting.
+ * @property {boolean}   hasImage           Whether either side renders an image.
+ * @property {boolean}   previewUnavailable Whether neither preview can show the change.
+ */
+interface BodyProps {
+    block: BlockDiff;
+    highlight: boolean;
+    hasImage: boolean;
+    previewUnavailable: boolean;
+}
+
+/**
+ * Renders the body a block's status calls for.
+ *
+ * @param {BodyProps} props Component props.
+ *
+ * @return {JSX.Element} Rendered block body.
+ */
+function BlockDiffBody( {
+    block,
+    highlight,
+    hasImage,
+    previewUnavailable,
+}: BodyProps ): JSX.Element {
+    const rawCurrentHtml = block.current?.rendered || '';
+    const rawIncomingHtml = block.incoming?.rendered || '';
+    const currentHtml = linkifyImages( rawCurrentHtml );
+
+    if ( block.status === 'removed' ) {
+        return <div className="safe-publish-block-diff__removed" dangerouslySetInnerHTML={ { __html: currentHtml } } />;
     }
-    return 'modified';
+    if ( block.status === 'added' ) {
+        const addedHtml = linkifyImages( rawIncomingHtml );
+        return <div className="safe-publish-block-diff__added" dangerouslySetInnerHTML={ { __html: addedHtml } } />;
+    }
+    if ( block.status === 'unchanged' ) {
+        return <div className="safe-publish-block-diff__unchanged" dangerouslySetInnerHTML={ { __html: currentHtml } } />;
+    }
+    if ( previewUnavailable ) {
+        return (
+            <div className="safe-publish-block-diff__no-preview">
+                <Text>
+                    { __( 'This change is not visible in the preview — see Source Diff.', 'safe-publish' ) }
+                </Text>
+            </div>
+        );
+    }
+
+    // Linkify after highlight — diffing linkified HTML would surface anchor
+    // wrappers as changes.
+    const highlighted = highlight && ! hasImage
+        ? highlightHtml( rawCurrentHtml, rawIncomingHtml )
+        : rawIncomingHtml;
+    const incomingHtml = linkifyImages( highlighted );
+
+    return (
+        <div className="safe-publish-block-diff__modified">
+            <div className="safe-publish-block-diff__col" dangerouslySetInnerHTML={ { __html: currentHtml } } />
+            <div className="safe-publish-block-diff__col" dangerouslySetInnerHTML={ { __html: incomingHtml } } />
+        </div>
+    );
+}
+
+/**
+ * Props for the BlockDiffCard component.
+ *
+ * @property {BlockDiff} block      Block diff entry to render.
+ * @property {boolean}   highlight  Enable inline word-level highlighting.
+ * @property {boolean}   showLabels When false, omit the block-name + status header.
+ */
+interface CardProps {
+    block: BlockDiff;
+    highlight: boolean;
+    showLabels: boolean;
+}
+
+/**
+ * Renders one block's card: its header and its status-specific body.
+ *
+ * @param {CardProps} props Component props.
+ *
+ * @return {JSX.Element} Rendered block card.
+ */
+function BlockDiffCard( { block, highlight, showLabels }: CardProps ): JSX.Element {
+    const status = block.status;
+    const title = block.incoming?.name || block.current?.name || __( 'Block', 'safe-publish' );
+    const previewUnavailable = isPreviewUnavailable( block );
+    const hasImage =
+        /<img\s/i.test( block.current?.rendered || '' ) ||
+        /<img\s/i.test( block.incoming?.rendered || '' );
+
+    return (
+        <div className="safe-publish-block-diff">
+            { showLabels && (
+                <div className="safe-publish-block-diff__header">
+                    <Text>{ title }</Text>
+                    <span className={ `safe-publish-badge safe-publish-${ status }` }>{ status }</span>
+                    { hasImage && status === 'modified' && ! previewUnavailable && (
+                        <span className="safe-publish-badge safe-publish-badge--neutral">
+                            image (no inline diff)
+                        </span>
+                    ) }
+                </div>
+            ) }
+            <BlockDiffBody
+                block={ block }
+                highlight={ highlight }
+                hasImage={ hasImage }
+                previewUnavailable={ previewUnavailable }
+            />
+        </div>
+    );
 }
 
 /**
@@ -148,14 +265,9 @@ export default function BlockDiffViewer( {
     showUnchanged = false,
     showLabels = true,
 }: Props ): JSX.Element {
-    const resolved = blocks.map( ( block ) => ( {
-        block,
-        status: resolveStatus( block ),
-    } ) );
-
     const visible = showUnchanged
-        ? resolved
-        : resolved.filter( ( entry ) => entry.status !== 'unchanged' );
+        ? blocks
+        : blocks.filter( ( block ) => block.status !== 'unchanged' );
 
     if ( visible.length === 0 ) {
         return (
@@ -167,58 +279,14 @@ export default function BlockDiffViewer( {
 
     return (
         <div className="safe-publish-block-diff-viewer">
-            { visible.map( ( { block, status } ) => {
-                const key = `${ block.index }-${ block.status }`;
-                const title = block.incoming?.name || block.current?.name || __( 'Block', 'safe-publish' );
-                const rawCurrentHtml = block.current?.rendered || '';
-                const rawIncomingHtml = block.incoming?.rendered || '';
-
-                const hasImage =
-                    /<img\s/i.test( rawCurrentHtml ) ||
-                    /<img\s/i.test( rawIncomingHtml );
-
-                // Linkify after highlight — diffing linkified HTML would
-                // surface anchor wrappers as changes.
-                let modifiedIncoming = rawIncomingHtml;
-                if ( highlight && status === 'modified' && ! hasImage ) {
-                    modifiedIncoming = highlightHtml( rawCurrentHtml, rawIncomingHtml );
-                }
-
-                const currentHtml = linkifyImages( rawCurrentHtml );
-                const incomingHtml = linkifyImages( rawIncomingHtml );
-                modifiedIncoming = linkifyImages( modifiedIncoming );
-
-                return (
-                    <div key={ key } className="safe-publish-block-diff">
-                        { showLabels && (
-                            <div className="safe-publish-block-diff__header">
-                                <Text>{ title }</Text>
-                                <span className={ `safe-publish-badge safe-publish-${ status }` }>{ status }</span>
-                                { hasImage && block.status === 'modified' && status !== 'unchanged' && (
-                                    <span className="safe-publish-badge safe-publish-badge--neutral">
-                                        image (no inline diff)
-                                    </span>
-                                ) }
-                            </div>
-                        ) }
-                        { status === 'removed' && (
-                            <div className="safe-publish-block-diff__removed" dangerouslySetInnerHTML={ { __html: currentHtml } } />
-                        ) }
-                        { status === 'added' && (
-                            <div className="safe-publish-block-diff__added" dangerouslySetInnerHTML={ { __html: incomingHtml } } />
-                        ) }
-                        { status === 'unchanged' && (
-                            <div className="safe-publish-block-diff__unchanged" dangerouslySetInnerHTML={ { __html: currentHtml } } />
-                        ) }
-                        { status === 'modified' && (
-                            <div className="safe-publish-block-diff__modified">
-                                <div className="safe-publish-block-diff__col" dangerouslySetInnerHTML={ { __html: currentHtml } } />
-                                <div className="safe-publish-block-diff__col" dangerouslySetInnerHTML={ { __html: modifiedIncoming } } />
-                            </div>
-                        ) }
-                    </div>
-                );
-            } ) }
+            { visible.map( ( block ) => (
+                <BlockDiffCard
+                    key={ `${ block.index }-${ block.status }` }
+                    block={ block }
+                    highlight={ highlight }
+                    showLabels={ showLabels }
+                />
+            ) ) }
         </div>
     );
 }
