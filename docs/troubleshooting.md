@@ -278,6 +278,19 @@ If duplicates still occur:
 1. **Check Manage → Posts** to see whether both destination posts are tracked.
 2. Delete duplicate drafts manually.
 
+#### Import refused because a trashed post is still linked
+
+**Symptoms**: Importing reports that a trashed post is still linked to the source post
+
+**Solutions**:
+
+The destination post that was linked to this source post is in the trash. Importing would create a second post linked to the same source post, so Safe Publish refuses instead. The row's Local Status usually reads **Trashed**, but the refusal follows the source post ID stored in post metadata, not the row: a trashed post of any type carrying that ID refuses the import even when the row reads **Not imported**. The message names the post's title and ID so you can find it.
+
+Open the trash for that post's type in WordPress, then choose the outcome you want:
+
+1. **Restore the post** to keep its history, then import again to update it.
+2. **Delete it permanently**, then import again to create a fresh copy.
+
 #### Embedded posts display as plain links
 
 This is a known limitation of WordPress' embed cache when imported posts reference each other while still in draft. See [Embedded posts may render as plain links](concepts/import-process.md#embedded-posts-may-render-as-plain-links) for the cause and recovery steps.

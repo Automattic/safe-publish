@@ -24,6 +24,10 @@ if ( ! defined( 'ABSPATH' ) ) {
  * It expands to types registered exclude_from_search=false, omitting
  * patterns, navigation menus, and custom types kept out of site search.
  *
+ * The status axis inverts: 'any' denies the registered exclude_from_search
+ * statuses, so it drops 'trash' and 'auto-draft' but passes unregistered
+ * ones, where an explicit status list would drop them.
+ *
  * Defaults return the newest claim by ID; callers override status, ordering,
  * result cap, and cache behavior through $args.
  */
@@ -86,8 +90,7 @@ class Source_Identity_Lookup {
 				),
 			),
 			'post_type'        => self::post_types(),
-			// 'any' excludes 'trash', 'auto-draft', and statuses with
-			// exclude_from_search=true.
+			// Drops 'trash' and 'auto-draft'.
 			'post_status'      => 'any',
 			'orderby'          => 'ID',
 			'order'            => 'DESC',

@@ -57,7 +57,8 @@ export type ChipState = LocalState | 'all';
  * @property {string}      status               Source post_status; empty when unknown.
  * @property {LocalState}  local_state          Routing label per active-row rule.
  * @property {boolean}     is_imported          True when local_state is 'up-to-date' or 'outdated'.
- * @property {string|null} wp_post_status       Local post's post_status when present, null otherwise.
+ * @property {string|null} wp_post_status       Local post's post_status, 'trash' included; null
+ *                                              when the post is gone.
  * @property {number|null} item_id              Active items-table row id.
  * @property {number|null} post_id              Local post id when the post exists.
  * @property {string|null} import_date_gmt      Active item's import_date_gmt.
