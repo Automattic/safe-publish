@@ -75,6 +75,7 @@ const EVENT_LABELS: Record< string, string > = {
 	EXPORT_RESPONSE_BAD_STATUS: __( 'Export response: bad status', 'safe-publish' ),
 	DISPATCH_REQUEST_ERROR: __( 'Dispatch request error', 'safe-publish' ),
 	DISPATCH_RESPONSE_BAD_STATUS: __( 'Dispatch response: bad status', 'safe-publish' ),
+	CATALOG_POST_TYPE_SKIPPED: __( 'Catalog post type skipped', 'safe-publish' ),
 	ITEM_ROLLED_BACK: __( 'Item rolled back', 'safe-publish' ),
 	ITEM_ROLLED_BACK_WITH_OMISSIONS: __( 'Item rolled back with omissions', 'safe-publish' ),
 	ITEM_ALREADY_ROLLED_BACK: __( 'Item already rolled back', 'safe-publish' ),

@@ -24,6 +24,21 @@ use WP_Error;
 class Session_Rollback_Test extends Integration_Test_Case {
 
 	/**
+	 * Probe post type registered exclude_from_search.
+	 */
+	private const HIDDEN_TYPE = 'sp_hidden';
+
+	/**
+	 * Probe post status registered internal, so exclude_from_search too.
+	 */
+	private const HIDDEN_STATUS = 'sp_internal';
+
+	/**
+	 * Post status that is never registered.
+	 */
+	private const UNKNOWN_STATUS = 'sp_unregistered';
+
+	/**
 	 * History repository instance.
 	 *
 	 * @var History_Repository
@@ -49,6 +64,28 @@ class Session_Rollback_Test extends Integration_Test_Case {
 
 		Audit_Log_Table::create_table();
 		Audit_Log_Table::clear( 'import' );
+
+		register_post_type(
+			self::HIDDEN_TYPE,
+			array(
+				'public'              => true,
+				'exclude_from_search' => true,
+				'supports'            => array( 'title', 'editor', 'thumbnail' ),
+			)
+		);
+		register_post_status( self::HIDDEN_STATUS, array( 'internal' => true ) );
+	}
+
+	/**
+	 * Tear down test environment.
+	 */
+	#[\Override]
+	protected function tearDown(): void {
+		unregister_post_type( self::HIDDEN_TYPE );
+		// Core registers statuses into a global with no unregister counterpart.
+		unset( $GLOBALS['wp_post_statuses'][ self::HIDDEN_STATUS ] );
+
+		parent::tearDown();
 	}
 
 	/**
@@ -236,6 +273,406 @@ class Session_Rollback_Test extends Integration_Test_Case {
 		// ASSERT: B keeps its featured image.
 		$this->assertNotNull( get_post( $post_b ) );
 		$this->assertNotNull( get_post( $shared_x ) );
+	}
+
+	/**
+	 * Verifies that rolling back a post keeps an attachment a trashed post uses
+	 * as its featured image, which untrashing would need back.
+	 */
+	public function test_rollback_keeps_media_featured_by_trashed_post(): void {
+		// ARRANGE: X is parented to A but is trashed B's featured image.
+		$seed   = $this->create_shared_media_item();
+		$post_b = $this->factory()->post->create( array( 'post_title' => 'B' ) );
+		set_post_thumbnail( $post_b, $seed['attachment_id'] );
+		wp_trash_post( $post_b );
+		$this->assertSame( 'trash', get_post_status( $post_b ) );
+
+		// ACT: Roll back A while B sits in the trash.
+		$this->rollback_service->rollback_item( $seed['item_id'] );
+
+		// ASSERT: A is gone but the attachment B still points at survives.
+		$this->assertNull( get_post( $seed['post_id'] ) );
+		$this->assertNotNull( get_post( $seed['attachment_id'] ) );
+
+		// ASSERT: Untrashing B yields a featured image that still resolves.
+		wp_untrash_post( $post_b );
+		$this->assertSame(
+			$seed['attachment_id'],
+			get_post_thumbnail_id( $post_b )
+		);
+	}
+
+	/**
+	 * Verifies that rolling back a post keeps an attachment a trashed post
+	 * still shows inline.
+	 */
+	public function test_rollback_keeps_media_inlined_by_trashed_post(): void {
+		// ARRANGE: X is parented to A but inlined by trashed B.
+		$seed   = $this->create_shared_media_item();
+		$url    = wp_get_attachment_url( $seed['attachment_id'] );
+		$post_b = $this->factory()->post->create(
+			array(
+				'post_title'   => 'B',
+				'post_content' => '<img src="' . $url . '">',
+			)
+		);
+		wp_trash_post( $post_b );
+		$this->assertSame( 'trash', get_post_status( $post_b ) );
+
+		// ACT: Roll back A while B sits in the trash.
+		$this->rollback_service->rollback_item( $seed['item_id'] );
+
+		// ASSERT: A is gone but the inlined attachment survives.
+		$this->assertNull( get_post( $seed['post_id'] ) );
+		$this->assertNotNull( get_post( $seed['attachment_id'] ) );
+
+		// ASSERT: Untrashing B yields content still pointing at the file.
+		wp_untrash_post( $post_b );
+		$this->assertStringContainsString(
+			(string) $url,
+			(string) get_post_field( 'post_content', $post_b )
+		);
+	}
+
+	/**
+	 * Verifies that rolling back a post keeps an attachment a trashed post's
+	 * gallery shortcode lists by ID.
+	 */
+	public function test_rollback_keeps_media_in_trashed_gallery(): void {
+		// ARRANGE: X is parented to A but listed in trashed B's gallery.
+		$seed   = $this->create_shared_media_item();
+		$post_b = $this->factory()->post->create(
+			array(
+				'post_title'   => 'B',
+				'post_content' => '[gallery ids="' . $seed['attachment_id'] . '"]',
+			)
+		);
+		wp_trash_post( $post_b );
+		$this->assertSame( 'trash', get_post_status( $post_b ) );
+
+		// ACT: Roll back A while B sits in the trash.
+		$this->rollback_service->rollback_item( $seed['item_id'] );
+
+		// ASSERT: A is gone but the gallery's attachment survives.
+		$this->assertNull( get_post( $seed['post_id'] ) );
+		$this->assertNotNull( get_post( $seed['attachment_id'] ) );
+
+		// ASSERT: Untrashing B yields a gallery still listing the ID.
+		wp_untrash_post( $post_b );
+		$this->assertStringContainsString(
+			'ids="' . $seed['attachment_id'] . '"',
+			(string) get_post_field( 'post_content', $post_b )
+		);
+	}
+
+	/**
+	 * Verifies that rolling back a post keeps an attachment a post of an
+	 * exclude_from_search post type uses as its featured image.
+	 */
+	public function test_rollback_keeps_media_featured_by_hidden_post_type(): void {
+		// ARRANGE: X is parented to A but featured by a hidden-type post.
+		$this->assertTrue(
+			get_post_type_object( self::HIDDEN_TYPE )->exclude_from_search
+		);
+		$seed   = $this->create_shared_media_item();
+		$post_b = $this->factory()->post->create(
+			array(
+				'post_title' => 'B',
+				'post_type'  => self::HIDDEN_TYPE,
+			)
+		);
+		set_post_thumbnail( $post_b, $seed['attachment_id'] );
+
+		// ACT: Roll back A.
+		$this->rollback_service->rollback_item( $seed['item_id'] );
+
+		// ASSERT: A is gone but the hidden-type post keeps its featured image.
+		$this->assertNull( get_post( $seed['post_id'] ) );
+		$this->assertSame(
+			$seed['attachment_id'],
+			get_post_thumbnail_id( $post_b )
+		);
+	}
+
+	/**
+	 * Verifies that rolling back a post keeps an attachment a post in an
+	 * internal post status uses as its featured image.
+	 */
+	public function test_rollback_keeps_media_featured_by_hidden_status(): void {
+		// ARRANGE: X is parented to A but featured by a hidden-status post.
+		$this->assertTrue(
+			get_post_status_object( self::HIDDEN_STATUS )->exclude_from_search
+		);
+		$seed   = $this->create_shared_media_item();
+		$post_b = $this->factory()->post->create(
+			array(
+				'post_title'  => 'B',
+				'post_status' => self::HIDDEN_STATUS,
+			)
+		);
+		set_post_thumbnail( $post_b, $seed['attachment_id'] );
+		$this->assertSame(
+			self::HIDDEN_STATUS,
+			get_post_field( 'post_status', $post_b )
+		);
+
+		// ACT: Roll back A.
+		$this->rollback_service->rollback_item( $seed['item_id'] );
+
+		// ASSERT: A is gone but the hidden-status post keeps its image.
+		$this->assertNull( get_post( $seed['post_id'] ) );
+		$this->assertSame(
+			$seed['attachment_id'],
+			get_post_thumbnail_id( $post_b )
+		);
+	}
+
+	/**
+	 * Verifies that rolling back a post keeps an attachment featured by a post
+	 * parked in a status no longer registered, as a deactivated editorial
+	 * workflow plugin leaves behind.
+	 */
+	public function test_rollback_keeps_media_featured_by_unregistered_status(): void {
+		// ARRANGE: X is parented to A but featured by B, whose status is gone.
+		$this->assertNull( get_post_status_object( self::UNKNOWN_STATUS ) );
+		$seed   = $this->create_shared_media_item();
+		$post_b = $this->factory()->post->create( array( 'post_title' => 'B' ) );
+		set_post_thumbnail( $post_b, $seed['attachment_id'] );
+		$this->force_post_status( $post_b, self::UNKNOWN_STATUS );
+
+		// ACT: Roll back A.
+		$this->rollback_service->rollback_item( $seed['item_id'] );
+
+		// ASSERT: A is gone but B keeps its featured image.
+		$this->assertNull( get_post( $seed['post_id'] ) );
+		$this->assertSame(
+			$seed['attachment_id'],
+			get_post_thumbnail_id( $post_b )
+		);
+	}
+
+	/**
+	 * Verifies that a query filter narrowing the featured-image lookup cannot
+	 * cause a deletion, since a hidden holder would otherwise read as none.
+	 */
+	public function test_rollback_keeps_media_a_query_filter_would_hide(): void {
+		// ARRANGE: A owns a held attachment and an unheld one; a filter would
+		// narrow any featured-image lookup made through WP_Query to nothing.
+		$session_id = $this->repository->create_session( 'https://example.com', 'bulk' );
+		$post_a     = $this->factory()->post->create( array( 'post_title' => 'A' ) );
+		$held       = $this->seed_imported_attachment( $post_a );
+		$unheld     = $this->seed_imported_attachment( $post_a );
+		$post_b     = $this->factory()->post->create( array( 'post_title' => 'B' ) );
+		set_post_thumbnail( $post_b, $held );
+		$item_a = $this->repository->log_import_action(
+			$session_id,
+			1,
+			'A',
+			'success',
+			$post_a
+		);
+
+		$narrow = static fn ( string $where ): string => str_contains( $where, '_thumbnail_id' )
+			? $where . ' AND 1=0'
+			: $where;
+		add_filter( 'posts_where', $narrow );
+
+		try {
+			// ACT: Roll back A.
+			$this->rollback_service->rollback_item( $item_a );
+		} finally {
+			remove_filter( 'posts_where', $narrow );
+		}
+
+		// ASSERT: The held attachment survives the filter that would hide it.
+		$this->assertNull( get_post( $post_a ) );
+		$this->assertSame( $held, get_post_thumbnail_id( $post_b ) );
+
+		// ASSERT: The unheld one is still deleted, so the filter did not simply
+		// stop the rollback from collecting the post's media.
+		$this->assertNull( get_post( $unheld ) );
+	}
+
+	/**
+	 * Verifies that one rollback both keeps a referenced attachment and deletes
+	 * an unreferenced one, so the batched usage checks stay per-attachment.
+	 */
+	public function test_rollback_separates_referenced_media_within_one_batch(): void {
+		// ARRANGE: A owns four attachments; three are held by surviving posts,
+		// one by each reference kind, and the fourth is held by nothing.
+		$session_id = $this->repository->create_session( 'https://example.com', 'bulk' );
+		$post_a     = $this->factory()->post->create( array( 'post_title' => 'A' ) );
+		$featured   = $this->seed_imported_attachment( $post_a );
+		$inlined    = $this->seed_imported_attachment( $post_a );
+		$listed     = $this->seed_imported_attachment( $post_a );
+		$orphan     = $this->seed_imported_attachment( $post_a );
+
+		$holder = $this->factory()->post->create(
+			array(
+				'post_title'   => 'B',
+				'post_content' => '<img src="' . wp_get_attachment_url( $inlined ) . '">'
+					. '[gallery ids="' . $listed . '"]',
+			)
+		);
+		set_post_thumbnail( $holder, $featured );
+
+		$item_a = $this->repository->log_import_action(
+			$session_id,
+			1,
+			'A',
+			'success',
+			$post_a
+		);
+
+		// ACT: Roll back A.
+		$result = $this->rollback_service->rollback_item( $item_a );
+
+		// ASSERT: Each held attachment survives and the unheld one is deleted.
+		$this->assertIsArray( $result );
+		$this->assertNull( get_post( $post_a ) );
+		$this->assertNotNull( get_post( $featured ) );
+		$this->assertNotNull( get_post( $inlined ) );
+		$this->assertNotNull( get_post( $listed ) );
+		$this->assertNull( get_post( $orphan ) );
+		$this->assertSame( array(), $result['omissions'] );
+	}
+
+	/**
+	 * Verifies that a holder past the first scan page still keeps its media,
+	 * so paging does not truncate the usage checks.
+	 */
+	public function test_rollback_keeps_media_held_beyond_the_first_scan_page(): void {
+		// ARRANGE: 600 gallery posts precede the one holding the attachment.
+		$seed = $this->create_shared_media_item();
+		for ( $i = 0; $i < 600; $i++ ) {
+			$this->factory()->post->create(
+				array( 'post_content' => '[gallery ids="9001"]' )
+			);
+		}
+		$post_b = $this->factory()->post->create(
+			array(
+				'post_title'   => 'B',
+				'post_content' => '[gallery ids="' . $seed['attachment_id'] . '"]',
+			)
+		);
+
+		// ACT: Roll back A.
+		$this->rollback_service->rollback_item( $seed['item_id'] );
+
+		// ASSERT: A is gone but the late holder's attachment survives.
+		$this->assertNull( get_post( $seed['post_id'] ) );
+		$this->assertNotNull( get_post( $seed['attachment_id'] ) );
+		$this->assertGreaterThan( 500, $post_b - $seed['post_id'] );
+	}
+
+	/**
+	 * Verifies that an auto-draft holding the attachment does not keep it,
+	 * an abandoned editor session core garbage-collects on its own.
+	 */
+	public function test_rollback_deletes_media_held_only_by_an_auto_draft(): void {
+		// ARRANGE: X is parented to A and featured by an auto-draft.
+		$seed   = $this->create_shared_media_item();
+		$post_b = $this->factory()->post->create(
+			array(
+				'post_title'  => 'B',
+				'post_status' => 'auto-draft',
+			)
+		);
+		set_post_thumbnail( $post_b, $seed['attachment_id'] );
+		$this->assertSame(
+			'auto-draft',
+			get_post_field( 'post_status', $post_b )
+		);
+
+		// ACT: Roll back A.
+		$this->rollback_service->rollback_item( $seed['item_id'] );
+
+		// ASSERT: A and the attachment are both gone.
+		$this->assertNull( get_post( $seed['post_id'] ) );
+		$this->assertNull( get_post( $seed['attachment_id'] ) );
+	}
+
+	/**
+	 * Verifies that rolling back a post keeps an attachment another attachment
+	 * uses as its featured image, the poster frame core stores on video and
+	 * audio attachments.
+	 */
+	public function test_rollback_keeps_media_used_as_attachment_poster(): void {
+		// ARRANGE: X is parented to A but is a video attachment's poster.
+		$seed  = $this->create_shared_media_item();
+		$video = $this->factory()->attachment->create(
+			array(
+				'post_mime_type' => 'video/mp4',
+				'post_title'     => 'Clip',
+			)
+		);
+		set_post_thumbnail( $video, $seed['attachment_id'] );
+		$this->assertSame( 'inherit', get_post_field( 'post_status', $video ) );
+
+		// ACT: Roll back A.
+		$this->rollback_service->rollback_item( $seed['item_id'] );
+
+		// ASSERT: A is gone but the video keeps its poster.
+		$this->assertNull( get_post( $seed['post_id'] ) );
+		$this->assertSame( $seed['attachment_id'], get_post_thumbnail_id( $video ) );
+	}
+
+	/**
+	 * Provides an SQL fingerprint identifying each usage check's query.
+	 *
+	 * @return array<string, array{string}> Fingerprint per check.
+	 */
+	public function usage_check_query_provider(): array {
+		return array(
+			'featured image'  => array( "meta.meta_key = '_thumbnail_id'" ),
+			'post content'    => array( '2026/08/' ),
+			'media shortcode' => array( '[gallery' ),
+		);
+	}
+
+	/**
+	 * Verifies that a failed usage check retains the attachment and reports the
+	 * omission, rather than reading the failure as an unreferenced attachment.
+	 *
+	 * @dataProvider usage_check_query_provider
+	 *
+	 * @param string $fingerprint SQL fragment unique to the check's query.
+	 */
+	public function test_rollback_retains_media_when_a_usage_check_fails(
+		string $fingerprint
+	): void {
+		global $wpdb;
+
+		// ARRANGE: One usage check's query is made to fail.
+		$seed     = $this->create_shared_media_item();
+		$suppress = $wpdb->suppress_errors( true );
+		$break    = static fn ( $query ) => str_contains( (string) $query, $fingerprint )
+			? 'SELECT 1 FROM sp_no_such_table'
+			: $query;
+		add_filter( 'query', $break );
+
+		try {
+			// ACT: Roll back A.
+			$result = $this->rollback_service->rollback_item( $seed['item_id'] );
+		} finally {
+			remove_filter( 'query', $break );
+			$wpdb->suppress_errors( $suppress );
+		}
+
+		// ASSERT: A is gone but the attachment is kept and reported.
+		$this->assertIsArray( $result );
+		$this->assertNull( get_post( $seed['post_id'] ) );
+		$this->assertNotNull( get_post( $seed['attachment_id'] ) );
+		$this->assertSame(
+			array(
+				array(
+					'field'         => 'media',
+					'reason'        => 'usage_check_failed',
+					'attachment_id' => $seed['attachment_id'],
+				),
+			),
+			$result['omissions']
+		);
 	}
 
 	/**
@@ -730,6 +1167,51 @@ class Session_Rollback_Test extends Integration_Test_Case {
 		);
 
 		return compact( 'session_id', 'post_id', 'item_id' );
+	}
+
+	/**
+	 * Creates an imported post owning one attachment, plus its history item.
+	 *
+	 * @return array{item_id: int, post_id: int, attachment_id: int} Created IDs.
+	 */
+	private function create_shared_media_item(): array {
+		$session_id    = $this->repository->create_session(
+			'https://example.com',
+			'bulk'
+		);
+		$post_id       = $this->factory()->post->create(
+			array( 'post_title' => 'A' )
+		);
+		$attachment_id = $this->seed_imported_attachment( $post_id );
+		$item_id       = $this->repository->log_import_action(
+			$session_id,
+			1,
+			'A',
+			'success',
+			$post_id
+		);
+
+		return compact( 'item_id', 'post_id', 'attachment_id' );
+	}
+
+	/**
+	 * Writes a post status core would reject on the ordinary update path.
+	 *
+	 * @param int    $post_id Post to park.
+	 * @param string $status  Status to write.
+	 */
+	private function force_post_status( int $post_id, string $status ): void {
+		global $wpdb;
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
+		$wpdb->update(
+			$wpdb->posts,
+			array( 'post_status' => $status ),
+			array( 'ID' => $post_id )
+		);
+		clean_post_cache( $post_id );
+
+		$this->assertSame( $status, get_post_field( 'post_status', $post_id ) );
 	}
 
 	/**

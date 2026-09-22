@@ -214,6 +214,7 @@ add_filter(
 1. Confirm the post type is still registered on the source with `show_in_rest` set to `true` and `public` set to `true`. Safe Publish also allows `wp_navigation` and `wp_block` despite `public` being false.
 2. A truthy but non-boolean `show_in_rest` value, such as `1`, registers the REST route but excludes the type from the catalog. Use `true`.
 3. Where the source registers the type conditionally, confirm the registration also runs for REST requests.
+4. The source leaves out any type whose REST controller throws. Check the dispatch channel of the source's Audit Log for a `CATALOG_POST_TYPE_SKIPPED` event naming the type.
 
 #### Post creation failed
 
@@ -276,6 +277,19 @@ If duplicates still occur:
 
 1. **Check Manage → Posts** to see whether both destination posts are tracked.
 2. Delete duplicate drafts manually.
+
+#### Import refused because a trashed post is still linked
+
+**Symptoms**: Importing reports that a trashed post is still linked to the source post
+
+**Solutions**:
+
+The destination post that was linked to this source post is in the trash. Importing would create a second post linked to the same source post, so Safe Publish refuses instead. The row's Local Status usually reads **Trashed**, but the refusal follows the source post ID stored in post metadata, not the row: a trashed post of any type carrying that ID refuses the import even when the row reads **Not imported**. The message names the post's title and ID so you can find it.
+
+Open the trash for that post's type in WordPress, then choose the outcome you want:
+
+1. **Restore the post** to keep its history, then import again to update it.
+2. **Delete it permanently**, then import again to create a fresh copy.
 
 #### Embedded posts display as plain links
 

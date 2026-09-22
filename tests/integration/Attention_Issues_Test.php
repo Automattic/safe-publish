@@ -717,6 +717,41 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 	}
 
 	/**
+	 * Verifies that the navigation retry repoints to the imported menu, not to a
+	 * newer post of another type claiming the same source ID.
+	 */
+	public function test_nav_retry_ignores_same_id_claim_of_another_type(): void {
+		// ARRANGE: A referencing menu, the imported menu, and a later page
+		// claiming the menu's source ID.
+		$referencing = $this->seed_referencing_post(
+			$this->nav_ref_block( 8300 ),
+			self::BLOG_URL,
+			8101
+		);
+		$dest_menu   = $this->seed_referencing_post(
+			'Menu body',
+			self::BLOG_URL,
+			8300
+		);
+		$impostor    = $this->seed_target_post( 8300, self::BLOG_URL );
+		$this->assertGreaterThan( $dest_menu, $impostor );
+
+		// ACT: Retry the rewrite for the menu's source ID.
+		$outcome = $this->import_service->retry_nav_ref_rewrite(
+			$referencing,
+			8300,
+			self::BLOG_URL
+		);
+
+		// ASSERT: The block points at the menu, never at the page.
+		$this->assertSame( Reconcile_Outcome::RESOLVED, $outcome->type );
+		$this->assertStringContainsString(
+			'"ref":' . $dest_menu,
+			(string) get_post_field( 'post_content', $referencing )
+		);
+	}
+
+	/**
 	 * Verifies that retrying an unmapped block reference repoints it in place to
 	 * the destination id, clears the issue, and writes without a revision or a
 	 * post_modified bump.

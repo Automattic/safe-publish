@@ -873,13 +873,15 @@ final class Admin_Ajax_Controller {
 
 		// Force-update confirmation prompt is HTTP UX, not import logic: If the
 		// post is already imported and the caller hasn't opted into updating,
-		// return the prompt response instead of running the import.
-		$imported_post = $this->post_import_service->find_imported_post(
+		// return the prompt response instead of running the import. Resolved as
+		// the import resolves it, so the prompt names the copy it writes to.
+		$claims        = $this->post_import_service->resolve_identity_claims(
 			$source_post_id,
 			Options::get_connected_site_url_with_path()
 		);
+		$imported_post = $claims['present'];
 
-		if ( $imported_post && ! $force_update ) {
+		if ( null !== $imported_post && ! $force_update ) {
 			wp_send_json_success(
 				array(
 					'existing'       => true,

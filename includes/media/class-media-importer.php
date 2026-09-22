@@ -878,7 +878,10 @@ class Media_Importer {
 	 * @return string The target URL with the source query parameters appended.
 	 */
 	public static function reapply_query_parameters( string $original_url, string $clean_url ): string {
-		$query = (string) wp_parse_url( $original_url, PHP_URL_QUERY );
+		$query = (string) wp_parse_url(
+			URL_Validator::normalize_url_whitespace( $original_url ),
+			PHP_URL_QUERY
+		);
 
 		if ( ! $query ) {
 			return $clean_url;
@@ -1120,6 +1123,8 @@ class Media_Importer {
 				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
 				'meta_value'       => $original_url,
 				'posts_per_page'   => 1,
+				'orderby'          => 'ID',
+				'order'            => 'DESC',
 				// Don't suppress posts_* filters; required for cache plugins.
 				'suppress_filters' => false,
 			)
@@ -1155,6 +1160,8 @@ class Media_Importer {
 					),
 				),
 				'posts_per_page'   => 1,
+				'orderby'          => 'ID',
+				'order'            => 'DESC',
 				// Don't suppress posts_* filters; required for cache plugins.
 				'suppress_filters' => false,
 			)

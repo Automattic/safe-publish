@@ -151,7 +151,7 @@ Safe Publish supports importing a single post or many posts at once. Both paths 
 1. On **Manage → Posts**, use the **Import** row action.
 2. The import starts right away. If the destination post is already published, confirm the overwrite first, because it changes the live site immediately.
 
-If a post with the same source post ID already exists on the destination, Safe Publish updates that post rather than creating a duplicate. If no matching post exists, it creates a new one.
+If a post with the same source post ID already exists on the destination, Safe Publish updates that post rather than creating a duplicate. If no matching post exists, it creates a new one. If the only matching post is in the trash, the import is refused rather than creating a second linked copy; restore that post to update it, or delete it permanently to import a fresh copy.
 
 By default, importing a child post fails if its parent is not present on the destination, to avoid creating orphaned content. Developers can change this with the `safe_publish_import_allow_orphans` filter (see [Filters](#filters)).
 
@@ -177,7 +177,7 @@ The Compare action on **Manage → Posts** fetches fresh source content and comp
 
 Rollback reverses a single import:
 
-- If the post was newly created by the import, the post is deleted.
+- If the post was newly created by the import, the post is deleted, along with the media that import created. Media another post still shows — as its featured image, inline in its content, or by ID in a gallery or playlist shortcode — is kept, whatever that post's type or status, trashed and otherwise hidden posts included. Media whose usage cannot be determined is kept and the omission recorded in the Audit Log.
 - If the post was an update of an existing post, the captured post fields, author, parent, post type, featured image, editor and tracking metadata, and previous assignments for taxonomies carried in the import payload are restored. Restored content passes through WordPress' normal save filters for the acting user. If a filter changes the content or excerpt, rollback reports an error, leaves the history item active, and warns that WordPress may already have persisted the filtered value. If a captured author, parent, post type, featured image, taxonomy, or term is no longer available, rollback retains the imported value for that field and records the omission in the Audit Log; a taxonomy's assignments are retained together if any part is unavailable. Imported custom metadata is not restored or removed, and created terms and changes to shared term fields are retained. When an update changes the post type, WordPress may add a default category or another taxonomy's default term outside the import payload; those assignments are not currently removed by rollback. If no previous content was captured, the post is deleted.
 
 It's important to note that the roll-back rolls back the specific changes from that single import. If a post has gone through a series of changes, each change can be rolled back sequentially.
@@ -197,7 +197,7 @@ When a post is imported, Safe Publish processes its content so that it renders c
 - **Media is deduplicated** by its original URL. If the same source file has already been imported, Safe Publish reuses the existing attachment on the destination instead of downloading it again.
 - **Third-party media is left untouched.** Files hosted on domains other than the source site are not downloaded; their original URLs are preserved as written.
 
-Safe Publish records where imported content came from in post metadata — including the source post ID and source permalink — so that subsequent imports of the same post update the existing post rather than duplicating it.
+Safe Publish records where imported content came from in post metadata — including the source post ID and source permalink — so that subsequent imports of the same post update the existing post rather than duplicating it, except when that post is in the trash.
 
 ## Author attribution
 

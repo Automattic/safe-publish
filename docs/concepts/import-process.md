@@ -244,6 +244,7 @@ Bulk imports process multiple posts sequentially:
 
 ### Failure Behavior
 
+- **Trashed destination post**: Import is refused when the only destination post linked to the source post is in the trash, so a second linked copy is never created. Restore that post to update it, or delete it permanently to import a fresh copy.
 - **Inline media download failures**: Import is aborted; any attachments already created during the run are deleted.
 - **Featured image failures**: Import is aborted.
 - **Meta/term failures**: Import is aborted; for new posts, the post and its attachments are deleted. For updates, the post is rolled back to its pre-update state.
