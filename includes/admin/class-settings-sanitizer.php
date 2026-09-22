@@ -34,7 +34,11 @@ class Settings_Sanitizer {
 			return get_option( Options::OPTION_CONNECTED_SITE_URL, '' );
 		}
 
-		$url = esc_url_raw( $url );
+		// Strip whitespace before esc_url_raw(), which percent-encodes a
+		// trailing space into the path and leaves media resolving against it.
+		$url = esc_url_raw(
+			URL_Validator::normalize_url_whitespace( (string) $url )
+		);
 
 		if ( empty( $url ) ) {
 			return '';

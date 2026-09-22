@@ -9,8 +9,13 @@ declare(strict_types=1);
 
 namespace Safe_Publish\Tests\Integration;
 
+use Safe_Publish\Admin\Content_Processor;
+use Safe_Publish\API\HTTP_Client;
 use Safe_Publish\API\Meta_Terms_Manager;
 use Safe_Publish\API\Source_Posts_API;
+use Safe_Publish\Content\Content_Media_Processor;
+use Safe_Publish\Content\Shortcode_ID_Rewriter;
+use Safe_Publish\Media\Media_Importer;
 use Safe_Publish\Utils\Options;
 use Safe_Publish\Utils\Term_Conflict;
 use Safe_Publish\Utils\Term_Reconcile_Report;
@@ -860,6 +865,43 @@ class Term_Field_Reconcile_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that two destination terms claiming one source term resolve to
+	 * the newest by ID, the rule the block-reference remap applies.
+	 */
+	public function test_duplicate_claim_resolves_to_newest_term(): void {
+		// ARRANGE: An imported term, then a newer duplicate claiming the same
+		// source ID. The newer sorts later by name, so alphabetical order and
+		// newest-by-ID resolve to different terms.
+		$this->import_terms(
+			array( $this->record( 520, 'Alpha', 'alpha', 0, '' ) )
+		);
+		$older = (int) $this->term_by_slug( 'alpha' )->term_id;
+		$newer = $this->claim_duplicate( 520, 'Zeta', 'zeta' );
+		$this->assertGreaterThan( $older, $newer );
+
+		// ACT: Re-import the source term, then resolve it through the remap.
+		// A re-import is a new request, so the identity memo starts empty.
+		$this->manager = new Meta_Terms_Manager();
+		$this->import_terms(
+			array( $this->record( 520, 'Renamed', 'alpha', 0, '' ) )
+		);
+		$map = $this->remap()->map_target_refs(
+			array(),
+			array( 520 => true ),
+			self::SOURCE
+		);
+
+		// ASSERT: The re-import wrote to and assigned the newer term, and the
+		// remap points at the same one.
+		$this->assertSame( 'Renamed', $this->term_by_slug( 'zeta' )->name );
+		$this->assertSame(
+			array( $newer ),
+			wp_get_post_terms( $this->post_id, 'category', array( 'fields' => 'ids' ) )
+		);
+		$this->assertSame( $newer, $map['term'][520] ?? 0 );
+	}
+
+	/**
 	 * Runs one import of a taxonomy's records and returns the conflicts it
 	 * collected, failing the test when the terms could not be assigned.
 	 *
@@ -985,6 +1027,50 @@ class Term_Field_Reconcile_Test extends Integration_Test_Case {
 			$term_id,
 			Options::META_TERM_ORIGIN_URL,
 			true
+		);
+	}
+
+	/**
+	 * Creates a second destination term claiming a source term already
+	 * imported, standing in for a duplicate a site already holds.
+	 *
+	 * @param int    $source_term_id Source term ID to claim.
+	 * @param string $name           Term name.
+	 * @param string $slug           Term slug.
+	 * @return int Created term ID.
+	 */
+	private function claim_duplicate(
+		int $source_term_id,
+		string $name,
+		string $slug
+	): int {
+		$term_id = self::factory()->term->create(
+			array(
+				'taxonomy' => 'category',
+				'name'     => $name,
+				'slug'     => $slug,
+			)
+		);
+		$this->assertIsInt( $term_id );
+		update_term_meta( $term_id, Options::META_SOURCE_TERM_ID, $source_term_id );
+		update_term_meta( $term_id, Options::META_SOURCE_TERM_URL, self::SOURCE );
+		update_term_meta( $term_id, Options::META_TERM_ORIGIN_URL, self::SOURCE );
+
+		return $term_id;
+	}
+
+	/**
+	 * Builds the content processor backing the block-reference remap.
+	 *
+	 * @return Content_Processor Configured processor.
+	 */
+	private function remap(): Content_Processor {
+		$media_importer = new Media_Importer( new HTTP_Client() );
+
+		return new Content_Processor(
+			$media_importer,
+			new Content_Media_Processor( $media_importer ),
+			new Shortcode_ID_Rewriter()
 		);
 	}
 }

@@ -20,6 +20,7 @@ use Safe_Publish\Utils\Options;
 use Safe_Publish\Utils\Post_Type_Map;
 use Safe_Publish\Utils\Reconcile_Logger;
 use Safe_Publish\Utils\Reconcile_Outcome;
+use Safe_Publish\Utils\Source_Identity_Lookup;
 use Safe_Publish\Utils\Telemetry_Events;
 use Safe_Publish\Utils\Telemetry_Service;
 use Safe_Publish\Utils\Term_Reconcile_Report;
@@ -1079,25 +1080,13 @@ class Post_Import_Service {
 			return array();
 		}
 
-		$imported_posts = get_posts(
+		$imported_posts = Source_Identity_Lookup::find(
+			$source_ids,
+			$source_site_url,
 			array(
-				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
-				'meta_query'             => array(
-					'relation' => 'AND',
-					array(
-						'key'     => Options::META_SOURCE_POST_ID,
-						'value'   => $source_ids,
-						'compare' => 'IN',
-					),
-					array(
-						'key'   => Options::META_SOURCE_SITE_URL,
-						'value' => $source_site_url,
-					),
-				),
-				'post_type'              => 'any',
-				'post_status'            => 'any',
-				'posts_per_page'         => count( $source_ids ),
-				'suppress_filters'       => false,
+				// Uncapped: A duplicate claim must not evict another source ID.
+				// phpcs:ignore WordPressVIPMinimum.Performance.NoPaging
+				'posts_per_page'         => -1,
 				'update_post_term_cache' => false,
 			)
 		);
@@ -1129,6 +1118,9 @@ class Post_Import_Service {
 	 * the lowest ID (the one inserted first); when this returns non-null, the
 	 * just-inserted post is the loser and should be discarded.
 	 *
+	 * Lowest, inverting the newest-wins rule elsewhere: Nothing older can
+	 * appear later, so racers agree on the winner. Newest-wins keeps both.
+	 *
 	 * Bypasses the WP_Query result cache so this lookup sees INSERTs
 	 * committed by parallel requests.
 	 *
@@ -1145,26 +1137,12 @@ class Post_Import_Service {
 		int $just_inserted_id,
 		string $source_site_url
 	): ?WP_Post {
-		$oldest = get_posts(
+		$oldest = Source_Identity_Lookup::find(
+			$source_post_id,
+			$source_site_url,
 			array(
-				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
-				'meta_query'             => array(
-					'relation' => 'AND',
-					array(
-						'key'   => Options::META_SOURCE_POST_ID,
-						'value' => $source_post_id,
-					),
-					array(
-						'key'   => Options::META_SOURCE_SITE_URL,
-						'value' => $source_site_url,
-					),
-				),
-				'post_type'              => 'any',
-				'post_status'            => 'any',
-				'posts_per_page'         => 1,
-				'orderby'                => 'ID',
+				// Against the shared default: The oldest claim wins the race.
 				'order'                  => 'ASC',
-				'suppress_filters'       => false,
 				'no_found_rows'          => true,
 				'cache_results'          => false,
 				'update_post_meta_cache' => false,
@@ -1172,7 +1150,7 @@ class Post_Import_Service {
 			)
 		);
 
-		if ( empty( $oldest ) || $oldest[0]->ID === $just_inserted_id ) {
+		if ( array() === $oldest || $oldest[0]->ID === $just_inserted_id ) {
 			return null;
 		}
 
@@ -1184,9 +1162,9 @@ class Post_Import_Service {
 	 * to the source site so two destinations connected to different sources
 	 * can't collide on overlapping source post IDs.
 	 *
-	 * Looks across all post types so callers importing pages or custom
-	 * hierarchical types can locate prior imports without knowing the
-	 * destination's post type up-front.
+	 * Resolves across every post type, so callers need not know the
+	 * destination type up-front. Where two posts claim one source ID, the
+	 * newest by ID wins.
 	 *
 	 * @param int    $source_post_id  Source post ID stored in post meta.
 	 * @param string $source_site_url Source site identity of the import.
@@ -1196,32 +1174,12 @@ class Post_Import_Service {
 		int $source_post_id,
 		string $source_site_url
 	): ?WP_Post {
-		$existing_posts = get_posts(
-			array(
-				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
-				'meta_query'       => array(
-					'relation' => 'AND',
-					array(
-						'key'   => Options::META_SOURCE_POST_ID,
-						'value' => $source_post_id,
-					),
-					array(
-						'key'   => Options::META_SOURCE_SITE_URL,
-						'value' => $source_site_url,
-					),
-				),
-				// Source post IDs identify a source-side post irrespective of
-				// type, so look across all post types.
-				'post_type'        => 'any',
-				// 'any' excludes 'trash', 'auto-draft', and statuses with
-				// exclude_from_search=true
-				'post_status'      => 'any',
-				'posts_per_page'   => 1,
-				'suppress_filters' => false,
-			)
+		$existing_posts = Source_Identity_Lookup::find(
+			$source_post_id,
+			$source_site_url
 		);
 
-		return ! empty( $existing_posts ) ? $existing_posts[0] : null;
+		return array() === $existing_posts ? null : $existing_posts[0];
 	}
 
 	/**
@@ -1959,10 +1917,14 @@ class Post_Import_Service {
 			return Reconcile_Outcome::target_absent( 'Source identity is empty.' );
 		}
 
-		$dest_nav = $this->find_imported_navigation(
+		// Type-scoped; the rewriter writes this ID without checking its type.
+		$menus = Source_Identity_Lookup::find(
 			$source_nav_id,
-			$source_site_url
+			$source_site_url,
+			array( 'post_type' => 'wp_navigation' )
 		);
+
+		$dest_nav = $menus[0] ?? null;
 
 		if ( ! $dest_nav instanceof WP_Post ) {
 			return Reconcile_Outcome::target_absent(
@@ -2377,44 +2339,6 @@ class Post_Import_Service {
 				clean_post_cache( $attachment_id );
 			}
 		}
-	}
-
-	/**
-	 * Finds the imported navigation menu for a source ID and identity.
-	 *
-	 * Queries wp_navigation explicitly because it is excluded from the
-	 * post_type 'any' query find_imported_post relies on.
-	 *
-	 * @param int    $source_nav_id   Menu's source post id.
-	 * @param string $source_site_url Path-bearing source identity.
-	 * @return WP_Post|null Imported menu, or null if not found.
-	 */
-	private function find_imported_navigation(
-		int $source_nav_id,
-		string $source_site_url
-	): ?WP_Post {
-		$menus = get_posts(
-			array(
-				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
-				'meta_query'       => array(
-					'relation' => 'AND',
-					array(
-						'key'   => Options::META_SOURCE_POST_ID,
-						'value' => $source_nav_id,
-					),
-					array(
-						'key'   => Options::META_SOURCE_SITE_URL,
-						'value' => $source_site_url,
-					),
-				),
-				'post_type'        => 'wp_navigation',
-				'post_status'      => 'any',
-				'posts_per_page'   => 1,
-				'suppress_filters' => false,
-			)
-		);
-
-		return empty( $menus ) ? null : $menus[0];
 	}
 
 	/**
