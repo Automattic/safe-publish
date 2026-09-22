@@ -70,9 +70,10 @@ class Log_Events {
 	const EXPORT_REQUEST_ERROR       = 'EXPORT_REQUEST_ERROR';
 	const EXPORT_RESPONSE_BAD_STATUS = 'EXPORT_RESPONSE_BAD_STATUS';
 
-	// Non-export dispatch events (list, preview, probe failures).
+	// Non-export dispatch events (list, preview, probe, catalog).
 	const DISPATCH_REQUEST_ERROR       = 'DISPATCH_REQUEST_ERROR';
 	const DISPATCH_RESPONSE_BAD_STATUS = 'DISPATCH_RESPONSE_BAD_STATUS';
+	const CATALOG_POST_TYPE_SKIPPED    = 'CATALOG_POST_TYPE_SKIPPED';
 
 	// Import session and item lifecycle events.
 	const IMPORT_ITEM_FAILED       = 'IMPORT_ITEM_FAILED';

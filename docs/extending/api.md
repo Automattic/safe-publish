@@ -37,6 +37,8 @@ Registered only on source-mode installs. HMAC-authenticated; called by the desti
 | `GET` | `/wp-json/safe-publish/v1/catalog/posts` | HMAC | Browsable, server-paginated source catalog |
 | `GET` | `/wp-json/safe-publish/v1/catalog/post-types` | HMAC | Post types the catalog can serve |
 
+Building the post type list calls each type's own REST controller. A type whose controller throws is left out of the response and recorded on the dispatch channel of the source's Audit Log.
+
 ## Authentication
 
 ### Content endpoints
