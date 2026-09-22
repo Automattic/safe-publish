@@ -303,6 +303,10 @@ Links inside post body content are migrated by host swap only, preserving the pa
 
 A navigation link or submenu whose target was a draft at import keeps the host-swapped source path instead of being re-derived, so it can break under a slug collision or a different permalink structure. See [Navigation links to draft targets may 404 or open the wrong page](concepts/import-process.md#navigation-links-to-draft-targets-may-404-or-open-the-wrong-page) for the fix.
 
+#### A navigation link to a term stays on the Needs attention tab
+
+A navigation link or submenu is repointed only to a destination term in the taxonomy the link names, so a source term that moved to another taxonomy can leave the link unrepointed. See [Navigation links to a term in another taxonomy are left unrepointed](concepts/import-process.md#navigation-links-to-a-term-in-another-taxonomy-are-left-unrepointed) for the fix.
+
 #### A sideloaded image has no title, caption, or alt in the media library
 
 Real source media-library images bring their alt text, title, caption, and description to the destination attachment, including images inserted at an intermediate size and responsive `srcset` sub-sizes. The exception is a file linked but not held in the source library, which has no source record to copy. See [Some sideloaded files carry no source library metadata](concepts/import-process.md#some-sideloaded-files-carry-no-source-library-metadata).

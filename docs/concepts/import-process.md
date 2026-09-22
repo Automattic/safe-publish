@@ -308,6 +308,10 @@ Navigation links and submenus are the exception: they carry an explicit entity r
 
 Navigation links and submenus are re-derived only when their target was already published at import. If the target was a draft, its slug isn't final, so the link keeps the host-swapped source path and behaves like an [internal body link](#internal-body-links-may-404-or-open-the-wrong-page) — it can 404 or open the wrong page under a slug collision or a different permalink structure. Re-import the referring content after the target is published to re-derive the URL; the Retry action does not cover this case.
 
+### Navigation links to a term in another taxonomy are left unrepointed
+
+A navigation link or submenu that points at a taxonomy term also names the taxonomy that term belongs to, and is repointed only to a destination term in that same taxonomy. If no imported term sits in that taxonomy — for example when the source term changed taxonomy and only its older copy was imported — the link keeps its source reference and is reported under Needs attention instead of being sent to an unrelated term. Import the term into the taxonomy the link names, then use the Retry action.
+
 ### Some sideloaded files carry no source library metadata
 
 Every imported image that is a real item in the source media library brings its library metadata — alt text, title, caption, and description — to the destination attachment, inline and featured alike. This covers images inserted at an intermediate size (for example `…-1024x683.jpg`) and responsive `srcset` sub-sizes: each sized URL is matched back to the library item it was generated from, so it inherits that item's metadata. One kind of sideloaded file is the exception, because it has no source library record to copy from:
