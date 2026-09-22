@@ -16,8 +16,9 @@ use Safe_Publish\Utils\Logger;
  * Logger for non-export REST dispatch outcomes.
  *
  * Captures failures on authenticated calls whose action isn't a real
- * export (list, preview, probe). Successes are not recorded here — the
- * auth channel's REQUEST_AUTHENTICATED already covers that.
+ * export (list, preview, probe), plus faults that degrade an otherwise
+ * successful response. Clean successes are not recorded here — the auth
+ * channel's REQUEST_AUTHENTICATED already covers that.
  */
 class Dispatch_Logger extends Logger {
 
@@ -77,6 +78,41 @@ class Dispatch_Logger extends Logger {
 				'action'               => $action,
 				'destination_site_url' => $destination_site_url,
 				'status'               => $status,
+			)
+		);
+	}
+
+	/**
+	 * Logs a post type left out of the catalog because its REST controller
+	 * threw.
+	 *
+	 * Leads with the post type and error class: the Audit Log previews only
+	 * the first payload entries before expansion.
+	 *
+	 * @param string $post_type            Slug of the omitted post type.
+	 * @param string $error_code           Class name of the thrown error.
+	 * @param string $error_message        Message of the thrown error.
+	 * @param string $route                REST route the destination requested.
+	 * @param string $action               Declared action value of the request.
+	 * @param string $destination_site_url URL of the destination that called.
+	 */
+	public function catalog_post_type_skipped(
+		string $post_type,
+		string $error_code,
+		string $error_message,
+		string $route,
+		string $action,
+		string $destination_site_url
+	): void {
+		$this->log_error(
+			Log_Events::CATALOG_POST_TYPE_SKIPPED,
+			array(
+				'post_type'            => $post_type,
+				'error_code'           => $error_code,
+				'error_message'        => $error_message,
+				'route'                => $route,
+				'action'               => $action,
+				'destination_site_url' => $destination_site_url,
 			)
 		);
 	}

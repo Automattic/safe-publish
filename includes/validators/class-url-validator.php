@@ -52,6 +52,24 @@ class URL_Validator {
 	}
 
 	/**
+	 * Removes the whitespace a URL parser discards from an attribute value.
+	 *
+	 * Mirrors the URL standard: leading and trailing C0 control or space, then
+	 * every ASCII tab or newline anywhere in the value. PHP's default trim()
+	 * set is a subset of C0 control or space and would leave FF behind.
+	 *
+	 * @param string $url URL to normalize.
+	 * @return string URL without the whitespace a parser discards.
+	 */
+	public static function normalize_url_whitespace( string $url ): string {
+		return str_replace(
+			array( "\t", "\n", "\r" ),
+			'',
+			trim( $url, "\x00..\x20" )
+		);
+	}
+
+	/**
 	 * Determines whether a URL is an absolute http or https URL.
 	 *
 	 * Tests the scheme and host rather than using FILTER_VALIDATE_URL, which is
@@ -62,6 +80,8 @@ class URL_Validator {
 	 * @return bool True for an absolute http or https URL.
 	 */
 	public static function is_absolute_http_url( string $url ): bool {
+		$url = self::normalize_url_whitespace( $url );
+
 		$scheme = wp_parse_url( $url, PHP_URL_SCHEME );
 		$host   = wp_parse_url( $url, PHP_URL_HOST );
 
@@ -75,18 +95,20 @@ class URL_Validator {
 	/**
 	 * Resolves a possibly relative URL against a base site URL.
 	 *
-	 * A URL carrying a scheme is already absolute and is returned untouched,
-	 * which covers non-ASCII paths and opaque schemes such as data: URIs. A
+	 * A URL carrying a scheme is already absolute and keeps its path, which
+	 * covers non-ASCII paths and opaque schemes such as data: URIs. A
 	 * scheme-relative URL adopts the base URL's scheme.
 	 *
 	 * @param string $url      URL to resolve.
 	 * @param string $base_url Base site URL to resolve against.
-	 * @return string Absolute URL.
+	 * @return string Absolute URL, normalized per normalize_url_whitespace().
 	 */
 	public static function resolve_relative_url(
 		string $url,
 		string $base_url
 	): string {
+		$url = self::normalize_url_whitespace( $url );
+
 		$parsed = wp_parse_url( $url );
 		$parts  = is_array( $parsed ) ? $parsed : array();
 
