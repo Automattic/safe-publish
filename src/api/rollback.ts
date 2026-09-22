@@ -26,7 +26,7 @@ export type RollbackAction = 'deleted' | 'restored';
  * @property {boolean}        success     Whether the rollback succeeded.
  * @property {RollbackAction} [action]    Action taken on success.
  * @property {string}         [message]   Confirmation message on success.
- * @property {Object[]}       [omissions] Values retained during restoration.
+ * @property {Object[]}       [omissions] Values the rollback left in place.
  * @property {string}         [error]     Human-readable message on failure.
  */
 export type RollbackItemOutcome =
