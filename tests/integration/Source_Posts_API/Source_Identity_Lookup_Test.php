@@ -1,6 +1,6 @@
 <?php
 /**
- * Source-identity lookup coverage for post types excluded from site search
+ * Source-identity lookup coverage for types and statuses hidden from search
  *
  * @package Safe_Publish
  */
@@ -28,13 +28,14 @@ use WP_Error;
 use WP_Post;
 
 /**
- * Covers the source-ID lookups against post types registered
+ * Covers the source-ID lookups against post types and statuses registered
  * exclude_from_search=true, which WP_Query's 'any' token omits.
  *
  * Patterns, navigation menus, and hidden custom types all reach the catalog,
  * so every lookup that maps a source ID to its destination post must see
- * them. Also locks the newest-by-ID tie-break shared by the import lookup and
- * the block-reference remap.
+ * them, as must a destination parked in a hidden status. Trash stays out.
+ * Also locks the newest-by-ID tie-break shared by the import lookup and the
+ * block-reference remap.
  */
 class Source_Identity_Lookup_Test extends Source_Posts_API_Test_Base {
 
@@ -47,6 +48,11 @@ class Source_Identity_Lookup_Test extends Source_Posts_API_Test_Base {
 	 * Hierarchical custom post type kept out of site search.
 	 */
 	private const HIDDEN_TYPE = 'sp_hidden';
+
+	/**
+	 * Post status kept out of site search, as editorial workflows register.
+	 */
+	private const HIDDEN_STATUS = 'sp_archived';
 
 	/**
 	 * Post import service under test.
@@ -63,11 +69,18 @@ class Source_Identity_Lookup_Test extends Source_Posts_API_Test_Base {
 	private Content_Processor $content_processor;
 
 	/**
-	 * Registers the hidden CPT, the source mock, and the import service.
+	 * Registers the hidden CPT and status, the source mock, and the import
+	 * service.
 	 */
 	#[\Override]
 	protected function setUp(): void {
 		parent::setUp();
+
+		// internal=true is what core derives exclude_from_search from.
+		register_post_status(
+			self::HIDDEN_STATUS,
+			array( 'internal' => true )
+		);
 
 		add_filter(
 			'pre_http_request',
@@ -110,7 +123,7 @@ class Source_Identity_Lookup_Test extends Source_Posts_API_Test_Base {
 	}
 
 	/**
-	 * Removes the source mock and unregisters the hidden CPT.
+	 * Removes the source mock and the hidden CPT and status.
 	 */
 	#[\Override]
 	protected function tearDown(): void {
@@ -120,6 +133,8 @@ class Source_Identity_Lookup_Test extends Source_Posts_API_Test_Base {
 			5
 		);
 		unregister_post_type( self::HIDDEN_TYPE );
+		// Core registers post statuses without an unregister counterpart.
+		unset( $GLOBALS['wp_post_statuses'][ self::HIDDEN_STATUS ] );
 		parent::tearDown();
 	}
 
@@ -501,6 +516,104 @@ class Source_Identity_Lookup_Test extends Source_Posts_API_Test_Base {
 	}
 
 	/**
+	 * Verifies that a hierarchical parent parked in a hidden status resolves to
+	 * its destination ID instead of failing the child's import.
+	 */
+	public function test_resolve_source_parent_finds_hidden_status_parent(): void {
+		// ARRANGE: A parent in the hidden status, asserted to be one 'any'
+		// would otherwise deny.
+		$parent_id = $this->create_claiming_post(
+			7410,
+			self::HIDDEN_TYPE,
+			self::HIDDEN_STATUS
+		);
+		$this->assertTrue(
+			get_post_status_object( self::HIDDEN_STATUS )->exclude_from_search
+		);
+
+		// ACT: Resolve the child's source parent reference.
+		$resolved = $this->import_service->resolve_source_parent(
+			7410,
+			self::HIDDEN_TYPE,
+			self::SOURCE_URL
+		);
+
+		// ASSERT: The destination parent ID comes back, not a WP_Error.
+		$this->assertSame( $parent_id, $resolved );
+	}
+
+	/**
+	 * Verifies that a trashed parent stays unresolved, so widening the status
+	 * scope for hidden statuses does not adopt trash along with them.
+	 */
+	public function test_resolve_source_parent_rejects_trashed_parent(): void {
+		// ARRANGE: The only claim on this source parent is trashed.
+		$parent_id = $this->create_claiming_post( 7420, self::HIDDEN_TYPE );
+		wp_trash_post( $parent_id );
+		$this->assertSame( 'trash', get_post_status( $parent_id ) );
+
+		// ACT: Resolve the child's source parent reference.
+		$resolved = $this->import_service->resolve_source_parent(
+			7420,
+			self::HIDDEN_TYPE,
+			self::SOURCE_URL
+		);
+
+		// ASSERT: Resolution fails rather than parenting under the trash.
+		$this->assertWPError( $resolved );
+		$this->assertSame( 'parent_not_resolved', $resolved->get_error_code() );
+	}
+
+	/**
+	 * Verifies that the diff compares against a claim parked in a hidden
+	 * status, which the import would update.
+	 */
+	public function test_diff_targets_a_claim_in_hidden_status(): void {
+		// ARRANGE: The only claim on this source ID is in the hidden status.
+		$claim_id = $this->create_claiming_post(
+			7910,
+			'post',
+			self::HIDDEN_STATUS
+		);
+
+		// ACT: Ask the diff renderer and the import lookup for the same ID.
+		$local         = ( new Diff_Renderer() )->find_local_post(
+			7910,
+			'post',
+			self::SOURCE_URL
+		);
+		$import_target = $this->import_service->find_imported_post(
+			7910,
+			self::SOURCE_URL
+		);
+
+		// ASSERT: Both resolve to the hidden-status copy.
+		$this->assertInstanceOf( WP_Post::class, $local );
+		$this->assertInstanceOf( WP_Post::class, $import_target );
+		$this->assertSame( $claim_id, $local->ID );
+		$this->assertSame( $claim_id, $import_target->ID );
+	}
+
+	/**
+	 * Verifies that the shared status list spans hidden statuses while trash
+	 * stays out unless the caller asks for it.
+	 */
+	public function test_post_stati_span_hidden_statuses_not_trash(): void {
+		// ACT: Read both forms of the list the lookups query.
+		$default    = Source_Identity_Lookup::post_stati();
+		$with_trash = Source_Identity_Lookup::post_stati( true );
+
+		// ASSERT: Hidden statuses are named so 'any' stops denying them.
+		$this->assertContains( self::HIDDEN_STATUS, $default );
+		$this->assertNotContains( 'trash', $default );
+		$this->assertNotContains( 'auto-draft', $default );
+
+		// ASSERT: The opt-in form readmits trash for claim partitioning.
+		$this->assertContains( self::HIDDEN_STATUS, $with_trash );
+		$this->assertContains( 'trash', $with_trash );
+	}
+
+	/**
 	 * Verifies that revisions are absent from the shared post type list while
 	 * the types 'any' omits are present.
 	 */
@@ -519,18 +632,20 @@ class Source_Identity_Lookup_Test extends Source_Posts_API_Test_Base {
 	 * Creates a destination post claiming a source ID for this class's source
 	 * site, mirroring what an import writes.
 	 *
-	 * @param int    $source_id Source post ID to claim.
-	 * @param string $post_type Destination post type.
+	 * @param int    $source_id   Source post ID to claim.
+	 * @param string $post_type   Destination post type.
+	 * @param string $post_status Destination post status.
 	 * @return int Created post ID.
 	 */
 	private function create_claiming_post(
 		int $source_id,
-		string $post_type
+		string $post_type,
+		string $post_status = 'publish'
 	): int {
 		$post_id = self::factory()->post->create(
 			array(
 				'post_type'   => $post_type,
-				'post_status' => 'publish',
+				'post_status' => $post_status,
 				'post_title'  => 'Claim ' . $source_id,
 				'meta_input'  => array(
 					Options::META_SOURCE_POST_ID  => $source_id,
