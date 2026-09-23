@@ -14,8 +14,8 @@ use Safe_Publish\API\Source_Post_Type_Resolver;
 use WP_REST_Request;
 
 /**
- * Covers how the block diff treats a change confined to markup wp_kses_post()
- * removes, and the filtering its rendered previews keep.
+ * Covers the block diff's verdict source: a saved block decides the status,
+ * while its render only feeds the previews, filtered for safe output.
  *
  * @psalm-suppress InvalidArgument
  */
@@ -152,15 +152,13 @@ class Diff_Renderer_Filtered_Markup_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Verifies that identical content stays unchanged once the comparison
-	 * reads unfiltered markup, so the wider signal adds no false positives.
-	 *
-	 * Blocks whose markup carries a per-render counter are left out: they
-	 * already report a false modified on identical content, tracked in
-	 * https://github.com/Automattic/safe-publish/issues/574.
+	 * Verifies that identical content stays unchanged, including the blocks
+	 * whose markup carries a counter the renderer advances per render.
 	 */
 	public function test_identical_content_stays_unchanged(): void {
 		// ARRANGE: A block set broad enough to expose render-time volatility.
+		// core/search, core/gallery and core/navigation each assign a counter
+		// that differs between the two renders of one request.
 		$content = implode(
 			"\n\n",
 			array(
@@ -171,6 +169,9 @@ class Diff_Renderer_Filtered_Markup_Test extends Integration_Test_Case {
 				'<!-- wp:table --><figure class="wp-block-table"><table><tbody><tr><td>A</td></tr></tbody></table></figure><!-- /wp:table -->',
 				'<!-- wp:video --><figure class="wp-block-video"><video controls src="https://example.com/a.mp4"></video></figure><!-- /wp:video -->',
 				'<!-- wp:buttons --><div class="wp-block-buttons"><!-- wp:button --><div class="wp-block-button"><a class="wp-block-button__link" href="https://example.com">Go</a></div><!-- /wp:button --></div><!-- /wp:buttons -->',
+				'<!-- wp:search {"label":"Search"} /-->',
+				'<!-- wp:gallery --><figure class="wp-block-gallery has-nested-images"></figure><!-- /wp:gallery -->',
+				'<!-- wp:navigation /-->',
 			)
 		);
 
@@ -178,7 +179,7 @@ class Diff_Renderer_Filtered_Markup_Test extends Integration_Test_Case {
 		$diffs = $this->render_block_diffs( $content, $content );
 
 		// ASSERT: Every block reports unchanged, and none was dropped.
-		$this->assertCount( 7, $diffs );
+		$this->assertCount( 10, $diffs );
 		foreach ( $diffs as $diff ) {
 			$this->assertSame(
 				'unchanged',
@@ -189,6 +190,73 @@ class Diff_Renderer_Filtered_Markup_Test extends Integration_Test_Case {
 				)
 			);
 		}
+	}
+
+	/**
+	 * Verifies that a per-render counter confined to markup wp_kses_post()
+	 * removes does not report a change either, which a render-fed comparison
+	 * cannot tell apart from a genuine edit.
+	 */
+	public function test_counter_inside_filtered_markup_stays_unchanged(): void {
+		// ARRANGE: A block whose render stamps a fresh id into an SVG, so two
+		// renders of the same saved block never match.
+		$counter = 0;
+		register_block_type(
+			'safe-publish-test/svg-counter',
+			array(
+				'render_callback' => static function () use ( &$counter ): string {
+					++$counter;
+					return '<svg viewBox="0 0 1 1"><clipPath id="c-'
+						. $counter . '"></clipPath></svg>';
+				},
+			)
+		);
+
+		// ACT: Diff the block against itself.
+		$diffs = $this->render_block_diffs(
+			'<!-- wp:safe-publish-test/svg-counter /-->',
+			'<!-- wp:safe-publish-test/svg-counter /-->'
+		);
+		unregister_block_type( 'safe-publish-test/svg-counter' );
+
+		// ASSERT: The saved block is identical, so nothing is reported.
+		$this->assertCount( 1, $diffs );
+		$this->assertSame( 'unchanged', $diffs[0]['status'] );
+	}
+
+	/**
+	 * Verifies that an attribute change on a block this site cannot render is
+	 * reported, since such a block renders to nothing on both sides.
+	 */
+	public function test_unregistered_block_attr_change_is_reported(): void {
+		// ARRANGE + ACT: Diff a block the destination has no plugin for,
+		// differing only in an attribute.
+		$diffs = $this->render_block_diffs(
+			'<!-- wp:acme/chart {"series":"a"} /-->',
+			'<!-- wp:acme/chart {"series":"b"} /-->'
+		);
+
+		// ASSERT: The change reaches the diff.
+		$this->assertCount( 1, $diffs );
+		$this->assertSame( 'modified', $diffs[0]['status'] );
+		$this->assertSame( 'acme/chart', $diffs[0]['incoming']['name'] );
+	}
+
+	/**
+	 * Verifies that an authored loading hint is compared rather than
+	 * normalized away, now that no renderer adds one to the saved markup.
+	 */
+	public function test_authored_loading_hint_change_is_reported(): void {
+		// ARRANGE + ACT: Diff Custom HTML blocks where the source dropped the
+		// hint, the one shape the old render-era normalizer erased.
+		$diffs = $this->render_block_diffs(
+			'<!-- wp:html --><img src="https://example.com/a.jpg" loading="lazy"><!-- /wp:html -->',
+			'<!-- wp:html --><img src="https://example.com/a.jpg"><!-- /wp:html -->'
+		);
+
+		// ASSERT: The change reaches the diff.
+		$this->assertCount( 1, $diffs );
+		$this->assertSame( 'modified', $diffs[0]['status'] );
 	}
 
 	/**
