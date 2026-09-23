@@ -1000,6 +1000,61 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 	}
 
 	/**
+	 * Verifies that an import blocked by a taxonomy mismatch records the
+	 * reason, so the row can say the term is here in another taxonomy rather
+	 * than tell the admin to import it.
+	 */
+	public function test_taxonomy_mismatch_issue_records_its_reason(): void {
+		// ARRANGE: The source term is claimed only by a tag.
+		$this->seed_target_term( 9707, self::BLOG_URL, 'post_tag' );
+
+		// ACT: Import a post whose link on that term declares type=category.
+		$result  = $this->import_under(
+			self::BLOG_URL,
+			7212,
+			array( 'content' => $this->term_link_content( 9707 ) )
+		);
+		$post_id = $result['post_id'];
+
+		// ASSERT: The issue row names the mismatch.
+		$issue = $this->attention->get_issue(
+			$post_id,
+			'unmapped_block_reference',
+			9707,
+			'term'
+		);
+		$this->assertIsArray( $issue );
+		$this->assertSame(
+			'declared_taxonomy_mismatch',
+			$issue['detail']['reason'] ?? ''
+		);
+	}
+
+	/**
+	 * Verifies that an unmapped reference with no claim records no reason, so
+	 * the row keeps the copy telling the admin to import the target.
+	 */
+	public function test_unclaimed_reference_issue_records_no_reason(): void {
+		// ARRANGE + ACT: Import a post linking to an unclaimed source term.
+		$result  = $this->import_under(
+			self::BLOG_URL,
+			7213,
+			array( 'content' => $this->term_link_content( 9708 ) )
+		);
+		$post_id = $result['post_id'];
+
+		// ASSERT: The issue row names no reason, so the copy stays "import it".
+		$issue = $this->attention->get_issue(
+			$post_id,
+			'unmapped_block_reference',
+			9708,
+			'term'
+		);
+		$this->assertIsArray( $issue );
+		$this->assertSame( '', $issue['detail']['reason'] ?? '' );
+	}
+
+	/**
 	 * Verifies that a post retry repoints to the claim of the post type the
 	 * nav link declares, not the newest claim overall.
 	 */

@@ -742,6 +742,31 @@ describe( 'renderIssueMessage', () => {
 		expect( message ).toContain( 'Retry' );
 	} );
 
+	it( 'tells a taxonomy mismatch apart from a missing term', () => {
+		// ARRANGE: The same term reference, unmapped versus mismatched.
+		const missing = makeIssue( {
+			target_kind: 'term',
+			target_ref: 702,
+		} );
+		const mismatched = makeIssue( {
+			target_kind: 'term',
+			target_ref: 702,
+			target_reason: 'declared_taxonomy_mismatch',
+		} );
+		// ACT: Render both messages.
+		const missingMessage = renderIssueMessage( missing );
+		const mismatchedMessage = renderIssueMessage( mismatched );
+		// ASSERT: The mismatch says the term is here in another taxonomy,
+		// never that it is missing, and still offers Retry. Length is capped
+		// because the inbox detail cell clips rather than wraps.
+		expect( missingMessage ).toContain( "isn't on this site yet" );
+		expect( mismatchedMessage ).not.toContain( "isn't on this site yet" );
+		expect( mismatchedMessage ).toContain( 'another taxonomy' );
+		expect( mismatchedMessage ).toContain( '702' );
+		expect( mismatchedMessage ).toContain( 'Retry' );
+		expect( mismatchedMessage.length ).toBeLessThan( 90 );
+	} );
+
 	it( 'renders retry-oriented copy for an orphaned parent', () => {
 		// ARRANGE: An orphaned-parent issue.
 		const issue = makeIssue( {

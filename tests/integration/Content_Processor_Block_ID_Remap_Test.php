@@ -1081,7 +1081,8 @@ class Content_Processor_Block_ID_Remap_Test extends Integration_Test_Case {
 			array()
 		);
 
-		// ASSERT: id untouched, url only host-swapped, one warning raised.
+		// ASSERT: id untouched, url only host-swapped, one warning raised
+		// naming the mismatch so the admin is not told to import the term.
 		$attrs = $this->first_nav_link_attrs( (string) $result );
 		$this->assertSame( $source_id, $attrs['id'] ?? 0 );
 		$this->assertSame(
@@ -1095,6 +1096,7 @@ class Content_Processor_Block_ID_Remap_Test extends Integration_Test_Case {
 					'kind'      => 'term',
 					'block'     => 'core/navigation-link',
 					'source_id' => $source_id,
+					'reason'    => 'declared_taxonomy_mismatch',
 				),
 			),
 			$this->processor->get_warnings()

@@ -2770,12 +2770,23 @@ class Content_Processor {
 					);
 				}
 			} else {
-				$this->warnings[] = array(
+				$warning = array(
 					'type'      => 'unmapped_block_reference',
 					'kind'      => $kind,
 					'block'     => $name,
 					'source_id' => $source_id,
 				);
+
+				// Claimed, just not in the declared taxonomy: "import it" would
+				// be wrong advice.
+				if (
+					'term' === $kind
+					&& array() !== ( $id_map[ $source_id ] ?? array() )
+				) {
+					$warning['reason'] = 'declared_taxonomy_mismatch';
+				}
+
+				$this->warnings[] = $warning;
 			}
 		}
 
