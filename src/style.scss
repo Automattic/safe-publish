@@ -518,6 +518,22 @@ html:has(body.toplevel_page_safe-publish) {
 		border-radius: 2px;
 	}
 
+	// A removed element now keeps its own tag, so a deleted row or item is
+	// struck through where a span used to be. Cells do not inherit the
+	// strike from their row, so they repeat it.
+	.safe-publish-inline-removed td,
+	.safe-publish-inline-removed th {
+		text-decoration: line-through;
+	}
+
+	// Changes with no text position of their own. An attribute edit rides
+	// on the element that carries it, and a block whose change cannot be
+	// marked at all is outlined as a whole.
+	.safe-publish-inline-attr-changed,
+	.safe-publish-block-diff__col--unmarked {
+		outline: 1px dashed var(--safe-publish-primary);
+	}
+
 	.safe-publish-block-diff__col img,
 	.safe-publish-block-diff__added img,
 	.safe-publish-block-diff__removed img,
