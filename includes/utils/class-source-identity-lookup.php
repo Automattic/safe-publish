@@ -25,8 +25,8 @@ if ( ! defined( 'ABSPATH' ) ) {
  * patterns, navigation menus, and custom types kept out of site search.
  *
  * The status axis inverts: 'any' denies the registered exclude_from_search
- * statuses, so it drops 'trash' and 'auto-draft' but passes unregistered
- * ones, where an explicit status list would drop them.
+ * statuses but passes unregistered ones, where an explicit status list would
+ * drop them. post_stati() names the denied ones so neither kind is lost.
  *
  * Defaults return the newest claim by ID; callers override status, ordering,
  * result cap, and cache behavior through $args.
@@ -46,6 +46,26 @@ class Source_Identity_Lookup {
 		unset( $post_types['revision'] );
 
 		return array_keys( $post_types );
+	}
+
+	/**
+	 * Returns a post_status argument that denies only trash and auto-draft,
+	 * or nothing at all when $include_trash is set.
+	 *
+	 * Naming a denied status alongside 'any' removes its denial clause, so
+	 * hidden and unregistered statuses resolve either way.
+	 *
+	 * @param bool $include_trash Whether trash and auto-draft stay in scope.
+	 * @return string[] post_status query argument.
+	 */
+	public static function post_stati( bool $include_trash = false ): array {
+		$hidden = get_post_stati( array( 'exclude_from_search' => true ) );
+
+		if ( ! $include_trash ) {
+			unset( $hidden['trash'], $hidden['auto-draft'] );
+		}
+
+		return array_merge( array( 'any' ), array_keys( $hidden ) );
 	}
 
 	/**
@@ -90,8 +110,7 @@ class Source_Identity_Lookup {
 				),
 			),
 			'post_type'        => self::post_types(),
-			// Drops 'trash' and 'auto-draft'.
-			'post_status'      => 'any',
+			'post_status'      => self::post_stati(),
 			'orderby'          => 'ID',
 			'order'            => 'DESC',
 			'posts_per_page'   => 1,

@@ -588,7 +588,7 @@ class Post_Import_Service {
 		$message = sprintf(
 			/* translators: %d: parent post ID */
 			__(
-				'Source parent post %d has not been imported on this site.',
+				'Source parent post %d could not be resolved on this site.',
 				'safe-publish'
 			),
 			$source_parent_id
@@ -1211,14 +1211,8 @@ class Post_Import_Service {
 			$source_post_id,
 			$source_site_url,
 			array(
-				// Every status, registered or not: Naming the hidden ones
-				// alongside 'any' leaves no status clause at all.
-				'post_status'    => array_merge(
-					array( 'any' ),
-					array_keys(
-						get_post_stati( array( 'exclude_from_search' => true ) )
-					)
-				),
+				// Trash included; the partition below needs both kinds.
+				'post_status'    => Source_Identity_Lookup::post_stati( true ),
 				// phpcs:ignore WordPressVIPMinimum.Performance.NoPaging
 				'posts_per_page' => -1,
 			)
