@@ -164,6 +164,34 @@ function get_post_types(
 	);
 }
 
+function get_post_stati(
+	array $args = array(),
+	string $output = 'names',
+	string $operator = 'and'
+): array {
+	// Core's stock set; only these two are excluded from search.
+	$hidden = array(
+		'trash'      => 'trash',
+		'auto-draft' => 'auto-draft',
+	);
+
+	if ( true === ( $args['exclude_from_search'] ?? null ) ) {
+		return $hidden;
+	}
+
+	return array_merge(
+		array(
+			'publish' => 'publish',
+			'future'  => 'future',
+			'draft'   => 'draft',
+			'pending' => 'pending',
+			'private' => 'private',
+			'inherit' => 'inherit',
+		),
+		$hidden
+	);
+}
+
 function set_test_get_posts_result( array $result ): void {
 	$GLOBALS['_test_get_posts_result'] = $result;
 }
