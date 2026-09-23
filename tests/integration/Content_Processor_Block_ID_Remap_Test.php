@@ -825,10 +825,13 @@ class Content_Processor_Block_ID_Remap_Test extends Integration_Test_Case {
 			array()
 		);
 
-		// ASSERT: url only host-swapped, not re-derived.
+		// ASSERT: id still resolved — a claim with no term has no taxonomy to
+		// mismatch — but the url is only host-swapped, not re-derived.
+		$attrs = $this->first_nav_link_attrs( (string) $result );
+		$this->assertSame( $phantom_term, $attrs['id'] ?? 0 );
 		$this->assertSame(
 			'http://example.org/category/news',
-			$this->first_nav_link_url( (string) $result )
+			$attrs['url'] ?? ''
 		);
 	}
 
@@ -982,6 +985,289 @@ class Content_Processor_Block_ID_Remap_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that a taxonomy link claimed by terms in two taxonomies
+	 * resolves to the one its type attr declares, not the newest claim.
+	 */
+	public function test_taxonomy_link_picks_declared_taxonomy_over_newer_claim(): void {
+		// ARRANGE: A category and a newer tag both claiming one source term.
+		$this->set_permalink_structure( '/%postname%/' );
+		create_initial_taxonomies();
+		$source_id = 99101;
+		$category  = $this->claiming_term( 'category', $source_id );
+		$tag       = $this->claiming_term( 'post_tag', $source_id );
+		$this->assertGreaterThan( $category, $tag );
+
+		$content = $this->nav_block_content(
+			array(
+				$this->taxonomy_link(
+					$source_id,
+					self::SOURCE_SITE_URL . '/category/news'
+				),
+			)
+		);
+
+		// ACT: Process a link declaring type=category.
+		$result = $this->processor->process_content(
+			$content,
+			self::SOURCE_SITE_URL,
+			array()
+		);
+
+		// ASSERT: The category won, and the url is its archive.
+		$expected = get_term_link( $category );
+		$this->assertIsString( $expected );
+		$attrs = $this->first_nav_link_attrs( (string) $result );
+		$this->assertSame( $category, $attrs['id'] ?? 0 );
+		$this->assertSame( $expected, $attrs['url'] ?? '' );
+		$this->assertSame( array(), $this->processor->get_warnings() );
+	}
+
+	/**
+	 * Verifies that a taxonomy link declaring the editor's tag alias resolves
+	 * to the post_tag claim rather than the category one.
+	 */
+	public function test_taxonomy_link_resolves_tag_alias_to_post_tag(): void {
+		// ARRANGE: The same two claims, with the tag created first so it
+		// cannot win on recency alone.
+		$source_id = 99102;
+		$tag       = $this->claiming_term( 'post_tag', $source_id );
+		$category  = $this->claiming_term( 'category', $source_id );
+		$this->assertGreaterThan( $tag, $category );
+
+		$content = $this->nav_block_content(
+			array(
+				$this->taxonomy_link(
+					$source_id,
+					self::SOURCE_SITE_URL . '/tag/news',
+					'tag'
+				),
+			)
+		);
+
+		// ACT: Process a link declaring type=tag.
+		$result = $this->processor->process_content(
+			$content,
+			self::SOURCE_SITE_URL,
+			array()
+		);
+
+		// ASSERT: The post_tag term won.
+		$attrs = $this->first_nav_link_attrs( (string) $result );
+		$this->assertSame( $tag, $attrs['id'] ?? 0 );
+	}
+
+	/**
+	 * Verifies that a taxonomy link whose only claim sits in another taxonomy
+	 * keeps its source id and is reported as unmapped.
+	 */
+	public function test_taxonomy_link_unmapped_when_only_claim_is_another_taxonomy(): void {
+		// ARRANGE: A tag holding the only claim on the source term.
+		$source_id = 99103;
+		$this->claiming_term( 'post_tag', $source_id );
+
+		$content = $this->nav_block_content(
+			array(
+				$this->taxonomy_link(
+					$source_id,
+					self::SOURCE_SITE_URL . '/category/news'
+				),
+			)
+		);
+
+		// ACT: Process a link declaring type=category.
+		$result = $this->processor->process_content(
+			$content,
+			self::SOURCE_SITE_URL,
+			array()
+		);
+
+		// ASSERT: id untouched, url only host-swapped, one warning raised.
+		$attrs = $this->first_nav_link_attrs( (string) $result );
+		$this->assertSame( $source_id, $attrs['id'] ?? 0 );
+		$this->assertSame(
+			'http://example.org/category/news',
+			$attrs['url'] ?? ''
+		);
+		$this->assertSame(
+			array(
+				array(
+					'type'      => 'unmapped_block_reference',
+					'kind'      => 'term',
+					'block'     => 'core/navigation-link',
+					'source_id' => $source_id,
+				),
+			),
+			$this->processor->get_warnings()
+		);
+	}
+
+	/**
+	 * Verifies that a taxonomy link carrying no type attr — core omits it on
+	 * some links — still resolves, keeping the newest claim.
+	 */
+	public function test_taxonomy_link_without_type_keeps_newest_claim(): void {
+		// ARRANGE: A category and a newer tag both claiming one source term.
+		$source_id = 99104;
+		$this->claiming_term( 'category', $source_id );
+		$tag = $this->claiming_term( 'post_tag', $source_id );
+
+		$content = $this->nav_block_content(
+			array(
+				$this->taxonomy_link(
+					$source_id,
+					self::SOURCE_SITE_URL . '/category/news',
+					null
+				),
+			)
+		);
+
+		// ACT: Process a link declaring no type.
+		$result = $this->processor->process_content(
+			$content,
+			self::SOURCE_SITE_URL,
+			array()
+		);
+
+		// ASSERT: The newest claim won, as before the taxonomy check.
+		$attrs = $this->first_nav_link_attrs( (string) $result );
+		$this->assertSame( $tag, $attrs['id'] ?? 0 );
+		$this->assertArrayNotHasKey( 'type', $attrs );
+	}
+
+	/**
+	 * Verifies that a hyphenated taxonomy matches the underscored form the
+	 * editor writes into the type attr.
+	 */
+	public function test_taxonomy_link_matches_hyphenated_taxonomy_declared_with_underscore(): void {
+		// ARRANGE: A hyphen-slugged taxonomy claim plus a newer category one.
+		register_taxonomy(
+			'sp-topic',
+			'post',
+			array(
+				'query_var' => false,
+				'rewrite'   => false,
+			)
+		);
+		$source_id = 99105;
+		$topic     = $this->claiming_term( 'sp-topic', $source_id );
+		$this->claiming_term( 'category', $source_id );
+
+		$content = $this->nav_block_content(
+			array(
+				$this->taxonomy_link(
+					$source_id,
+					self::SOURCE_SITE_URL . '/topic/news',
+					'sp_topic'
+				),
+			)
+		);
+
+		// ACT: Process a link declaring the editor's underscored form.
+		$result = $this->processor->process_content(
+			$content,
+			self::SOURCE_SITE_URL,
+			array()
+		);
+
+		// ASSERT: The hyphenated taxonomy's term won over the newer category.
+		$attrs = $this->first_nav_link_attrs( (string) $result );
+		$this->assertSame( $topic, $attrs['id'] ?? 0 );
+
+		unregister_taxonomy( 'sp-topic' );
+	}
+
+	/**
+	 * Verifies that two claims inside the declared taxonomy still resolve to
+	 * the newest, matching the copy the term import writes to.
+	 */
+	public function test_taxonomy_link_keeps_newest_claim_within_declared_taxonomy(): void {
+		// ARRANGE: Two categories claiming one source term.
+		$source_id = 99106;
+		$older     = $this->claiming_term( 'category', $source_id );
+		$newer     = $this->claiming_term( 'category', $source_id );
+		$this->assertGreaterThan( $older, $newer );
+
+		$content = $this->nav_block_content(
+			array(
+				$this->taxonomy_link(
+					$source_id,
+					self::SOURCE_SITE_URL . '/category/news'
+				),
+			)
+		);
+
+		// ACT: Process a link declaring type=category.
+		$result = $this->processor->process_content(
+			$content,
+			self::SOURCE_SITE_URL,
+			array()
+		);
+
+		// ASSERT: The newest of the two matching claims won.
+		$attrs = $this->first_nav_link_attrs( (string) $result );
+		$this->assertSame( $newer, $attrs['id'] ?? 0 );
+	}
+
+	/**
+	 * Verifies that a taxonomy submenu honors its declared type too, as both
+	 * nav blocks share the term attr registry.
+	 */
+	public function test_taxonomy_submenu_picks_claim_matching_declared_type(): void {
+		// ARRANGE: A category and a newer tag both claiming one source term.
+		$source_id = 99107;
+		$category  = $this->claiming_term( 'category', $source_id );
+		$this->claiming_term( 'post_tag', $source_id );
+
+		$content = $this->nav_block_content(
+			array(
+				array(
+					'name'  => 'core/navigation-submenu',
+					'attrs' => array(
+						'id'    => $source_id,
+						'kind'  => 'taxonomy',
+						'type'  => 'category',
+						'label' => 'News',
+						'url'   => self::SOURCE_SITE_URL . '/category/news',
+					),
+				),
+			)
+		);
+
+		// ACT: Process a submenu declaring type=category.
+		$result = $this->processor->process_content(
+			$content,
+			self::SOURCE_SITE_URL,
+			array()
+		);
+
+		// ASSERT: The category won over the newer tag.
+		$attrs = $this->first_nav_link_attrs( (string) $result );
+		$this->assertSame( $category, $attrs['id'] ?? 0 );
+	}
+
+	/**
+	 * Creates a destination term in the taxonomy claiming the source term id.
+	 *
+	 * @param string $taxonomy  Destination taxonomy.
+	 * @param int    $source_id Source term id to claim.
+	 * @return int Created term id.
+	 */
+	private function claiming_term( string $taxonomy, int $source_id ): int {
+		$term_id = self::factory()->term->create(
+			array( 'taxonomy' => $taxonomy )
+		);
+		$this->assertIsInt( $term_id );
+		update_term_meta( $term_id, Options::META_SOURCE_TERM_ID, $source_id );
+		update_term_meta(
+			$term_id,
+			Options::META_SOURCE_TERM_URL,
+			self::SOURCE_SITE_URL
+		);
+
+		return $term_id;
+	}
+
+	/**
 	 * Wraps a list of nav-link/submenu shapes in a core/navigation block,
 	 * matching the serializer output the editor would produce.
 	 *
@@ -1021,21 +1307,78 @@ class Content_Processor_Block_ID_Remap_Test extends Integration_Test_Case {
 	/**
 	 * Builds a taxonomy nav-link inner-block shape.
 	 *
-	 * @param int    $source_id Source term ID for the id attr.
-	 * @param string $url       Link url attr.
+	 * @param int         $source_id Source term ID for the id attr.
+	 * @param string      $url       Link url attr.
+	 * @param string|null $type      Declared taxonomy; null omits the attr.
 	 * @return array{name:string, attrs:array<string,mixed>} Inner-block shape.
 	 */
-	private function taxonomy_link( int $source_id, string $url ): array {
+	private function taxonomy_link(
+		int $source_id,
+		string $url,
+		?string $type = 'category'
+	): array {
+		$attrs = array(
+			'id'   => $source_id,
+			'kind' => 'taxonomy',
+		);
+
+		if ( null !== $type ) {
+			$attrs['type'] = $type;
+		}
+
+		$attrs['label'] = 'News';
+		$attrs['url']   = $url;
+
 		return array(
 			'name'  => 'core/navigation-link',
-			'attrs' => array(
-				'id'    => $source_id,
-				'kind'  => 'taxonomy',
-				'type'  => 'category',
-				'label' => 'News',
-				'url'   => $url,
-			),
+			'attrs' => $attrs,
 		);
+	}
+
+	/**
+	 * Returns the attrs of the first nav-link or submenu in the content.
+	 *
+	 * @param string $content Serialized block content.
+	 * @return array<string, mixed> Attrs, or empty when none is found.
+	 */
+	private function first_nav_link_attrs( string $content ): array {
+		foreach ( parse_blocks( $content ) as $block ) {
+			$found = $this->find_nav_link_attrs( $block );
+			if ( array() !== $found ) {
+				return $found;
+			}
+		}
+
+		return array();
+	}
+
+	/**
+	 * Recursively finds the first nav-link or submenu attrs in a subtree.
+	 *
+	 * @param array<string, mixed> $block Parsed block.
+	 * @return array<string, mixed> Attrs, or empty when not found.
+	 */
+	private function find_nav_link_attrs( array $block ): array {
+		$name = $block['blockName'] ?? '';
+		if (
+			(
+				'core/navigation-link' === $name
+				|| 'core/navigation-submenu' === $name
+			)
+			&& isset( $block['attrs'] )
+			&& is_array( $block['attrs'] )
+		) {
+			return $block['attrs'];
+		}
+
+		foreach ( $block['innerBlocks'] ?? array() as $inner ) {
+			$found = $this->find_nav_link_attrs( $inner );
+			if ( array() !== $found ) {
+				return $found;
+			}
+		}
+
+		return array();
 	}
 
 	/**

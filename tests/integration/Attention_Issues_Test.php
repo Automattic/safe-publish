@@ -884,7 +884,7 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 		$result  = $this->import_under(
 			self::BLOG_URL,
 			7206,
-			array( 'content' => $this->single_term_link_content( 9701 ) )
+			array( 'content' => $this->term_link_content( 9701 ) )
 		);
 		$post_id = $result['post_id'];
 		$rows    = $this->open_rows_for_source( self::BLOG_URL );
@@ -907,6 +907,139 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 				$post_id,
 				'unmapped_block_reference',
 				9701,
+				'term'
+			)
+		);
+	}
+
+	/**
+	 * Verifies that a term retry repoints to the claim in the taxonomy the nav
+	 * link declares, not the newest claim overall.
+	 */
+	public function test_block_ref_retry_picks_declared_taxonomy(): void {
+		// ARRANGE: Import a post linking to a not-yet-imported source term.
+		$result  = $this->import_under(
+			self::BLOG_URL,
+			7207,
+			array( 'content' => $this->term_link_content( 9702 ) )
+		);
+		$post_id = $result['post_id'];
+
+		// ACT: Make the term available as a category and a newer tag, then
+		// retry the link, which declares type=category.
+		$category = $this->seed_target_term( 9702, self::BLOG_URL );
+		$tag      = $this->seed_target_term( 9702, self::BLOG_URL, 'post_tag' );
+		$this->assertGreaterThan( $category, $tag );
+		$outcome = $this->import_service->retry_block_ref_repoint(
+			$post_id,
+			9702,
+			'term',
+			self::BLOG_URL
+		);
+
+		// ASSERT: The category won over the newer tag; issue cleared.
+		$this->assertSame( 'resolved', $outcome->type );
+		$this->assertSame(
+			array( $category ),
+			$this->nav_link_ids( $post_id )
+		);
+		$this->assertNull(
+			$this->attention->get_issue(
+				$post_id,
+				'unmapped_block_reference',
+				9702,
+				'term'
+			)
+		);
+	}
+
+	/**
+	 * Verifies that a term retry whose only claim sits in another taxonomy
+	 * leaves the link alone and keeps the issue open.
+	 */
+	public function test_block_ref_retry_unresolved_on_taxonomy_mismatch(): void {
+		// ARRANGE: Import a post linking to a not-yet-imported source term.
+		$result  = $this->import_under(
+			self::BLOG_URL,
+			7208,
+			array( 'content' => $this->term_link_content( 9703 ) )
+		);
+		$post_id = $result['post_id'];
+
+		// ACT: Make the term available only as a tag, then retry the link,
+		// which declares type=category.
+		$this->seed_target_term( 9703, self::BLOG_URL, 'post_tag' );
+		$outcome = $this->import_service->retry_block_ref_repoint(
+			$post_id,
+			9703,
+			'term',
+			self::BLOG_URL
+		);
+
+		// ASSERT: Unresolved naming the taxonomy, link untouched, issue open,
+		// and no repoint stamp written.
+		$this->assertSame( 'unresolved', $outcome->type );
+		$this->assertStringContainsString( 'taxonomy', $outcome->detail );
+		$this->assertSame( array( 9703 ), $this->nav_link_ids( $post_id ) );
+		$this->assertNotNull(
+			$this->attention->get_issue(
+				$post_id,
+				'unmapped_block_reference',
+				9703,
+				'term'
+			)
+		);
+		$this->assertSame(
+			'',
+			get_post_meta(
+				$post_id,
+				Content_Processor::META_REF_REPOINTED_AT,
+				true
+			)
+		);
+	}
+
+	/**
+	 * Verifies that a retry repointing one of two links sharing a source ref
+	 * keeps the repoint but leaves the issue open, so the link still carrying
+	 * the source id is not silently dropped from Needs attention.
+	 */
+	public function test_block_ref_retry_keeps_issue_open_on_partial_repoint(): void {
+		// ARRANGE: Import a post whose two links on one source term declare
+		// different taxonomies.
+		$result  = $this->import_under(
+			self::BLOG_URL,
+			7209,
+			array(
+				'content' => $this->term_link_content(
+					9704,
+					array( 'tag', 'category' )
+				),
+			)
+		);
+		$post_id = $result['post_id'];
+
+		// ACT: Make the term available only as a tag, then retry.
+		$tag     = $this->seed_target_term( 9704, self::BLOG_URL, 'post_tag' );
+		$outcome = $this->import_service->retry_block_ref_repoint(
+			$post_id,
+			9704,
+			'term',
+			self::BLOG_URL
+		);
+
+		// ASSERT: The tag link repointed and persisted, yet the issue stays
+		// open for the link still holding the source id.
+		$this->assertSame(
+			array( $tag, 9704 ),
+			$this->nav_link_ids( $post_id )
+		);
+		$this->assertSame( 'unresolved', $outcome->type );
+		$this->assertNotNull(
+			$this->attention->get_issue(
+				$post_id,
+				'unmapped_block_reference',
+				9704,
 				'term'
 			)
 		);
@@ -1828,11 +1961,16 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 	 *
 	 * @param int    $source_id Source term ID meta value.
 	 * @param string $identity  Source site identity meta value.
+	 * @param string $taxonomy  Taxonomy to create the term in.
 	 * @return int Created term ID.
 	 */
-	private function seed_target_term( int $source_id, string $identity ): int {
+	private function seed_target_term(
+		int $source_id,
+		string $identity,
+		string $taxonomy = 'category'
+	): int {
 		$term_id = self::factory()->term->create(
-			array( 'taxonomy' => 'category' )
+			array( 'taxonomy' => $taxonomy )
 		);
 		$this->assertIsInt( $term_id );
 		update_term_meta( $term_id, Options::META_SOURCE_TERM_ID, $source_id );
@@ -1907,31 +2045,34 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 	}
 
 	/**
-	 * Builds a core/navigation block with a single taxonomy nav-link referencing
-	 * the given source term ID.
+	 * Builds a core/navigation block with one taxonomy nav-link per declared
+	 * type, all referencing the given source term ID.
 	 *
-	 * @param int $term_source_id Source term ID in the nav-link.
+	 * @param int      $term_source_id Source term ID in the nav-link.
+	 * @param string[] $types          Declared taxonomy per link, one link each.
 	 * @return string Block markup.
 	 */
-	private function single_term_link_content( int $term_source_id ): string {
-		$term_link = wp_json_encode(
-			array(
-				'id'    => $term_source_id,
-				'kind'  => 'taxonomy',
-				'type'  => 'category',
-				'label' => 'News',
-				'url'   => 'https://source.example.com/category/news',
-			)
-		);
+	private function term_link_content(
+		int $term_source_id,
+		array $types = array( 'category' )
+	): string {
+		$links = array( '<!-- wp:navigation -->' );
 
-		return implode(
-			"\n",
-			array(
-				'<!-- wp:navigation -->',
-				'<!-- wp:navigation-link ' . $term_link . ' /-->',
-				'<!-- /wp:navigation -->',
-			)
-		);
+		foreach ( $types as $type ) {
+			$links[] = '<!-- wp:navigation-link ' . wp_json_encode(
+				array(
+					'id'    => $term_source_id,
+					'kind'  => 'taxonomy',
+					'type'  => $type,
+					'label' => 'News',
+					'url'   => 'https://source.example.com/category/news',
+				)
+			) . ' /-->';
+		}
+
+		$links[] = '<!-- /wp:navigation -->';
+
+		return implode( "\n", $links );
 	}
 
 	/**

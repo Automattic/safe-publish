@@ -282,18 +282,26 @@ class Post_Import_Service {
 		try {
 			$source_site_url = Options::get_connected_site_url_with_path();
 
-			$imported_post = $this->find_imported_post(
+			$claims = $this->resolve_identity_claims(
 				$fields['source_post_id'],
 				$source_site_url
 			);
 
-			if ( $imported_post ) {
+			if ( null !== $claims['present'] ) {
 				return $this->handle_imported_post(
-					$imported_post,
+					$claims['present'],
 					$fields,
 					$post_type,
 					$session_id,
 					$options
+				);
+			}
+
+			if ( null !== $claims['trashed'] ) {
+				return $this->refuse_trashed_claim(
+					$claims['trashed'],
+					$fields,
+					$session_id
 				);
 			}
 
@@ -580,7 +588,7 @@ class Post_Import_Service {
 		$message = sprintf(
 			/* translators: %d: parent post ID */
 			__(
-				'Source parent post %d has not been imported on this site.',
+				'Source parent post %d could not be resolved on this site.',
 				'safe-publish'
 			),
 			$source_parent_id
@@ -969,13 +977,15 @@ class Post_Import_Service {
 				$local_post_present
 			);
 
-			$post['local_state']    = $local_state;
-			$post['is_imported']    = in_array(
+			$post['local_state'] = $local_state;
+			$post['is_imported'] = in_array(
 				$local_state,
 				array( 'up-to-date', 'outdated' ),
 				true
 			);
-			$post['wp_post_status'] = $local_post_present ? $wp_post_status : null;
+			// Reported even when trashed, so the row reads as trashed rather
+			// than as never imported. Null only when the post is gone.
+			$post['wp_post_status'] = $wp_post_status;
 
 			$this->attach_active_row_metadata( $post, $active_row, $local_post_present );
 		}
@@ -1183,9 +1193,94 @@ class Post_Import_Service {
 	}
 
 	/**
+	 * Partitions the posts claiming a source identity into the newest one
+	 * outside the trash and the newest one in it.
+	 *
+	 * Uncapped: The newest claim overall can be a trashed one hiding a post
+	 * the import should update. Identity meta bounds the result.
+	 *
+	 * @param int    $source_post_id  Source post ID stored in post meta.
+	 * @param string $source_site_url Source site identity of the import.
+	 * @return array{present: WP_Post|null, trashed: WP_Post|null} Newest of each.
+	 */
+	public function resolve_identity_claims(
+		int $source_post_id,
+		string $source_site_url
+	): array {
+		$claims = Source_Identity_Lookup::find(
+			$source_post_id,
+			$source_site_url,
+			array(
+				// Trash included; the partition below needs both kinds.
+				'post_status'    => Source_Identity_Lookup::post_stati( true ),
+				// phpcs:ignore WordPressVIPMinimum.Performance.NoPaging
+				'posts_per_page' => -1,
+			)
+		);
+
+		$resolved = array(
+			'present' => null,
+			'trashed' => null,
+		);
+
+		// find() orders newest-first by ID, so the first of each kind wins.
+		foreach ( $claims as $claim ) {
+			if ( 'trash' === $claim->post_status ) {
+				$resolved['trashed'] ??= $claim;
+			} else {
+				$resolved['present'] ??= $claim;
+			}
+		}
+
+		return $resolved;
+	}
+
+	/**
+	 * Refuses an import whose source identity is claimed only by a trashed
+	 * post, so a second claim is never created.
+	 *
+	 * @param WP_Post  $trashed_post Trashed post holding the claim.
+	 * @param array    $fields       Normalized source post fields.
+	 * @param int|null $session_id   Import session, null when unsessioned.
+	 * @return array Error result describing the refusal.
+	 */
+	private function refuse_trashed_claim(
+		WP_Post $trashed_post,
+		array $fields,
+		?int $session_id
+	): array {
+		$title = '' !== $trashed_post->post_title
+			? $trashed_post->post_title
+			: __( '(no title)', 'safe-publish' );
+
+		$error_message = sprintf(
+			/* translators: 1: trashed post title, 2: its post ID. */
+			__(
+				'A trashed post ("%1$s", ID %2$d) is still linked to this source post. Restore it to update it, or delete it permanently to import a fresh copy.',
+				'safe-publish'
+			),
+			$title,
+			$trashed_post->ID
+		);
+
+		$this->log_import_if_session(
+			$session_id,
+			$fields['source_post_id'],
+			$fields['title'],
+			'error',
+			null,
+			$error_message,
+			array( 'action' => 'trashed_copy_exists' )
+		);
+
+		return $this->build_error_result( $fields, $error_message );
+	}
+
+	/**
 	 * Reports per open degradation whether its target is imported, so a Retry
 	 * would reconcile it now. Batched, reusing each type's Retry lookup; a true
-	 * is a hint, not a guarantee, since Retry can still return write_failed.
+	 * is a hint, not a guarantee, since Retry can still return write_failed, or
+	 * leave a term ref open when no claim matches a block's declared taxonomy.
 	 *
 	 * @param array[] $issue_rows      Open degradation rows, each carrying
 	 *                                 issue_type, target_ref, and target_kind.
@@ -1216,7 +1311,7 @@ class Post_Import_Service {
 			}
 
 			// parent_orphaned mirrors find_imported_post; block/nav refs mirror
-			// resolve_target_ref (post or term meta).
+			// the Retry lookups (post or term meta).
 			if ( 'parent_orphaned' === $type ) {
 				$bucket              = 'parent';
 				$parent_refs[ $ref ] = true;
