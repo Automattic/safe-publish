@@ -1000,6 +1000,82 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 	}
 
 	/**
+	 * Verifies that a post retry repoints to the claim of the post type the
+	 * nav link declares, not the newest claim overall.
+	 */
+	public function test_block_ref_retry_picks_declared_post_type(): void {
+		// ARRANGE: Import a post linking to a not-yet-imported source post.
+		$result  = $this->import_under(
+			self::BLOG_URL,
+			7210,
+			array( 'content' => $this->post_link_content( 9705 ) )
+		);
+		$post_id = $result['post_id'];
+
+		// ACT: Make the post available as a page and a newer post, then retry
+		// the link, which declares type=page.
+		$page = $this->seed_target_post( 9705, self::BLOG_URL );
+		$post = $this->seed_target_post( 9705, self::BLOG_URL, 'post' );
+		$this->assertGreaterThan( $page, $post );
+		$outcome = $this->import_service->retry_block_ref_repoint(
+			$post_id,
+			9705,
+			'post',
+			self::BLOG_URL
+		);
+
+		// ASSERT: The page won over the newer post; type kept; issue cleared.
+		$this->assertSame( 'resolved', $outcome->type );
+		$this->assertSame( array( $page ), $this->nav_link_ids( $post_id ) );
+		$this->assertSame( 'page', $this->first_nav_link_type( $post_id ) );
+		$this->assertNull(
+			$this->attention->get_issue(
+				$post_id,
+				'unmapped_block_reference',
+				9705,
+				'post'
+			)
+		);
+	}
+
+	/**
+	 * Verifies that a post retry whose only claim is another post type still
+	 * repoints, realigning the declared type so the editor resolves it.
+	 */
+	public function test_block_ref_retry_realigns_declared_post_type(): void {
+		// ARRANGE: Import a post linking to a not-yet-imported source post.
+		$result  = $this->import_under(
+			self::BLOG_URL,
+			7211,
+			array( 'content' => $this->post_link_content( 9706 ) )
+		);
+		$post_id = $result['post_id'];
+
+		// ACT: Make the post available only as a post, then retry the link,
+		// which declares the now-stale type=page.
+		$target  = $this->seed_target_post( 9706, self::BLOG_URL, 'post' );
+		$outcome = $this->import_service->retry_block_ref_repoint(
+			$post_id,
+			9706,
+			'post',
+			self::BLOG_URL
+		);
+
+		// ASSERT: Repointed with the type realigned; issue cleared.
+		$this->assertSame( 'resolved', $outcome->type );
+		$this->assertSame( array( $target ), $this->nav_link_ids( $post_id ) );
+		$this->assertSame( 'post', $this->first_nav_link_type( $post_id ) );
+		$this->assertNull(
+			$this->attention->get_issue(
+				$post_id,
+				'unmapped_block_reference',
+				9706,
+				'post'
+			)
+		);
+	}
+
+	/**
 	 * Verifies that a retry repointing one of two links sharing a source ref
 	 * keeps the repoint but leaves the issue open, so the link still carrying
 	 * the source id is not silently dropped from Needs attention.
@@ -1945,15 +2021,76 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 	 *
 	 * @param int    $source_id Source post ID meta value.
 	 * @param string $identity  Source site identity meta value.
+	 * @param string $post_type Post type to create.
 	 * @return int Created post ID.
 	 */
-	private function seed_target_post( int $source_id, string $identity ): int {
-		$post_id = self::factory()->post->create( array( 'post_type' => 'page' ) );
+	private function seed_target_post(
+		int $source_id,
+		string $identity,
+		string $post_type = 'page'
+	): int {
+		$post_id = self::factory()->post->create(
+			array( 'post_type' => $post_type )
+		);
 		$this->assertIsInt( $post_id );
 		update_post_meta( $post_id, Options::META_SOURCE_POST_ID, $source_id );
 		update_post_meta( $post_id, Options::META_SOURCE_SITE_URL, $identity );
 
 		return $post_id;
+	}
+
+	/**
+	 * Builds a core/navigation block with one post-type nav-link declaring the
+	 * given type.
+	 *
+	 * @param int    $post_source_id Source post ID in the nav-link.
+	 * @param string $type           Declared post type.
+	 * @return string Block markup.
+	 */
+	private function post_link_content(
+		int $post_source_id,
+		string $type = 'page'
+	): string {
+		$link = wp_json_encode(
+			array(
+				'id'    => $post_source_id,
+				'kind'  => 'post-type',
+				'type'  => $type,
+				'label' => 'About',
+				'url'   => 'https://source.example.com/about',
+			)
+		);
+
+		return implode(
+			"\n",
+			array(
+				'<!-- wp:navigation -->',
+				'<!-- wp:navigation-link ' . $link . ' /-->',
+				'<!-- /wp:navigation -->',
+			)
+		);
+	}
+
+	/**
+	 * Returns the declared type attr of the first nav-link in a post.
+	 *
+	 * @param int $post_id Post to read.
+	 * @return string Declared type, or empty when absent.
+	 */
+	private function first_nav_link_type( int $post_id ): string {
+		$content = (string) get_post_field( 'post_content', $post_id );
+
+		foreach ( parse_blocks( $content ) as $block ) {
+			foreach ( $block['innerBlocks'] ?? array() as $inner ) {
+				if (
+					'core/navigation-link' === ( $inner['blockName'] ?? '' )
+				) {
+					return (string) ( $inner['attrs']['type'] ?? '' );
+				}
+			}
+		}
+
+		return '';
 	}
 
 	/**
