@@ -1279,7 +1279,8 @@ class Post_Import_Service {
 	/**
 	 * Reports per open degradation whether its target is imported, so a Retry
 	 * would reconcile it now. Batched, reusing each type's Retry lookup; a true
-	 * is a hint, not a guarantee, since Retry can still return write_failed.
+	 * is a hint, not a guarantee, since Retry can still return write_failed, or
+	 * leave a term ref open when no claim matches a block's declared taxonomy.
 	 *
 	 * @param array[] $issue_rows      Open degradation rows, each carrying
 	 *                                 issue_type, target_ref, and target_kind.
@@ -1310,7 +1311,7 @@ class Post_Import_Service {
 			}
 
 			// parent_orphaned mirrors find_imported_post; block/nav refs mirror
-			// resolve_target_ref (post or term meta).
+			// the Retry lookups (post or term meta).
 			if ( 'parent_orphaned' === $type ) {
 				$bucket              = 'parent';
 				$parent_refs[ $ref ] = true;
