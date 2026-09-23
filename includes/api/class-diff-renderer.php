@@ -14,6 +14,7 @@ use Safe_Publish\Auth\Permissions;
 use Safe_Publish\Admin\Content_Logger;
 use Safe_Publish\Utils\Options;
 use Safe_Publish\Utils\Post_Type_Map;
+use Safe_Publish\Utils\Source_Identity_Lookup;
 use stdClass;
 use WP_Error;
 use WP_Post;
@@ -193,7 +194,7 @@ final class Diff_Renderer {
 					),
 				),
 				'post_type'      => $post_type,
-				'post_status'    => 'any',
+				'post_status'    => Source_Identity_Lookup::post_stati(),
 				'posts_per_page' => 1,
 				// Match the import lookup's tie-break so the diff shows the
 				// copy an import would write to.

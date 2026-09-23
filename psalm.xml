@@ -50,6 +50,7 @@
         <file name="vendor/php-stubs/wordpress-stubs/wordpress-stubs.php"/>
         <file name="vendor/php-stubs/wordpress-tests-stubs/wordpress-tests-stubs.php" preloadClasses="true"/>
         <file name="tests/unit/test-utils.php"/>
+        <file name="tests/integration/bootstrap.php"/>
         <file name="safe-publish.php"/>
     </stubs>
 </psalm>

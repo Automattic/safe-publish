@@ -168,7 +168,9 @@ For hierarchical post types (pages and any custom post type registered with `'hi
 - **Top-level source posts** (source `parent = 0`) are imported as top-level on the destination. No resolution is performed.
 - **Non-hierarchical post types** ignore the source `parent` entirely.
 - **Match found**: `post_parent` is set to the destination post ID.
-- **No match (strict default)**: the import aborts with an error that identifies the unresolved parent. The error distinguishes "has not been imported on this site" (the parent was never imported and is not part of the current batch) from "failed to import earlier in this batch" (the parent was part of the bulk batch but did not succeed).
+- **No match (strict default)**: the import aborts with an error that identifies the unresolved parent. The error distinguishes "could not be resolved on this site" (no destination post the import can parent under claims that parent, and it is not part of the current batch) from "failed to import earlier in this batch" (the parent was part of the bulk batch but did not succeed).
+
+A destination parent is resolvable whatever its post status, including statuses a plugin registers as hidden from site search. Trashed parents are not: parenting a new post under one would orphan it in the UI.
 
 Bulk imports run in two passes. Pass 1 fetches each post's REST payload without writing to the database; pass 2 then processes the batch in topological order so the destination parent exists by the time its children look it up. Posts in a cycle (or whose parent is outside the batch) are processed at the end of pass 2 and route through the same unresolvable-parent path.
 
@@ -307,6 +309,10 @@ Navigation links and submenus are the exception: they carry an explicit entity r
 ### Navigation links to draft targets may 404 or open the wrong page
 
 Navigation links and submenus are re-derived only when their target was already published at import. If the target was a draft, its slug isn't final, so the link keeps the host-swapped source path and behaves like an [internal body link](#internal-body-links-may-404-or-open-the-wrong-page) — it can 404 or open the wrong page under a slug collision or a different permalink structure. Re-import the referring content after the target is published to re-derive the URL; the Retry action does not cover this case.
+
+### Navigation links to a term in another taxonomy are left unrepointed
+
+A navigation link or submenu that points at a taxonomy term also names the taxonomy that term belongs to, and is repointed only to a destination term in that same taxonomy. If no imported term sits in that taxonomy — for example when the source term changed taxonomy and only its older copy was imported — the link keeps its source reference and is reported under Needs attention instead of being sent to an unrelated term. Import the term into the taxonomy the link names, then use the Retry action.
 
 ### Some sideloaded files carry no source library metadata
 

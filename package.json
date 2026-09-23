@@ -1,6 +1,6 @@
 {
   "name": "safe-publish",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "author": "WPVIP",
   "description": "Safe Publish plugin",
   "license": "GPL-2.0-or-later",
@@ -41,6 +41,7 @@
     "playground:reset": "npm run playground -- --reset",
     "plugin-zip": "npm run build && composer install --prefer-dist --optimize-autoloader --no-dev && wp-scripts plugin-zip --no-root-folder",
     "postinstall": "composer install",
+    "prepare": "husky",
     "release": "./bin/release",
     "seed": "./bin/seed",
     "seed:degradations": "./bin/seed-degradations",

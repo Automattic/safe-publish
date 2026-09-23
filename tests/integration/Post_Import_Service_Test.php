@@ -2930,7 +2930,7 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 
 	/**
 	 * Verifies that an unresolvable parent aborts the import with the
-	 * "has not been imported" message when the parent is not part of the
+	 * "could not be resolved" message when the parent is not part of the
 	 * current batch.
 	 */
 	public function test_unresolvable_parent_not_in_batch_aborts(): void {
@@ -2957,7 +2957,7 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 		// ASSERT: Failure with the no-match message and no post created.
 		$this->assertFalse( $result['success'] );
 		$this->assertStringContainsString(
-			'has not been imported on this site',
+			'could not be resolved on this site',
 			$result['error']
 		);
 		$this->assertStringNotContainsString( '"', $result['error'] );
