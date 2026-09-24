@@ -12,6 +12,10 @@ namespace Safe_Publish\API;
 use Safe_Publish\Auth\Permissions;
 
 use Safe_Publish\Admin\Content_Logger;
+use Safe_Publish\Admin\Content_Processor;
+use Safe_Publish\Content\Content_Media_Processor;
+use Safe_Publish\Content\Shortcode_ID_Rewriter;
+use Safe_Publish\Media\Media_Importer;
 use Safe_Publish\Utils\Options;
 use Safe_Publish\Utils\Post_Type_Map;
 use Safe_Publish\Utils\Source_Identity_Lookup;
@@ -108,6 +112,13 @@ final class Diff_Renderer {
 		$incoming = $this->extract_incoming_data(
 			$source_data,
 			$resolved_post_data['raw_values']
+		);
+
+		$incoming['content'] = $this->preview_incoming_content(
+			$incoming['content'],
+			untrailingslashit( (string) $source_site_url ),
+			$source_post_id,
+			$credentials
 		);
 
 		// Extract current local data.
@@ -365,6 +376,49 @@ final class Diff_Renderer {
 		$incoming['has_term_fields'] = null !== $source_terms;
 
 		return $incoming;
+	}
+
+	/**
+	 * Rewrites incoming content the way the import would, so the comparison
+	 * reports what an update changes rather than the rewrite itself.
+	 *
+	 * Media resolves against what the import already sideloaded, downloading
+	 * nothing. Content is returned as it came in when no source is connected
+	 * or a pass fails, leaving the unrewritten comparison.
+	 *
+	 * @param string $content         Raw source content.
+	 * @param string $source_site_url Connected source site URL, untrailingslashed.
+	 * @param int    $source_post_id  Source post ID, for the gallery id self check.
+	 * @param array  $credentials     Source REST auth credentials.
+	 *
+	 * @return string Content as the import would store it.
+	 */
+	private function preview_incoming_content(
+		string $content,
+		string $source_site_url,
+		int $source_post_id,
+		array $credentials
+	): string {
+		if ( '' === $source_site_url || '' === $content ) {
+			return $content;
+		}
+
+		$media_importer = new Media_Importer( new HTTP_Client(), true );
+
+		$preview = ( new Content_Processor(
+			$media_importer,
+			new Content_Media_Processor( $media_importer ),
+			new Shortcode_ID_Rewriter()
+		) )->preview_content(
+			$content,
+			$source_site_url,
+			array(
+				'source_post_id'   => $source_post_id,
+				'auth_credentials' => $credentials,
+			)
+		);
+
+		return is_string( $preview ) ? $preview : $content;
 	}
 
 	/**
