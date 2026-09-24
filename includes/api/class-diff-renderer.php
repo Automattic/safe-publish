@@ -694,11 +694,16 @@ final class Diff_Renderer {
 	}
 
 	/**
-	 * Renders content with WordPress filters and block rendering.
+	 * Renders content with WordPress filters and block rendering, then
+	 * filters the result for safe output.
+	 *
+	 * The content comes from the source site, so the rendered result passes
+	 * through wp_kses_post() before it reaches the response, matching the
+	 * filtering the block-level rendered output already receives.
 	 *
 	 * @param string $content Content to render.
 	 *
-	 * @return string Rendered content.
+	 * @return string Rendered content, filtered for safe output.
 	 */
 	private function render_content( string $content ): string {
 		$rendered = $content;
@@ -714,6 +719,12 @@ final class Diff_Renderer {
 		if ( function_exists( 'apply_filters' ) ) {
 			// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound
 			$rendered = apply_filters( 'the_content', $rendered );
+		}
+
+		// The rendered result carries source markup, so filter it the same
+		// way the block-level rendered output is filtered.
+		if ( function_exists( 'wp_kses_post' ) ) {
+			$rendered = wp_kses_post( $rendered );
 		}
 
 		return $rendered;
