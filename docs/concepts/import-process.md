@@ -99,6 +99,8 @@ An inline `<img>` carries two attachment-ID references alongside its URL — the
 
 After media processing, all remaining source-domain URLs in the content are replaced with the destination site URL. This catches URLs outside media elements, such as normal links, block comment attributes, and text references.
 
+The **Compare** action runs this whole transform over the incoming content before diffing it, resolving media against what earlier imports already sideloaded rather than downloading anything, so the comparison reports what a re-import would change instead of the rewrite it already applied. Media the destination has never imported cannot be resolved this way and is left for the URL replacement alone, so it still reads as a difference.
+
 ### Content and Excerpt Filtering
 
 Post content and excerpts pass through WordPress' normal save filters for the acting user. After saving, Safe Publish compares both persisted fields with the requested values. If either differs, the import reports an error instead of claiming success. A failed new import is removed, while a failed update attempts to restore its previous version through the same WordPress filters. If WordPress prevents new-post or attachment cleanup, the error identifies the items that remain so an administrator can remove them manually.

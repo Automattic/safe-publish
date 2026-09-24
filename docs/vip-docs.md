@@ -65,7 +65,7 @@ The plugin uses a small set of terms consistently throughout its interface and t
 - **Sync mode** — a per-site setting that determines whether a site acts as a source (`export`), a destination (`import`), or both (`bidirectional`).
 - **Catalog** — the list of posts available on the source site, served through a REST API endpoint and browsed from the destination.
 - **Import** — creating a destination draft or updating an existing imported post. A bulk run records several items in one history session.
-- **Compare** — a side-by-side comparison of fresh source content against the current destination post.
+- **Compare** — a side-by-side comparison of the current destination post against what a re-import from the source would store.
 - **Roll back** — reversing the latest eligible import for a selected post. Rolling back a created post deletes it. Rolling back an updated post restores the previous content when it was captured, or deletes the post when it was not.
 
 ## Requirements
@@ -171,7 +171,7 @@ The **Manage** page has two tabs:
 
 ### Previewing changes with Compare
 
-The Compare action on **Manage → Posts** fetches fresh source content and compares it with the current destination post, covering the title, content, excerpt, featured image, metadata, and taxonomy terms, including each term's parent and description. It is shown side by side, and block-editor content is compared block by block so editors can see which blocks were added, removed, or changed. Terms the source sends to preserve the hierarchy appear in a separate **Related hierarchy terms** block. A taxonomy this site registers and the source does not send is not reported as a removal, since the import does not touch it. Any difference shown that the import would not apply is noted under the comparison: a term difference names the term and the field it affects, and a taxonomy this site does not register names the taxonomy. The modal also offers an **Update** button that re-imports the post from the source.
+The Compare action on **Manage → Posts** fetches fresh source content and compares it with the current destination post, covering the title, content, excerpt, featured image, metadata, and taxonomy terms, including each term's parent and description. It is shown side by side, and block-editor content is compared block by block so editors can see which blocks were added, removed, or changed. The incoming side is shown as an import would store it, with references, links and media resolved against this site, so the adjustments every import makes are not reported as changes; a post whose source was saved without editing it therefore reports no differences. Terms the source sends to preserve the hierarchy appear in a separate **Related hierarchy terms** block. A taxonomy this site registers and the source does not send is not reported as a removal, since the import does not touch it. Any difference shown that the import would not apply is noted under the comparison: a term difference names the term and the field it affects, and a taxonomy this site does not register names the taxonomy. The modal also offers an **Update** button that re-imports the post from the source. It stays available for a post that reports no differences, so a row the source marked as changed can still be brought up to date.
 
 ### Rolling back imports
 

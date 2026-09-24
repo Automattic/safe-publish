@@ -28,6 +28,10 @@ if ( ! defined( 'ABSPATH' ) ) {
  *
  * Handles importing media files from the source site into the WordPress media
  * library.
+ *
+ * A resolve-only instance answers from the library alone: it returns media an
+ * earlier import already sideloaded and yields null for anything else, so a
+ * caller previewing an import downloads nothing and writes nothing.
  */
 class Media_Importer {
 
@@ -65,13 +69,27 @@ class Media_Importer {
 	private array $library_metadata_map = array();
 
 	/**
+	 * Whether this instance resolves already-imported media only, never
+	 * downloading.
+	 *
+	 * @var bool
+	 */
+	private bool $resolve_only;
+
+	/**
 	 * Constructs the Media_Importer instance.
 	 *
-	 * @param HTTP_Client $http_client HTTP client for downloading files.
+	 * @param HTTP_Client $http_client  HTTP client for downloading files.
+	 * @param bool        $resolve_only Optional. Resolve already-imported media
+	 *                                  without downloading. Default false.
 	 */
-	public function __construct( HTTP_Client $http_client ) {
-		$this->http_client = $http_client;
-		$this->logger      = new Media_Logger();
+	public function __construct(
+		HTTP_Client $http_client,
+		bool $resolve_only = false
+	) {
+		$this->http_client  = $http_client;
+		$this->logger       = new Media_Logger();
+		$this->resolve_only = $resolve_only;
 	}
 
 	/**
@@ -88,8 +106,9 @@ class Media_Importer {
 	 *                                    otherwise. Meaningful only on a string
 	 *                                    return.
 	 * @return string|false|null New media URL on success, false on failure, null
-	 *                           when the URL belongs to a third-party domain, or
-	 *                           when it is not media and $skip_if_not_media is set.
+	 *                           when the URL belongs to a third-party domain, when
+	 *                           it is not media and $skip_if_not_media is set, or
+	 *                           when a resolve-only instance has not imported it.
 	 */
 	public function import_source_media(
 		string $media_url,
@@ -128,6 +147,10 @@ class Media_Importer {
 		if ( $existing_attachment ) {
 			$imported_id = $existing_attachment;
 			return wp_get_attachment_url( $existing_attachment );
+		}
+
+		if ( $this->resolve_only ) {
+			return null;
 		}
 
 		$this->ensure_media_functions_loaded();
@@ -238,8 +261,9 @@ class Media_Importer {
 	 *                                  an allowed upload type, for ambiguous URLs
 	 *                                  that may be a page link rather than media.
 	 * @return int|false|null Attachment ID on success, false on failure, null
-	 *                        when the URL belongs to a third-party domain, or
-	 *                        when it is not media and $skip_if_not_media is set.
+	 *                        when the URL belongs to a third-party domain, when
+	 *                        it is not media and $skip_if_not_media is set, or
+	 *                        when a resolve-only instance has not imported it.
 	 */
 	public function import_source_media_as_attachment(
 		string $media_url,
@@ -310,7 +334,8 @@ class Media_Importer {
 	 * @param bool   $skip_if_not_media Return null instead of false when the
 	 *                                  download is not an allowed media type.
 	 * @return int|false|null Attachment ID on success, false on failure, null
-	 *                        when it is not media and $skip_if_not_media is set.
+	 *                        when it is not media and $skip_if_not_media is set,
+	 *                        or when a resolve-only instance has not imported it.
 	 */
 	private function sideload_media(
 		string $media_url,
@@ -323,6 +348,10 @@ class Media_Importer {
 		$existing_attachment = $this->get_attachment_by_url( $media_url );
 		if ( $existing_attachment ) {
 			return $existing_attachment;
+		}
+
+		if ( $this->resolve_only ) {
+			return null;
 		}
 
 		$this->ensure_media_functions_loaded();
