@@ -612,11 +612,6 @@ final class Diff_Renderer {
 			// Remove leading/trailing whitespace.
 			$html = trim( $html );
 
-			// Remove lazy-loading & decoding attrs that WP may add automatically.
-			$html = preg_replace( '/\sloading=("|\')lazy\1/i', '', $html );
-			$html = preg_replace( '/\sdecoding=("|\')async\1/i', '', $html );
-			$html = preg_replace( '/\sfetchpriority=("|\')high\1/i', '', $html );
-
 			// Collapse multiple spaces / newlines.
 			$html = preg_replace( '/\s+/', ' ', $html );
 
@@ -646,16 +641,24 @@ final class Diff_Renderer {
 			$cur_name = $cur['blockName'] ?? null;
 			$inc_name = $inc['blockName'] ?? null;
 
-			$cur_rendered = $cur ? render_block( $cur ) : '';
-			$inc_rendered = $inc ? render_block( $inc ) : '';
+			// An update writes saved markup, so the verdict reads that. A
+			// render drops whatever wp_kses_post() filters, and invents
+			// changes from the counters some blocks assign per render.
+			$cur_signal = $cur
+				? $normalize_block_html( serialize_block( $cur ) )
+				: '';
+			$inc_signal = $inc
+				? $normalize_block_html( serialize_block( $inc ) )
+				: '';
 
-			$norm_cur = $cur ? $normalize_block_html( wp_kses_post( $cur_rendered ) ) : '';
-			$norm_inc = $inc ? $normalize_block_html( wp_kses_post( $inc_rendered ) ) : '';
+			// Rendering serves the previews alone.
+			$cur_filtered = $cur ? wp_kses_post( render_block( $cur ) ) : '';
+			$inc_filtered = $inc ? wp_kses_post( render_block( $inc ) ) : '';
 
 			// Skip empty freeform whitespace slots — parse_blocks emits them
 			// between real blocks and they carry no visible signal.
-			$cur_empty_freeform = ! $cur || ( null === $cur_name && '' === $norm_cur );
-			$inc_empty_freeform = ! $inc || ( null === $inc_name && '' === $norm_inc );
+			$cur_empty_freeform = ! $cur || ( null === $cur_name && '' === $cur_signal );
+			$inc_empty_freeform = ! $inc || ( null === $inc_name && '' === $inc_signal );
 			if ( $cur_empty_freeform && $inc_empty_freeform ) {
 				continue;
 			}
@@ -667,7 +670,7 @@ final class Diff_Renderer {
 				$status = 'added';
 			} elseif ( $cur_name !== $inc_name ) {
 				$status = 'modified';
-			} elseif ( $cur && $inc && $norm_cur !== $norm_inc ) {
+			} elseif ( $cur && $inc && $cur_signal !== $inc_signal ) {
 				$status = 'modified';
 			}
 
@@ -675,16 +678,14 @@ final class Diff_Renderer {
 				'index'    => $i,
 				'status'   => $status,
 				'current'  => $cur ? array(
-					'name'       => $cur_name,
-					'attrs'      => $cur['attrs'] ?? new stdClass(),
-					'rendered'   => wp_kses_post( $cur_rendered ),
-					'normalized' => $norm_cur,
+					'name'     => $cur_name,
+					'attrs'    => $cur['attrs'] ?? new stdClass(),
+					'rendered' => $cur_filtered,
 				) : null,
 				'incoming' => $inc ? array(
-					'name'       => $inc_name,
-					'attrs'      => $inc['attrs'] ?? new stdClass(),
-					'rendered'   => wp_kses_post( $inc_rendered ),
-					'normalized' => $norm_inc,
+					'name'     => $inc_name,
+					'attrs'    => $inc['attrs'] ?? new stdClass(),
+					'rendered' => $inc_filtered,
 				) : null,
 			);
 		}
