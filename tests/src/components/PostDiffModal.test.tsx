@@ -374,3 +374,37 @@ describe( 'PostDiffModal outcome announcements', () => {
 		);
 	} );
 } );
+
+describe( 'PostDiffModal filtered-markup changes', () => {
+	it( 'Verifies that a modified block with identical previews keeps the content section', async () => {
+		// ARRANGE: A diff whose only signal is a block the server reports as
+		// modified while both filtered previews render empty.
+		mockApiFetch.mockResolvedValue( {
+			contentDiffHtml: '',
+			blockDiffs: [
+				{
+					index: 0,
+					status: 'modified',
+					current: { name: 'core/html', rendered: '' },
+					incoming: { name: 'core/html', rendered: '' },
+				},
+			],
+		} );
+		render(
+			<PostDiffModal
+				items={ [ ROW ] }
+				ajaxurl={ AJAX_URL }
+				nonce={ NONCE }
+				syncStatus="outdated"
+				onRefresh={ vi.fn() }
+			/>
+		);
+
+		// ACT + ASSERT: With the default view the section still renders and
+		// names the block, instead of dropping off the screen.
+		expect(
+			await screen.findByRole( 'heading', { name: 'Post Content' } )
+		).toBeInTheDocument();
+		expect( screen.getByText( 'core/html' ) ).toBeInTheDocument();
+	} );
+} );
