@@ -116,7 +116,7 @@ Post content and excerpts pass through WordPress' normal save filters for the ac
 - Post data set:
   - **Title**: From source post title
   - **Content**: Transformed content with updated URLs
-  - **Slug**: From source post slug (WordPress appends `-2`, `-3`, etc. if the slug already exists)
+  - **Slug**: From source post slug, kept as-is even when the destination already uses it. WordPress resolves a collision by appending `-2`, `-3`, and so on only once the post leaves draft, so the final slug is decided when it is published, not at import.
   - **Status**: Always `draft`
   - **Post type**: Same as source post
   - **Post Meta**: meta available via REST is transferred, see below for more details.
