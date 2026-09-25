@@ -5,7 +5,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import NeedsAttentionInbox from '@/components/NeedsAttentionInbox';
-import type { NeedsAttentionRow } from '@/types';
+import { renderIssueMessage } from '@/utils';
+
+import type { InboxDegradation, NeedsAttentionRow } from '@/types';
 
 const dv = vi.hoisted( () => ( {
 	view: undefined as unknown,
@@ -92,7 +94,7 @@ const FAILURE: NeedsAttentionRow = {
 	edit_url: '',
 };
 
-const DEGRADATION: NeedsAttentionRow = {
+const DEGRADATION: InboxDegradation = {
 	kind: 'degradation',
 	row_id: 'degradation:1024:nav_ref_rewrite_failed:8300:post:',
 	affected_post_id: 1024,
@@ -306,6 +308,104 @@ describe( 'NeedsAttentionInbox', () => {
 				screen.queryByText( 'Resolvable now' )
 			).not.toBeInTheDocument()
 		);
+	} );
+
+	// The detail cell truncates in CSS, so the full text has to stay reachable.
+	it( "Verifies that a degradation's detail carries its full text as a title", async () => {
+		// ARRANGE: A degradation, and the message the inbox renders for it.
+		mockListResponse( [ DEGRADATION ] );
+		const message = renderIssueMessage( DEGRADATION );
+
+		// ACT: Render the inbox.
+		render(
+			<NeedsAttentionInbox
+				ajaxurl="https://example.com/wp-admin/admin-ajax.php"
+				nonce="test-nonce"
+			/>
+		);
+
+		// ASSERT: The detail span titles itself with the message it renders.
+		const detail = await screen.findByTitle( message );
+		expect( detail ).toHaveClass( 'safe-publish-inbox-detail' );
+		expect( detail.textContent ).toBe( message );
+	} );
+
+	it( "Verifies that a failure's detail carries its full text as a title", async () => {
+		// ARRANGE: A failure row carrying an error message.
+		mockListResponse( [ FAILURE ] );
+
+		// ACT: Render the inbox.
+		render(
+			<NeedsAttentionInbox
+				ajaxurl="https://example.com/wp-admin/admin-ajax.php"
+				nonce="test-nonce"
+			/>
+		);
+
+		// ASSERT: The detail span titles itself with the error it renders.
+		const detail = await screen.findByTitle( 'Timed out' );
+		expect( detail ).toHaveClass( 'safe-publish-inbox-detail' );
+		expect( detail.textContent ).toBe( 'Timed out' );
+	} );
+
+	it( 'Verifies that a linked content title carries its full text as a title', async () => {
+		// ARRANGE: A degradation, which always has a destination post to link.
+		mockListResponse( [ DEGRADATION ] );
+
+		// ACT: Render the inbox.
+		render(
+			<NeedsAttentionInbox
+				ajaxurl="https://example.com/wp-admin/admin-ajax.php"
+				nonce="test-nonce"
+			/>
+		);
+
+		// ASSERT: The title link titles itself with its own text.
+		const title = await screen.findByTitle( 'Primary Menu' );
+		expect( title.tagName ).toBe( 'A' );
+		expect( title.textContent ).toBe( 'Primary Menu' );
+	} );
+
+	it( 'Verifies that an unlinked content title carries its full text as a title', async () => {
+		// ARRANGE: A first-import failure, which has no destination post to
+		// link to, so the Content cell falls back to plain text.
+		mockListResponse( [ FAILURE ] );
+
+		// ACT: Render the inbox.
+		render(
+			<NeedsAttentionInbox
+				ajaxurl="https://example.com/wp-admin/admin-ajax.php"
+				nonce="test-nonce"
+			/>
+		);
+
+		// ASSERT: The unlinked title span titles itself with its own text.
+		const title = await screen.findByTitle( 'Broken import' );
+		expect( title.tagName ).toBe( 'SPAN' );
+		expect( title.textContent ).toBe( 'Broken import' );
+	} );
+
+	it( 'Verifies that the resolvable badge sits outside the truncated detail', async () => {
+		// ARRANGE: A resolvable degradation, so both elements render.
+		const resolvable = { ...DEGRADATION, resolvable: true };
+		mockListResponse( [ resolvable ] );
+
+		// ACT: Render the inbox.
+		render(
+			<NeedsAttentionInbox
+				ajaxurl="https://example.com/wp-admin/admin-ajax.php"
+				nonce="test-nonce"
+			/>
+		);
+		const badge = await screen.findByText( 'Resolvable now' );
+		const detail = await screen.findByTitle(
+			renderIssueMessage( resolvable )
+		);
+
+		// ASSERT: The badge is the detail's sibling, so truncating the detail
+		// cannot clip it.
+		expect( detail.contains( badge ) ).toBe( false );
+		expect( badge.parentElement ).toBe( detail.parentElement );
 	} );
 
 	it( 'Verifies that an empty inbox shows the reassuring empty state', async () => {

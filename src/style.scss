@@ -396,6 +396,14 @@ html:has(body.toplevel_page_safe-publish) {
 	}
 }
 
+// Needs attention inbox: The row's message. DataViews caps a cell at 80ch and
+// sets nowrap but leaves its overflow visible, so a longer message paints over
+// the columns that follow.
+.safe-publish-inbox-detail {
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
 // Needs attention inbox: The per-degradation resolvable-now hint badge.
 .safe-publish-inbox-resolvable {
 	display: inline-block;
@@ -691,6 +699,13 @@ html:has(body.toplevel_page_safe-publish) {
 	text-decoration: underline;
 }
 /* stylelint-enable no-descending-specificity */
+
+// DataViews truncates a primary cell only when its content is a link, so a
+// plain title overflows its cell.
+.safe-publish-dataviews-wrapper .dataviews-title-field > span {
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
 
 // Accents DataViews' faint selected-row tint. A background would break hover.
 .safe-publish-dataviews-wrapper .dataviews-view-table tr.is-selected {
