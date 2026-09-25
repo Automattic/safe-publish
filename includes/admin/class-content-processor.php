@@ -1553,14 +1553,14 @@ class Content_Processor {
 	}
 
 	/**
-	 * Updates wp-image class with new attachment ID.
+	 * Updates wp-image class with new attachment ID, adding one when absent.
 	 *
 	 * @param string $html              HTML content.
 	 * @param int    $new_attachment_id New attachment ID.
 	 * @return string Updated HTML content.
 	 */
 	private function update_wp_image_class( string $html, int $new_attachment_id ): string {
-		if ( empty( $html ) || empty( $new_attachment_id ) ) {
+		if ( '' === $html || 0 === $new_attachment_id ) {
 			return $html;
 		}
 
@@ -1568,24 +1568,25 @@ class Content_Processor {
 		$pattern     = '/wp-image-\d+/';
 		$replacement = 'wp-image-' . $new_attachment_id;
 
-		$updated_html = preg_replace( $pattern, $replacement, $html );
+		$updated_html = preg_replace( $pattern, $replacement, $html, -1, $count );
 
-		// If no existing wp-image class found, add it to the img tag.
-		if ( $updated_html === $html && strpos( $html, '<img' ) !== false ) {
+		// A rewrite onto the same ID is a no-op, so test the match count.
+		if ( 0 === $count && strpos( $html, '<img' ) !== false ) {
 			// Add wp-image class to img tag that doesn't have one.
 			$pattern      = '/(<img[^>]+class=["\'])([^"\']*?)(["\'][^>]*>)/i';
 			$replacement  = '${1}${2} wp-image-' . $new_attachment_id . '${3}';
 			$updated_html = preg_replace( $pattern, $replacement, $html );
 
-			// If img tag has no class attribute at all, add one.
+			// If img tag has no class attribute at all, add one. The lazy
+			// quantifier keeps a self-closing solidus in the closing group.
 			if ( $updated_html === $html ) {
-				$pattern      = '/(<img[^>]+)(\s*\/?>)/i';
+				$pattern      = '/(<img[^>]+?)(\s*\/?>)/i';
 				$replacement  = '${1} class="wp-image-' . $new_attachment_id . '"${2}';
 				$updated_html = preg_replace( $pattern, $replacement, $html );
 			}
 		}
 
-		return $updated_html ? $updated_html : $html;
+		return is_string( $updated_html ) ? $updated_html : $html;
 	}
 
 	/**

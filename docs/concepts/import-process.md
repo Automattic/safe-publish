@@ -86,7 +86,7 @@ If an `<a>` tag's `href` ends in a file extension allowed by WordPress, it is pr
 
 ### Inline Image ID References
 
-An inline `<img>` carries two attachment-ID references alongside its URL — the `wp-image-{id}` class and the `data-id` attribute. Once the `src` is repointed at the destination file, both are rewritten from the source ID to the destination attachment ID (an existing reference only; neither is fabricated). This keeps WordPress' runtime responsive-image (`srcset`) output and editor media linkage working for migrated classic-editor and legacy-gallery images. Gutenberg `core/image` blocks are already repointed by their dedicated parser.
+An inline `<img>` carries two attachment-ID references alongside its URL — the `wp-image-{id}` class and the `data-id` attribute. Once the `src` is repointed at the destination file, both are rewritten from the source ID to the destination attachment ID (an existing reference only; neither is fabricated). This keeps WordPress' runtime responsive-image (`srcset`) output and editor media linkage working for migrated classic-editor and legacy-gallery images. Gutenberg `core/image` blocks are already repointed by their dedicated parser, which also adds the class when the source markup carries none.
 
 ### Featured Image
 
