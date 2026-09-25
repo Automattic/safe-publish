@@ -47,7 +47,7 @@ class Content_Logger extends Logger {
 	}
 
 	/**
-	 * Logs a content fetch that returned a non-array or empty response body.
+	 * Logs a content fetch whose response body could not be used.
 	 *
 	 * @param int    $source_post_id   Source post ID that was being fetched.
 	 * @param string $source_site_url  Source site the fetch targeted.

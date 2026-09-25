@@ -1596,7 +1596,7 @@ class Diff_Renderer_Terms_Test extends Integration_Test_Case {
 	 */
 	private function notes( string $html ): array {
 		$list    = array();
-		$pattern = '#<ul class="safe-publish-term-notes">(.*)</ul>#s';
+		$pattern = '#<ul class="safe-publish-diff-notes">(.*)</ul>#s';
 
 		if ( 1 !== preg_match( $pattern, $html, $list ) ) {
 			return array();

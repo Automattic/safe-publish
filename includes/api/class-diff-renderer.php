@@ -12,9 +12,11 @@ namespace Safe_Publish\API;
 use Safe_Publish\Auth\Permissions;
 
 use Safe_Publish\Admin\Content_Logger;
+use Safe_Publish\Media\Media_Importer;
 use Safe_Publish\Utils\Options;
 use Safe_Publish\Utils\Post_Type_Map;
 use Safe_Publish\Utils\Source_Identity_Lookup;
+use Safe_Publish\Validators\URL_Validator;
 use stdClass;
 use WP_Error;
 use WP_Post;
@@ -512,9 +514,10 @@ final class Diff_Renderer {
 	/**
 	 * Generates the featured media side-by-side preview.
 	 *
-	 * Returns an empty string when both sides resolve to the same image (or
-	 * both sides are missing); the client uses that signal to omit the
-	 * section.
+	 * Returns an empty string when the incoming image resolves to the
+	 * attachment the post already holds, or when neither side has an image;
+	 * the client uses that signal to omit the section. A difference the import
+	 * would not apply carries a note below the preview.
 	 *
 	 * @param int      $local_post_id   Local post ID.
 	 * @param string   $source_site_url Source site URL.
@@ -534,7 +537,7 @@ final class Diff_Renderer {
 		$incoming_featured_id  = isset( $source_data['featured_media'] ) ? absint( $source_data['featured_media'] ) : 0;
 		$incoming_featured_url = '';
 
-		if ( $incoming_featured_id && ! empty( $source_site_url ) ) {
+		if ( $incoming_featured_id > 0 && '' !== $source_site_url ) {
 			$media_api_url  = trailingslashit( $source_site_url ) . 'wp-json/wp/v2/media/' . $incoming_featured_id;
 			$media_response = $make_request(
 				$media_api_url,
@@ -545,12 +548,24 @@ final class Diff_Renderer {
 			if ( ! is_wp_error( $media_response ) ) {
 				$media_body = wp_remote_retrieve_body( $media_response );
 				$media_json = json_decode( $media_body, true );
-				if ( is_array( $media_json ) && ! empty( $media_json['source_url'] ) ) {
-					$incoming_featured_url = (string) $media_json['source_url'];
+				$source_url = is_array( $media_json )
+					? ( $media_json['source_url'] ?? null )
+					: null;
+				// A non-string source_url counts as missing, never as a cast.
+				if ( is_string( $source_url ) && '' !== $source_url ) {
+					// Resolved so the markup points at the source site,
+					// not at this one.
+					$incoming_featured_url = URL_Validator::resolve_relative_url(
+						$source_url,
+						$source_site_url
+					);
+				} else {
+					$this->logger->content_fetch_invalid_response(
+						$incoming_featured_id,
+						$source_site_url
+					);
 				}
 			} else {
-				// Log the failure rather than silently rendering the incoming
-				// featured image as absent.
 				$this->logger->content_fetch_failed(
 					$incoming_featured_id,
 					$source_site_url,
@@ -559,33 +574,53 @@ final class Diff_Renderer {
 			}
 		}
 
-		$current_featured_id  = get_post_thumbnail_id( $local_post_id );
+		$current_featured_id  = (int) get_post_thumbnail_id( $local_post_id );
 		$current_featured_url = '';
-		if ( $current_featured_id ) {
+		if ( $current_featured_id > 0 ) {
 			$resolved = wp_get_attachment_image_url( $current_featured_id, 'full' );
 			if ( is_string( $resolved ) ) {
 				$current_featured_url = $resolved;
 			}
 		}
 
-		if ( $current_featured_url === $incoming_featured_url ) {
+		// Compare attachment identity: The destination copy always has its own
+		// URL, so the two sides never compare equal. A source image with no
+		// destination copy yet reports even when the post has no thumbnail.
+		$resolved_featured_id = Media_Importer::find_imported_attachment_id(
+			$incoming_featured_id,
+			$source_site_url,
+			$incoming_featured_url
+		);
+		$is_unchanged         = $resolved_featured_id > 0
+			&& $resolved_featured_id === $current_featured_id;
+
+		// An unreadable incoming record says nothing about the source's image,
+		// so it must not read as a removal. The failure reaches the audit log.
+		$is_incoming_unknown = $incoming_featured_id > 0
+			&& '' === $incoming_featured_url;
+
+		// With no URL on either side the preview has nothing to draw.
+		$is_drawable = '' !== $current_featured_url
+			|| '' !== $incoming_featured_url;
+
+		if ( $is_unchanged || $is_incoming_unknown || ! $is_drawable ) {
 			return '';
 		}
 
-		$current_img  = $current_featured_url
+		$current_img  = '' !== $current_featured_url
 			? sprintf(
 				'<a href="%1$s" target="_blank" rel="noopener noreferrer"><img alt="" src="%1$s" /></a>',
 				esc_url( $current_featured_url )
 			)
 			: '<em>' . esc_html__( 'None', 'safe-publish' ) . '</em>';
-		$incoming_img = $incoming_featured_url
+		$incoming_img = '' !== $incoming_featured_url
 			? sprintf(
 				'<a href="%1$s" target="_blank" rel="noopener noreferrer"><img alt="" src="%1$s" /></a>',
 				esc_url( $incoming_featured_url )
 			)
 			: '<em>' . esc_html__( 'None', 'safe-publish' ) . '</em>';
 
-		return sprintf(
+		$preview = sprintf(
 			'<div class="incoming-featured-media-preview">
 				<div>%1$s</div>
 				<div>%2$s</div>
@@ -593,6 +628,19 @@ final class Diff_Renderer {
 			$current_img,
 			$incoming_img
 		);
+
+		// The import only ever sets a thumbnail, so a source that dropped its
+		// featured image is a difference the update leaves in place.
+		$notes = array();
+
+		if ( 0 === $incoming_featured_id ) {
+			$notes[] = __(
+				'The import will not clear this image.',
+				'safe-publish'
+			);
+		}
+
+		return $preview . $this->build_diff_notes_html( $notes );
 	}
 
 	/**
@@ -879,7 +927,7 @@ final class Diff_Renderer {
 				$title_right
 			);
 
-			return $html . $this->build_term_notes_html(
+			return $html . $this->build_diff_notes_html(
 				$this->unregistered_taxonomy_notes( $records )
 			);
 		}
@@ -943,11 +991,11 @@ final class Diff_Renderer {
 			false
 		);
 
-		$html = $assigned_html . $this->build_term_notes_html( $assigned_notes );
+		$html = $assigned_html . $this->build_diff_notes_html( $assigned_notes );
 
 		if ( '' !== $related_html ) {
 			$html .= $this->build_related_terms_html(
-				$related_html . $this->build_term_notes_html( $related_notes )
+				$related_html . $this->build_diff_notes_html( $related_notes )
 			);
 		}
 
@@ -1594,15 +1642,15 @@ final class Diff_Renderer {
 	}
 
 	/**
-	 * Renders the notes as a list below the diff table. Core escapes and
-	 * word-diffs everything inside the table, so a note placed there would read
-	 * as inserted content.
+	 * Renders the notes as a list below a comparison. Core escapes and
+	 * word-diffs everything inside a diff table, so a note placed there would
+	 * read as inserted content.
 	 *
 	 * @param string[] $notes Note lines.
 	 *
 	 * @return string Notes HTML, or '' when there are none.
 	 */
-	private function build_term_notes_html( array $notes ): string {
+	private function build_diff_notes_html( array $notes ): string {
 		if ( array() === $notes ) {
 			return '';
 		}
@@ -1612,7 +1660,7 @@ final class Diff_Renderer {
 			$items .= '<li>' . esc_html( $note ) . '</li>';
 		}
 
-		return '<ul class="safe-publish-term-notes">' . $items . '</ul>';
+		return '<ul class="safe-publish-diff-notes">' . $items . '</ul>';
 	}
 
 	/**
