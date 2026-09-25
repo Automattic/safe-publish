@@ -315,45 +315,54 @@ class Content_Media_Processor_Inline_Image_Id_Test extends Integration_Test_Case
 
 	/**
 	 * Verifies that a legacy v1 gallery, routed through the full block pipeline,
-	 * has each inner image's class and data-id repointed, while the vestigial
-	 * parent attrs.ids is left untouched (out of scope).
+	 * has each inner image's class and data-id repointed, while the parent
+	 * attrs.ids, which core discards on migration, is left as-is.
 	 */
 	public function test_legacy_v1_gallery_inner_images_repointed(): void {
-		// ARRANGE: A pre-5.9 gallery block whose images live in its innerHTML,
-		// carrying data-id and wp-image classes, with no inner image blocks.
-		$gallery = '<!-- wp:gallery {"ids":[900705,900706],"linkTo":"none"} -->' . "\n"
-			. '<figure class="wp-block-gallery columns-2 is-cropped">'
-			. '<ul class="blocks-gallery-grid">'
-			. '<li class="blocks-gallery-item"><figure><img'
-			. ' src="' . self::SOURCE . '/a.jpg" alt="" data-id="900705"'
-			. ' class="wp-image-900705"/></figure></li>'
-			. '<li class="blocks-gallery-item"><figure><img'
-			. ' src="' . self::SOURCE . '/b.jpg" alt="" data-id="900706"'
-			. ' class="wp-image-900706"/></figure></li>'
-			. '</ul></figure>' . "\n"
-			. '<!-- /wp:gallery -->';
+		// ARRANGE: A pre-5.9 gallery whose comment carries only core attrs.
+		$gallery = $this->legacy_gallery_markup(
+			'{"ids":[900705,900706],"linkTo":"none"}'
+		);
 
 		// ACT: Run the full processing pipeline.
-		$result  = (string) $this->content_processor->process_content(
+		$result = (string) $this->content_processor->process_content(
 			$gallery,
 			self::SOURCE
 		);
-		$srcs    = $this->img_attrs( $result, 'src' );
-		$classes = $this->img_attrs( $result, 'class' );
-		$data    = $this->img_attrs( $result, 'data-id' );
 
 		// ASSERT: Both inner images are repointed at their destination.
-		$dest_a = $this->media_importer->get_attachment_id_from_url( (string) $srcs[0] );
-		$dest_b = $this->media_importer->get_attachment_id_from_url( (string) $srcs[1] );
-		$this->assertGreaterThan( 0, $dest_a );
-		$this->assertNotSame( $dest_a, $dest_b );
-		$this->assertSame( "wp-image-{$dest_a}", $classes[0] );
-		$this->assertSame( "wp-image-{$dest_b}", $classes[1] );
-		$this->assertSame( (string) $dest_a, $data[0] );
-		$this->assertSame( (string) $dest_b, $data[1] );
+		$this->assert_both_images_repointed( $result );
 
 		// ASSERT: The parent gallery ids attr is left as-is.
 		$this->assertStringContainsString( '"ids":[900705,900706]', $result );
+	}
+
+	/**
+	 * Verifies that a legacy gallery repoints each inner image independently
+	 * when its comment JSON also carries an images attr.
+	 *
+	 * Only a non-core serializer can produce that attr: Core declares images
+	 * with source "query", which keeps it out of the block comment.
+	 */
+	public function test_legacy_gallery_with_images_attr_repoints_each_image(): void {
+		// ARRANGE: A legacy gallery whose comment JSON also carries images.
+		$gallery = $this->legacy_gallery_markup(
+			'{"ids":[900705,900706],"linkTo":"none","images":['
+			. '{"url":"' . self::SOURCE . '/a.jpg","id":"900705"},'
+			. '{"url":"' . self::SOURCE . '/b.jpg","id":"900706"}]}'
+		);
+
+		// ACT: Run the full processing pipeline.
+		$result = (string) $this->content_processor->process_content(
+			$gallery,
+			self::SOURCE
+		);
+
+		// ASSERT: Each image names its own destination attachment.
+		$this->assert_both_images_repointed( $result );
+
+		// ASSERT: The images attr itself is left as-is.
+		$this->assertStringContainsString( '"images":[', $result );
 	}
 
 	/**
@@ -382,6 +391,55 @@ class Content_Media_Processor_Inline_Image_Id_Test extends Integration_Test_Case
 		$this->assertStringContainsString( 'srcset=', $repointed );
 		$this->assertStringContainsString( "{$stem}-1024x768", $repointed );
 		$this->assertStringNotContainsString( 'srcset=', $control );
+	}
+
+	/**
+	 * Builds a pre-5.9 gallery block whose two images live in its innerHTML,
+	 * each carrying a data-id and wp-image class, with no inner image blocks.
+	 *
+	 * @param string $attrs_json Block comment JSON.
+	 * @return string Gallery block markup.
+	 */
+	private function legacy_gallery_markup( string $attrs_json ): string {
+		return '<!-- wp:gallery ' . $attrs_json . ' -->' . "\n"
+			. '<figure class="wp-block-gallery columns-2 is-cropped">'
+			. '<ul class="blocks-gallery-grid">'
+			. '<li class="blocks-gallery-item"><figure><img'
+			. ' src="' . self::SOURCE . '/a.jpg" alt="" data-id="900705"'
+			. ' class="wp-image-900705"/></figure></li>'
+			. '<li class="blocks-gallery-item"><figure><img'
+			. ' src="' . self::SOURCE . '/b.jpg" alt="" data-id="900706"'
+			. ' class="wp-image-900706"/></figure></li>'
+			. '</ul></figure>' . "\n"
+			. '<!-- /wp:gallery -->';
+	}
+
+	/**
+	 * Asserts that both gallery images imported to distinct attachments, each
+	 * with its class and data-id naming the attachment its own src points at.
+	 *
+	 * @param string $result Processed content.
+	 */
+	private function assert_both_images_repointed( string $result ): void {
+		$srcs    = $this->img_attrs( $result, 'src' );
+		$classes = $this->img_attrs( $result, 'class' );
+		$data    = $this->img_attrs( $result, 'data-id' );
+
+		$this->assertCount( 2, $srcs );
+
+		$dest_a = $this->media_importer->get_attachment_id_from_url(
+			(string) $srcs[0]
+		);
+		$dest_b = $this->media_importer->get_attachment_id_from_url(
+			(string) $srcs[1]
+		);
+
+		$this->assertGreaterThan( 0, $dest_a );
+		$this->assertNotSame( $dest_a, $dest_b );
+		$this->assertSame( "wp-image-{$dest_a}", $classes[0] );
+		$this->assertSame( "wp-image-{$dest_b}", $classes[1] );
+		$this->assertSame( (string) $dest_a, $data[0] );
+		$this->assertSame( (string) $dest_b, $data[1] );
 	}
 
 	/**
