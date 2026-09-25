@@ -245,6 +245,29 @@ describe( 'PostsDataView fields', () => {
 		expect( container.querySelector( 'a' ) ).toBeNull();
 	} );
 
+	// The title truncates in CSS, so the full text has to stay reachable.
+	it( 'Verifies that a source post title carries its full text as a title', async () => {
+		// ARRANGE: Mount the listing and capture the title field DataViews gets.
+		render( <PostsDataView sourceSiteUrl={ SOURCE_URL } /> );
+		await waitFor( () => expect( dataViews.props?.data ).toHaveLength( 1 ) );
+		const titleField = dataViews.props?.fields.find(
+			( field ) => 'title' === field.id
+		);
+
+		// ACT: Render the title cell for the source post the catalog returned.
+		const { container } = render(
+			titleField?.render?.( {
+				item: dataViews.props?.data[ 0 ] as UnifiedPostRow,
+			} )
+		);
+
+		// ASSERT: The span titles itself with the title it renders.
+		expect( container.querySelector( 'span' ) ).toHaveAttribute(
+			'title',
+			'Source post'
+		);
+	} );
+
 	it( 'Verifies that available source posts are labeled Not imported', async () => {
 		// ARRANGE: Mount the listing and capture the local-state field.
 		render( <PostsDataView sourceSiteUrl={ SOURCE_URL } /> );
