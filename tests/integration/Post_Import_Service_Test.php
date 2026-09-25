@@ -36,6 +36,8 @@ use WP_Post;
  */
 class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 
+	use Failing_Query_Trait;
+
 	/**
 	 * Post import service instance.
 	 *
@@ -88,6 +90,8 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 	 */
 	#[\Override]
 	protected function tearDown(): void {
+		$this->restore_failing_queries();
+
 		remove_filter( 'pre_http_request', array( $this, 'mock_media_api_request' ), 5 );
 		parent::tearDown();
 	}
@@ -1052,8 +1056,6 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 	public function test_update_warns_when_history_write_fails(
 		string $session_type
 	): void {
-		global $wpdb;
-
 		// ARRANGE: An existing imported post and a session whose item INSERT
 		// will fail.
 		$post_id = self::factory()->post->create(
@@ -1078,32 +1080,20 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 			'content' => '<p>Updated content.</p>',
 		);
 
-		$items_table     = Import_Items_Table::table_name();
-		$filter_callback = static function ( string $query ) use ( $items_table ): string {
-			if ( 0 === strpos( $query, "INSERT INTO `{$items_table}`" ) ) {
-				return 'INSERT INTO safe_publish_nonexistent_table_for_test VALUES (1)';
-			}
+		$this->fail_table_queries( 'INSERT', Import_Items_Table::table_name() );
 
-			return $query;
-		};
-		add_filter( 'query', $filter_callback );
-		$wpdb->suppress_errors( true );
-
-		try {
-			// ACT: Update through the shared single/bulk import service path.
-			$result = $this->import_service->import_post(
-				array(
-					'id'        => 9402,
-					'title'     => 'Queued title',
-					'link'      => 'https://source.example.com/history-write-failure',
-					'post_type' => 'posts',
-				),
-				$session_id
-			);
-		} finally {
-			remove_filter( 'query', $filter_callback );
-			$wpdb->suppress_errors( false );
-		}
+		// ACT: Update through the shared single/bulk import service path, then
+		// stop the injection before asserting.
+		$result = $this->import_service->import_post(
+			array(
+				'id'        => 9402,
+				'title'     => 'Queued title',
+				'link'      => 'https://source.example.com/history-write-failure',
+				'post_type' => 'posts',
+			),
+			$session_id
+		);
+		$this->restore_failing_queries();
 
 		// ASSERT: The update succeeds but explicitly reports that rollback is
 		// unavailable.

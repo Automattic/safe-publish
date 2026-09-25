@@ -28,6 +28,7 @@ use WP_Ajax_UnitTestCase;
 class Telemetry_Rollback_Test extends WP_Ajax_UnitTestCase {
 
 	use Ajax_Die_Continue_Trait;
+	use Failing_Query_Trait;
 
 	/**
 	 * Queue that captures every telemetry event emitted by the handler.
@@ -72,6 +73,16 @@ class Telemetry_Rollback_Test extends WP_Ajax_UnitTestCase {
 		remove_all_actions( 'wp_ajax_safe_publish_rollback_session' );
 		remove_all_actions( 'wp_ajax_safe_publish_rollback_item' );
 		$handler->init();
+	}
+
+	/**
+	 * Tear down test environment.
+	 */
+	#[\Override]
+	protected function tearDown(): void {
+		$this->restore_failing_queries();
+
+		parent::tearDown();
 	}
 
 	/**
@@ -279,11 +290,8 @@ class Telemetry_Rollback_Test extends WP_Ajax_UnitTestCase {
 	 * outcome rather than counting as a successful restore.
 	 */
 	public function test_item_rollback_unrecorded_flag_fires_with_failed_outcome(): void {
-		global $wpdb;
-
-		// ARRANGE: An updated item, with the next UPDATE on the items table
-		// forced to fail so only the flag write breaks. try/finally
-		// guarantees filter removal.
+		// ARRANGE: An updated item, with the items table's UPDATEs forced to
+		// fail so only the flag write breaks.
 		$session_id = $this->repository->create_session(
 			'https://source.example.com',
 			'single'
@@ -313,37 +321,24 @@ class Telemetry_Rollback_Test extends WP_Ajax_UnitTestCase {
 			'item_id' => $item_id,
 		);
 
-		$items_table     = Import_Items_Table::table_name();
-		$filter_callback = function ( string $query ) use ( $items_table ): string {
-			if ( 0 === strpos( $query, "UPDATE `{$items_table}`" ) ) {
-				return 'UPDATE safe_publish_nonexistent_table_for_test SET x = 1';
-			}
-			return $query;
-		};
-		add_filter( 'query', $filter_callback );
-		$wpdb->suppress_errors( true );
+		$this->fail_table_queries( 'UPDATE', Import_Items_Table::table_name() );
 
-		try {
-			// ACT: Dispatch the item rollback.
-			$this->dispatch_ajax_expecting_die( 'safe_publish_rollback_item' );
+		// ACT: Dispatch the item rollback.
+		$this->dispatch_ajax_expecting_die( 'safe_publish_rollback_item' );
 
-			// ASSERT: Scope=item, failed_count=1, outcome=failed.
-			$events = $this->queue->events();
-			$this->assertCount( 1, $events );
-			$this->assertSame(
-				Telemetry_Events::ROLLBACK_SCOPE_ITEM,
-				$events[0]['properties']['scope']
-			);
-			$this->assertSame( 0, $events[0]['properties']['deleted_count'] );
-			$this->assertSame( 0, $events[0]['properties']['restored_count'] );
-			$this->assertSame( 1, $events[0]['properties']['failed_count'] );
-			$this->assertSame(
-				Telemetry_Events::ROLLBACK_OUTCOME_FAILED,
-				$events[0]['properties']['outcome']
-			);
-		} finally {
-			remove_filter( 'query', $filter_callback );
-			$wpdb->suppress_errors( false );
-		}
+		// ASSERT: Scope=item, failed_count=1, outcome=failed.
+		$events = $this->queue->events();
+		$this->assertCount( 1, $events );
+		$this->assertSame(
+			Telemetry_Events::ROLLBACK_SCOPE_ITEM,
+			$events[0]['properties']['scope']
+		);
+		$this->assertSame( 0, $events[0]['properties']['deleted_count'] );
+		$this->assertSame( 0, $events[0]['properties']['restored_count'] );
+		$this->assertSame( 1, $events[0]['properties']['failed_count'] );
+		$this->assertSame(
+			Telemetry_Events::ROLLBACK_OUTCOME_FAILED,
+			$events[0]['properties']['outcome']
+		);
 	}
 }
