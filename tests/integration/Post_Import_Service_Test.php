@@ -397,26 +397,16 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 	 * Verifies that import fails when a Gutenberg core/gallery block contains an
 	 * image that cannot be downloaded.
 	 *
-	 * The traditional gallery format stores image URLs in attrs['images'].
-	 * Content_Processor::process_gallery_block() must track the failure in
-	 * $failed_media so the import service aborts.
+	 * A legacy gallery stores its images only in the block markup. The shared
+	 * media pass scans it and records the download failure, which aborts the
+	 * import.
 	 */
 	public function test_import_fails_when_gutenberg_gallery_block_cannot_be_downloaded(): void {
-		// ARRANGE: A Gutenberg core/gallery block (traditional attrs format) with a broken image URL.
+		// ARRANGE: A legacy core/gallery block with a broken image URL.
 		$broken_url = 'https://source.example.com/nonexistent-gallery.jpg';
-		$attrs_json = wp_json_encode(
-			array(
-				'images' => array(
-					array(
-						'url' => $broken_url,
-						'id'  => 1,
-					),
-				),
-			)
-		);
 
 		$this->mock_post_overrides = array(
-			'content' => '<!-- wp:gallery ' . $attrs_json . ' -->'
+			'content' => '<!-- wp:gallery -->'
 				. "\n<figure class=\"wp-block-gallery\"><ul class=\"blocks-gallery-grid\">"
 				. "<li class=\"blocks-gallery-item\"><figure><img src=\"{$broken_url}\" alt=\"\" /></figure></li>"
 				. '</ul></figure>'
