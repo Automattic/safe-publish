@@ -116,7 +116,7 @@ Post content and excerpts pass through WordPress' normal save filters for the ac
 - Post data set:
   - **Title**: From source post title
   - **Content**: Transformed content with updated URLs
-  - **Slug**: From source post slug (WordPress appends `-2`, `-3`, etc. if the slug already exists)
+  - **Slug**: From source post slug, kept as-is even when the destination already uses it. WordPress resolves a collision by appending `-2`, `-3`, and so on only once the post leaves draft, so the final slug is decided when it is published, not at import.
   - **Status**: Always `draft`
   - **Post type**: Same as source post
   - **Post Meta**: meta available via REST is transferred, see below for more details.
@@ -304,11 +304,15 @@ Internal links inside post body content (for example `<a href>` in paragraphs an
 
 A permalink stored in a custom or third-party block's attributes — for example a block that saves a post's own URL — is treated the same way: host-swapped, but not re-derived. Rewriting an arbitrary attribute that merely looks like a permalink could point it at the wrong content, so only blocks whose attributes carry an explicit, known entity reference are re-derived.
 
-Navigation links and submenus are the exception: they carry an explicit entity reference, so their URLs are re-derived to the destination permalink automatically — unless the target was a draft at import (see [below](#navigation-links-to-draft-targets-may-404-or-open-the-wrong-page)).
+Navigation links and submenus are the exception: they carry an explicit entity reference, so their URLs are re-derived to the destination permalink automatically — unless the target was a draft at import, or sat under one (see [below](#navigation-links-to-draft-targets-or-their-children-may-404-or-open-the-wrong-page)).
 
-### Navigation links to draft targets may 404 or open the wrong page
+### Navigation links to draft targets or their children may 404 or open the wrong page
 
-Navigation links and submenus are re-derived only when their target was already published at import. If the target was a draft, its slug isn't final, so the link keeps the host-swapped source path and behaves like an [internal body link](#internal-body-links-may-404-or-open-the-wrong-page) — it can 404 or open the wrong page under a slug collision or a different permalink structure. Re-import the referring content after the target is published to re-derive the URL; the Retry action does not cover this case.
+WordPress settles a post's slug only when it leaves draft or pending, so a link to a target in either status keeps the host-swapped source path instead of a URL that would move later. The same applies when the target itself is published but a parent page it sits under is not, because the parent's slug forms part of the child's path.
+
+Such a link behaves like an [internal body link](#internal-body-links-may-404-or-open-the-wrong-page) — it can 404 or open the wrong page under a slug collision or a different permalink structure. Re-import the referring content after the target and its parents are published to re-derive the URL; the Retry action does not cover this case.
+
+Scheduled targets, and targets in a non-public custom status, are re-derived normally — their slug is already settled, so the link gets the address the target will be served at.
 
 ### Navigation links to a term in another taxonomy are left unrepointed
 

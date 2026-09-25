@@ -2651,9 +2651,9 @@ class Content_Processor {
 	 *
 	 * The source url's query is carried over with post/term identity vars
 	 * removed (so a plain-permalink source's stale id cannot override the new
-	 * path) and its fragment preserved. Draft, pending, and auto-draft post
-	 * targets are left alone: Their slug is not final, so re-deriving would
-	 * store a temporary url.
+	 * path) and its fragment preserved. A post target whose path still holds an
+	 * unsettled slug is left alone, since re-deriving would store a temporary
+	 * url.
 	 *
 	 * @param array<string, mixed> $attrs    Block attrs.
 	 * @param string               $url_attr Attr holding the link url.
@@ -2672,15 +2672,15 @@ class Content_Processor {
 			return $attrs;
 		}
 
-		if ( 'term' !== $kind && $this->is_unpublished_post( $dest_id ) ) {
+		if ( 'term' !== $kind && $this->has_unsettled_path( $dest_id ) ) {
 			return $attrs;
 		}
 
 		$permalink = 'term' === $kind
 			? get_term_link( $dest_id )
-			: get_permalink( $dest_id );
+			: $this->viewable_permalink( $dest_id );
 
-		if ( ! is_string( $permalink ) ) {
+		if ( ! is_string( $permalink ) || '' === $permalink ) {
 			return $attrs;
 		}
 
@@ -2703,17 +2703,51 @@ class Content_Processor {
 	}
 
 	/**
-	 * Whether a post target is unpublished, so its permalink is not yet final.
+	 * Whether any slug in a post's permalink path is still provisional. Core
+	 * defers unique-slug assignment in these statuses, so the slug can still
+	 * change on publish; an ancestor in that state moves the path too.
 	 *
 	 * @param int $post_id Destination post id.
-	 * @return bool True for draft, pending, or auto-draft posts.
+	 * @return bool True when the post or an ancestor holds a provisional slug.
 	 */
-	private function is_unpublished_post( int $post_id ): bool {
-		return in_array(
-			get_post_status( $post_id ),
-			array( 'draft', 'pending', 'auto-draft' ),
-			true
-		);
+	private function has_unsettled_path( int $post_id ): bool {
+		$unsettled = array( 'draft', 'pending', 'auto-draft' );
+
+		if ( in_array( get_post_status( $post_id ), $unsettled, true ) ) {
+			return true;
+		}
+
+		foreach ( get_post_ancestors( $post_id ) as $ancestor_id ) {
+			if ( in_array( get_post_status( $ancestor_id ), $unsettled, true ) ) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * Returns the permalink a post will have once it is publicly viewable.
+	 * get_permalink() yields the plain ?p= form for statuses WordPress hides, so
+	 * the lookup runs against a copy marked published, as get_sample_permalink()
+	 * does. The clone keeps the 'raw' filter, without which get_post() refetches
+	 * and discards it.
+	 *
+	 * @param int $post_id Destination post id.
+	 * @return string Permalink, or '' when it cannot be derived.
+	 */
+	private function viewable_permalink( int $post_id ): string {
+		$post = get_post( $post_id );
+		if ( ! ( $post instanceof WP_Post ) ) {
+			return '';
+		}
+
+		$viewable              = clone $post;
+		$viewable->post_status = 'publish';
+
+		$permalink = get_permalink( $viewable );
+
+		return is_string( $permalink ) ? $permalink : '';
 	}
 
 	/**
