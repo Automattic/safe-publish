@@ -2678,9 +2678,9 @@ class Content_Processor {
 
 		$permalink = 'term' === $kind
 			? get_term_link( $dest_id )
-			: get_permalink( $dest_id );
+			: $this->viewable_permalink( $dest_id );
 
-		if ( ! is_string( $permalink ) ) {
+		if ( ! is_string( $permalink ) || '' === $permalink ) {
 			return $attrs;
 		}
 
@@ -2714,6 +2714,30 @@ class Content_Processor {
 			array( 'draft', 'pending', 'auto-draft' ),
 			true
 		);
+	}
+
+	/**
+	 * Returns the permalink a post will have once it is publicly viewable.
+	 * get_permalink() yields the plain ?p= form for statuses WordPress hides, so
+	 * the lookup runs against a copy marked published, as get_sample_permalink()
+	 * does. The clone keeps the 'raw' filter, without which get_post() refetches
+	 * and discards it.
+	 *
+	 * @param int $post_id Destination post id.
+	 * @return string Permalink, or '' when it cannot be derived.
+	 */
+	private function viewable_permalink( int $post_id ): string {
+		$post = get_post( $post_id );
+		if ( ! ( $post instanceof WP_Post ) ) {
+			return '';
+		}
+
+		$viewable              = clone $post;
+		$viewable->post_status = 'publish';
+
+		$permalink = get_permalink( $viewable );
+
+		return is_string( $permalink ) ? $permalink : '';
 	}
 
 	/**

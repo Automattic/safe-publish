@@ -932,6 +932,165 @@ class Content_Processor_Block_ID_Remap_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that a scheduled target's url is re-derived to the permalink it
+	 * will carry on publication, not the temporary plain form.
+	 */
+	public function test_rederives_scheduled_post_target(): void {
+		// ARRANGE: Pretty permalinks; a scheduled target whose slug was uniqued
+		// against a page already holding /about.
+		$this->set_permalink_structure( '/%postname%/' );
+		self::factory()->post->create(
+			array(
+				'post_type' => 'page',
+				'post_name' => 'about',
+			)
+		);
+		$dest_post = self::factory()->post->create(
+			array(
+				'post_type'     => 'page',
+				'post_status'   => 'future',
+				'post_name'     => 'about',
+				'post_date'     => gmdate( 'Y-m-d H:i:s', time() + DAY_IN_SECONDS ),
+				'post_date_gmt' => gmdate( 'Y-m-d H:i:s', time() + DAY_IN_SECONDS ),
+			)
+		);
+		$source_id = 99031;
+		$content   = $this->nav_block_content(
+			array( $this->post_link( $source_id, self::SOURCE_SITE_URL . '/about' ) )
+		);
+
+		// ACT: Run process_content.
+		$result = $this->processor->process_content(
+			$content,
+			self::SOURCE_SITE_URL,
+			array( 'session_id_map' => array( $source_id => $dest_post ) )
+		);
+
+		// ASSERT: id remapped and url on the collision-resolved destination slug.
+		$this->assertStringContainsString( '"id":' . $dest_post . ',', (string) $result );
+		$this->assertSame(
+			'http://example.org/about-2/',
+			$this->first_nav_link_url( (string) $result )
+		);
+	}
+
+	/**
+	 * Verifies that a target in a non-public custom status is re-derived to its
+	 * settled pretty permalink rather than a plain one.
+	 */
+	public function test_rederives_non_public_custom_status_target(): void {
+		// ARRANGE: Pretty permalinks; the target sits in a non-public status.
+		register_post_status( 'sp_hidden', array( 'public' => false ) );
+		$this->set_permalink_structure( '/%postname%/' );
+		$dest_post = self::factory()->post->create(
+			array(
+				'post_type'   => 'page',
+				'post_status' => 'sp_hidden',
+				'post_name'   => 'about',
+			)
+		);
+		$source_id = 99032;
+		$content   = $this->nav_block_content(
+			array( $this->post_link( $source_id, self::SOURCE_SITE_URL . '/about' ) )
+		);
+
+		// ACT: Run process_content.
+		$result = $this->processor->process_content(
+			$content,
+			self::SOURCE_SITE_URL,
+			array( 'session_id_map' => array( $source_id => $dest_post ) )
+		);
+
+		// ASSERT: id remapped and url re-derived to the destination permalink.
+		$this->assertStringContainsString( '"id":' . $dest_post . ',', (string) $result );
+		$this->assertSame(
+			'http://example.org/about/',
+			$this->first_nav_link_url( (string) $result )
+		);
+	}
+
+	/**
+	 * Verifies that a target in a search-excluded custom status resolves through
+	 * post meta and is re-derived to its settled pretty permalink.
+	 */
+	public function test_rederives_search_excluded_custom_status_target(): void {
+		// ARRANGE: A status the identity lookup has to name explicitly, claimed
+		// through post meta so the lookup does the resolving.
+		register_post_status(
+			'sp_hidden_xfs',
+			array(
+				'public'              => false,
+				'exclude_from_search' => true,
+			)
+		);
+		$this->set_permalink_structure( '/%postname%/' );
+		$dest_post = self::factory()->post->create(
+			array(
+				'post_type'   => 'page',
+				'post_status' => 'sp_hidden_xfs',
+				'post_name'   => 'about',
+			)
+		);
+		$source_id = 99033;
+		update_post_meta( $dest_post, Options::META_SOURCE_POST_ID, $source_id );
+		update_post_meta(
+			$dest_post,
+			Options::META_SOURCE_SITE_URL,
+			self::SOURCE_SITE_URL
+		);
+		$content = $this->nav_block_content(
+			array( $this->post_link( $source_id, self::SOURCE_SITE_URL . '/about' ) )
+		);
+
+		// ACT: Run process_content with no session map, forcing the meta lookup.
+		$result = $this->processor->process_content(
+			$content,
+			self::SOURCE_SITE_URL,
+			array()
+		);
+
+		// ASSERT: id remapped and url re-derived to the destination permalink.
+		$this->assertStringContainsString( '"id":' . $dest_post . ',', (string) $result );
+		$this->assertSame(
+			'http://example.org/about/',
+			$this->first_nav_link_url( (string) $result )
+		);
+	}
+
+	/**
+	 * Verifies that a private target keeps re-deriving, its permalink already
+	 * being the address the post is served at.
+	 */
+	public function test_rederives_private_post_target(): void {
+		// ARRANGE: Pretty permalinks; the target is private.
+		$this->set_permalink_structure( '/%postname%/' );
+		$dest_post = self::factory()->post->create(
+			array(
+				'post_type'   => 'page',
+				'post_status' => 'private',
+				'post_name'   => 'about',
+			)
+		);
+		$source_id = 99035;
+		$content   = $this->nav_block_content(
+			array( $this->post_link( $source_id, self::SOURCE_SITE_URL . '/about' ) )
+		);
+
+		// ACT: Run process_content.
+		$result = $this->processor->process_content(
+			$content,
+			self::SOURCE_SITE_URL,
+			array( 'session_id_map' => array( $source_id => $dest_post ) )
+		);
+
+		// ASSERT: url re-derived to the destination permalink.
+		$this->assertSame(
+			'http://example.org/about/',
+			$this->first_nav_link_url( (string) $result )
+		);
+	}
+
+	/**
 	 * Verifies that a custom taxonomy's registered query var is stripped, found
 	 * dynamically from the destination term's taxonomy.
 	 */
