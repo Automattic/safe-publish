@@ -21,6 +21,8 @@ use WP_Error;
  */
 class Imports_Source_Identity_Test extends Integration_Test_Case {
 
+	use Failing_Query_Trait;
+
 	/**
 	 * Option key tracking the installed table schema version, spelled out
 	 * independently of the production constant so a change has to be
@@ -50,12 +52,7 @@ class Imports_Source_Identity_Test extends Integration_Test_Case {
 	 */
 	#[\Override]
 	protected function tearDown(): void {
-		global $wpdb;
-
-		// Dropped before the base class truncates, so a forced failure cannot
-		// reach its cleanup queries.
-		remove_all_filters( 'query' );
-		$wpdb->suppress_errors( false );
+		$this->restore_failing_queries();
 
 		$this->restore_items_table();
 
@@ -273,7 +270,7 @@ class Imports_Source_Identity_Test extends Integration_Test_Case {
 		// imports table forced to fail.
 		$session_id = $this->insert_legacy_row( 'https://example.com/blog/' );
 		delete_option( self::VERSION_OPTION );
-		$this->fail_table_queries( 'UPDATE' );
+		$this->fail_table_queries( 'UPDATE', Imports_Table::table_name() );
 
 		// ACT: Run the migration.
 		Imports_Table::create_table();
@@ -293,7 +290,7 @@ class Imports_Source_Identity_Test extends Integration_Test_Case {
 	public function test_failed_backfill_read_leaves_the_version_unrecorded(): void {
 		// ARRANGE: No recorded version and the backfill's read forced to fail.
 		delete_option( self::VERSION_OPTION );
-		$this->fail_table_queries( 'SELECT' );
+		$this->fail_table_queries( 'SELECT', Imports_Table::table_name() );
 
 		// ACT: Run the migration.
 		Imports_Table::create_table();
@@ -437,7 +434,7 @@ class Imports_Source_Identity_Test extends Integration_Test_Case {
 		$session_id = $this->insert_legacy_row( '' );
 		$this->insert_item( array( 'session_id' => $session_id ) );
 		delete_option( self::VERSION_OPTION );
-		$this->fail_table_queries( 'DELETE' );
+		$this->fail_table_queries( 'DELETE', Imports_Table::table_name() );
 
 		// ACT: Run the migration.
 		Imports_Table::create_table();
@@ -695,39 +692,6 @@ class Imports_Source_Identity_Test extends Integration_Test_Case {
 	 */
 	private function stored_url( int $session_id ): string {
 		return (string) $this->stored_row( $session_id )['source_site_url'];
-	}
-
-	/**
-	 * Forces one table's statements of one kind to fail, standing in for a
-	 * database error during the migration.
-	 *
-	 * @param string      $statement Leading SQL keyword to break, e.g. UPDATE.
-	 * @param string|null $table     Table to break; defaults to imports.
-	 */
-	private function fail_table_queries(
-		string $statement,
-		?string $table = null
-	): void {
-		global $wpdb;
-
-		$table ??= Imports_Table::table_name();
-
-		$wpdb->suppress_errors( true );
-
-		add_filter(
-			'query',
-			static function ( $query ) use ( $statement, $table ): string {
-				$query = (string) $query;
-
-				if ( 0 !== stripos( ltrim( $query ), $statement )
-					|| false === strpos( $query, $table )
-				) {
-					return $query;
-				}
-
-				return "SELECT no_such_column FROM `{$table}`";
-			}
-		);
 	}
 
 	/**
