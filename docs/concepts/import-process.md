@@ -94,6 +94,7 @@ An inline `<img>` carries two attachment-ID references alongside its URL — the
 - Uploaded to media library regardless of serving host — unlike content media (step 3), an off-domain featured image is still downloaded because it belongs to the source.
 - The source library metadata (alt text, title, caption, description) is applied to the destination attachment, fetched in edit context for the raw values.
 - Set as post thumbnail via `set_post_thumbnail()`.
+- A re-import reuses the destination attachment already recorded against the source media ID and origin site, falling back to one sideloaded from the same URL. **Compare** resolves the incoming image the same way, so an unchanged featured image reports no difference, while a repointed or not-yet-imported one still does. A source that dropped its featured image is reported with a note, since the import sets a thumbnail but never clears one. When the source's media record cannot be read, the comparison stays silent and the failure goes to the audit log.
 
 ### URL Replacement
 
