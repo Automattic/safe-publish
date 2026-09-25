@@ -14,12 +14,18 @@ use Safe_Publish\Utils\Imports_Table;
 
 /**
  * Exercises the harness the failure-path tests rely on, so a matcher that
- * stops injecting, or a restore that stops cleaning up, fails here rather
- * than silently turning those tests green.
+ * stops injecting, one that injects too widely, or a restore that stops
+ * cleaning up, fails here rather than silently turning those tests green.
  */
 class Failing_Query_Trait_Test extends Integration_Test_Case {
 
 	use Failing_Query_Trait;
+
+	/**
+	 * Fingerprint matching only the read in stored_type, chosen so it cannot
+	 * also catch the metadata SQL wpdb issues before a write.
+	 */
+	private const READ_FINGERPRINT = 'SELECT session_type FROM';
 
 	/**
 	 * History repository instance.
@@ -43,9 +49,24 @@ class Failing_Query_Trait_Test extends Integration_Test_Case {
 	 */
 	#[\Override]
 	protected function tearDown(): void {
+		global $wpdb;
+
 		$this->restore_failing_queries();
+		$wpdb->suppress_errors( false );
 
 		parent::tearDown();
+	}
+
+	/**
+	 * Prior error suppression states a test could be holding.
+	 *
+	 * @return array<string, array{bool}>
+	 */
+	public function suppression_provider(): array {
+		return array(
+			'errors reported'   => array( false ),
+			'errors suppressed' => array( true ),
+		);
 	}
 
 	/**
@@ -72,34 +93,77 @@ class Failing_Query_Trait_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Verifies that fail_queries_matching breaks every query carrying the
-	 * fingerprint and that restoring lets them through again.
+	 * Verifies that fail_table_queries leaves every query it did not select
+	 * alone, so a test cannot mistake a broken harness for the failure it
+	 * meant to force.
 	 */
-	public function test_fail_queries_matching_breaks_only_until_restored(): void {
-		// ARRANGE: A session row, with its own table name as the fingerprint
-		// so reads of it are selected whatever their statement kind.
+	public function test_fail_table_queries_spares_other_queries(): void {
+		// ARRANGE: A session and a post, with only the imports table's
+		// UPDATEs forced to fail.
 		$session_id = $this->seed_session();
-		$this->fail_queries_matching( Imports_Table::table_name() );
+		$post_id    = $this->factory()->post->create();
+		$this->assertIsInt( $post_id );
+		$this->fail_table_queries( 'UPDATE', Imports_Table::table_name() );
 
-		// ACT: Read through the injection, then restore and read again.
-		$blocked = $this->stored_type( $session_id );
-		$this->restore_failing_queries();
-		$allowed = $this->stored_type( $session_id );
+		// ACT: Run a read of the same table and a write of another one, both
+		// of which the matcher should ignore.
+		$read    = $this->stored_type( $session_id );
+		$written = wp_update_post(
+			array(
+				'ID'         => $post_id,
+				'post_title' => 'Untouched',
+			)
+		);
 
-		// ASSERT: The read was broken, then whole again.
-		$this->assertNull( $blocked );
-		$this->assertSame( 'bulk', $allowed );
+		// ASSERT: The other statement kind on the named table survived.
+		$this->assertSame( 'bulk', $read );
+
+		// ASSERT: The same statement kind on another table survived.
+		$this->assertSame( $post_id, $written );
+		$this->assertSame( 'Untouched', get_post( $post_id )->post_title );
 	}
 
 	/**
-	 * Verifies that restoring returns error suppression to its prior value,
-	 * so a forced failure cannot mute genuine errors in later tests.
+	 * Verifies that fail_queries_matching breaks every query carrying the
+	 * fingerprint, spares the rest, and stops once restored.
 	 */
-	public function test_restoring_returns_error_suppression(): void {
-		// ARRANGE: Suppression explicitly off, so a leak from an earlier test
-		// cannot let these assertions pass for the wrong reason.
+	public function test_fail_queries_matching_breaks_only_until_restored(): void {
+		// ARRANGE: A session row, with only its read fingerprinted.
+		$session_id = $this->seed_session();
+		$this->fail_queries_matching( self::READ_FINGERPRINT );
+
+		// ACT: Read through the injection, write past it, then restore and
+		// read again.
+		$blocked = $this->stored_type( $session_id );
+		$written = $this->retype_session( $session_id, 'single' );
+		$this->restore_failing_queries();
+		$allowed = $this->stored_type( $session_id );
+
+		// ASSERT: The fingerprinted read was broken.
+		$this->assertNull( $blocked );
+
+		// ASSERT: A query without the fingerprint was left alone.
+		$this->assertSame( 1, $written );
+
+		// ASSERT: The read came back whole, showing what the write stored.
+		$this->assertSame( 'single', $allowed );
+	}
+
+	/**
+	 * Verifies that restoring hands error suppression back at the value the
+	 * test held, so a forced failure cannot mute genuine errors later.
+	 *
+	 * @dataProvider suppression_provider
+	 *
+	 * @param bool $prior Error suppression the test starts out holding.
+	 */
+	public function test_restoring_returns_prior_error_suppression(
+		bool $prior
+	): void {
+		// ARRANGE: A known suppression state, set rather than read, so a leak
+		// from an earlier test cannot make this pass for the wrong reason.
 		global $wpdb;
-		$wpdb->suppress_errors( false );
+		$wpdb->suppress_errors( $prior );
 
 		// ACT: Register two failures, then restore once.
 		$this->fail_table_queries( 'UPDATE', Imports_Table::table_name() );
@@ -107,9 +171,11 @@ class Failing_Query_Trait_Test extends Integration_Test_Case {
 		$suppressed = $wpdb->suppress_errors;
 		$this->restore_failing_queries();
 
-		// ASSERT: Suppression was turned on, then handed back off.
+		// ASSERT: Suppression was turned on for the injection.
 		$this->assertTrue( $suppressed );
-		$this->assertFalse( $wpdb->suppress_errors );
+
+		// ASSERT: It came back at the value the test held, not a fixed one.
+		$this->assertSame( $prior, $wpdb->suppress_errors );
 	}
 
 	/**
@@ -133,7 +199,10 @@ class Failing_Query_Trait_Test extends Integration_Test_Case {
 	 *
 	 * @return int|false Rows updated, or false when the write was rejected.
 	 */
-	private function retype_session( int $session_id, string $type ) {
+	private function retype_session(
+		int $session_id,
+		string $type
+	): int|false {
 		global $wpdb;
 
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
