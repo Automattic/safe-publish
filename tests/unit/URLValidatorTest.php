@@ -517,10 +517,20 @@ class URLValidatorTest extends TestCase {
 				'base'     => 'https://example.com/',
 				'expected' => 'https://example.com/wp-content/image.png',
 			),
-			'base path preserved'           => array(
+			'root-relative drops base path' => array(
 				'url'      => '/wp-content/image.png',
 				'base'     => 'https://example.com/blog',
+				'expected' => 'https://example.com/wp-content/image.png',
+			),
+			'bare relative keeps base path' => array(
+				'url'      => 'wp-content/image.png',
+				'base'     => 'https://example.com/blog',
 				'expected' => 'https://example.com/blog/wp-content/image.png',
+			),
+			'root-relative keeps base port' => array(
+				'url'      => '/wp-content/image.png',
+				'base'     => 'https://example.com:8443/blog',
+				'expected' => 'https://example.com:8443/wp-content/image.png',
 			),
 			'leading space stays absolute'  => array(
 				'url'      => ' https://example.com/image.png',
