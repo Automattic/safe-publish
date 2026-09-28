@@ -9,7 +9,15 @@ export default defineConfig( {
 	},
 	test: {
 		environment: 'happy-dom',
-		exclude: [ '**/build/**', '**/node_modules/**', '**/vendor/**', '**/tests/e2e/**', '**/.claude/**' ],
+		exclude: [
+			'**/.claude/**',
+			'**/.playwright-mcp/**',
+			'**/.scratch/**',
+			'**/build/**',
+			'**/node_modules/**',
+			'**/tests/e2e/**',
+			'**/vendor/**',
+		],
 		setupFiles: [ './tests/src/vitest.setup.ts' ],
 		globals: true,
 		coverage: {

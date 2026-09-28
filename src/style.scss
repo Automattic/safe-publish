@@ -476,6 +476,12 @@ html:has(body.toplevel_page_safe-publish) {
 			background: var(--safe-publish-bg-muted);
 			padding: 8px;
 		}
+
+		&__no-preview {
+			background: var(--safe-publish-bg-muted);
+			padding: 8px;
+			font-style: italic;
+		}
 	}
 
 	.safe-publish-badge {

@@ -1,7 +1,7 @@
 <?php
 /**
  * End-to-end import tests for custom post types whose rest_base differs from
- * their slug.
+ * their slug
  *
  * @package Safe_Publish
  */

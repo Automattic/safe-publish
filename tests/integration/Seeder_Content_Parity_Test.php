@@ -1,6 +1,6 @@
 <?php
 /**
- * Seeder content parity integration test.
+ * Seeder content parity integration test
  *
  * @package Safe_Publish
  */

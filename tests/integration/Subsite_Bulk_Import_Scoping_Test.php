@@ -1,6 +1,6 @@
 <?php
 /**
- * Bulk-import source-scoping integration tests for a subsite connection.
+ * Bulk-import source-scoping integration tests for a subsite connection
  *
  * @package Safe_Publish
  */

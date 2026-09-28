@@ -1,6 +1,6 @@
 <?php
 /**
- * Integration tests for the Needs attention inbox AJAX endpoint.
+ * Integration tests for the Needs attention inbox AJAX endpoint
  *
  * @package Safe_Publish
  */

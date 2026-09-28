@@ -1,6 +1,6 @@
 <?php
 /**
- * Tests the destination's shape validation of the safe_publish_media field.
+ * Tests the destination's shape validation of the safe_publish_media field
  *
  * @package Safe_Publish
  */

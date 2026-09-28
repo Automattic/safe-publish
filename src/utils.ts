@@ -170,7 +170,7 @@ export function formatBadgeTimestamp( dateString: string ): string {
 }
 
 /**
- * Display labels for built-in publish statuses; access via statusLabel().
+ * Display labels for built-in statuses; access via statusLabel().
  */
 const PUBLISH_STATUS_LABELS: Record< string, string > = {
 	publish: __( 'Published', 'safe-publish' ),
@@ -178,6 +178,7 @@ const PUBLISH_STATUS_LABELS: Record< string, string > = {
 	pending: __( 'Pending Review', 'safe-publish' ),
 	private: __( 'Private', 'safe-publish' ),
 	future:  __( 'Scheduled', 'safe-publish' ),
+	trash:   __( 'Trashed', 'safe-publish' ),
 };
 
 /**
@@ -519,6 +520,16 @@ export function renderIssueMessage( issue: AttentionIssue ): string {
 					/* translators: %d: source reusable block (wp_block) ID */
 					__(
 						"Reusable block %d isn't on this site yet. Import it under Patterns, then Retry.",
+						'safe-publish'
+					),
+					issue.target_ref
+				);
+			}
+			if ( issue.target_reason === 'declared_taxonomy_mismatch' ) {
+				return sprintf(
+					/* translators: %d: source term ID */
+					__(
+						'Source term %d is in another taxonomy. Import it into the declared one, then Retry.',
 						'safe-publish'
 					),
 					issue.target_ref

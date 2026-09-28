@@ -26,6 +26,11 @@ if ( ! defined( 'ABSPATH' ) ) {
 final class Session_Rollback_Service {
 
 	/**
+	 * Posts read per page when scanning content for media references.
+	 */
+	private const SCAN_PAGE_SIZE = 500;
+
+	/**
 	 * History repository instance.
 	 *
 	 * @var History_Repository
@@ -45,7 +50,7 @@ final class Session_Rollback_Service {
 	 * Rolls back a single import item.
 	 *
 	 * @param int $item_id Item ID to roll back.
-	 * @return array{action: string, post_id: int, post_title: string, omissions?: array}|WP_Error Rollback result or error.
+	 * @return array{action: string, post_id: int, post_title: string, omissions: array}|WP_Error Rollback result or error.
 	 */
 	public function rollback_item( int $item_id ): array|WP_Error {
 		$item = $this->repository->get_item( $item_id );
@@ -75,8 +80,7 @@ final class Session_Rollback_Service {
 		}
 
 		// A failed flag write leaves the revert unrecorded; don't claim success.
-		$omissions = $result['omissions'] ?? array();
-		if ( ! $this->repository->mark_item_rolled_back( $item_id, $omissions ) ) {
+		if ( ! $this->repository->mark_item_rolled_back( $item_id, $result['omissions'] ) ) {
 			return new WP_Error(
 				'rollback_not_recorded',
 				__(
@@ -93,7 +97,7 @@ final class Session_Rollback_Service {
 	 * Rolls back a single item row (internal helper).
 	 *
 	 * @param array $item Item row.
-	 * @return array{action: string, post_id: int, post_title: string, omissions?: array}|WP_Error Rollback result or error.
+	 * @return array{action: string, post_id: int, post_title: string, omissions: array}|WP_Error Rollback result or error.
 	 */
 	private function rollback_item_row( array $item ): array|WP_Error {
 		$post_id = isset( $item['post_id'] ) ? (int) $item['post_id'] : 0;
@@ -144,7 +148,7 @@ final class Session_Rollback_Service {
 	 *
 	 * @param int    $post_id    Post ID to delete.
 	 * @param string $post_title Post title for response.
-	 * @return array{action: string, post_id: int, post_title: string}|WP_Error Result or error.
+	 * @return array{action: string, post_id: int, post_title: string, omissions: array}|WP_Error Result or error.
 	 */
 	private function delete_new_post( int $post_id, string $post_title ): array|WP_Error {
 		// Capture the media this post owns before the delete unlinks it.
@@ -157,11 +161,25 @@ final class Session_Rollback_Service {
 			);
 		}
 
+		$omissions  = array();
+		$referenced = $this->referenced_attachment_ids( $imported_media_ids );
+
 		foreach ( $imported_media_ids as $attachment_id ) {
+			// A check that could not answer withholds every deletion, since one
+			// failed scan covered the whole batch.
+			if ( null === $referenced ) {
+				$omissions[] = array(
+					'field'         => 'media',
+					'reason'        => 'usage_check_failed',
+					'attachment_id' => $attachment_id,
+				);
+				continue;
+			}
+
 			// A surviving post may still show media parented here, since import
 			// deduplicates by source URL; skip those and delete only what this
 			// post solely owns.
-			if ( $this->attachment_used_by_other_post( $attachment_id ) ) {
+			if ( in_array( $attachment_id, $referenced, true ) ) {
 				continue;
 			}
 
@@ -174,6 +192,7 @@ final class Session_Rollback_Service {
 			'action'     => 'deleted',
 			'post_id'    => $post_id,
 			'post_title' => $post_title,
+			'omissions'  => $omissions,
 		);
 	}
 
@@ -216,121 +235,222 @@ final class Session_Rollback_Service {
 	}
 
 	/**
-	 * Reports whether a surviving post still shows the attachment, across the
+	 * Returns which of the attachments a surviving post still shows, across the
 	 * three ways an import can make a post reference one: Inline in content,
 	 * as a featured image, or by ID in a gallery or playlist shortcode.
 	 *
-	 * @param int $attachment_id Attachment considered for deletion.
-	 * @return bool True when another post references it.
-	 */
-	private function attachment_used_by_other_post( int $attachment_id ): bool {
-		return $this->used_as_featured_image( $attachment_id )
-			|| $this->used_in_post_content( $attachment_id )
-			|| $this->used_in_media_shortcode( $attachment_id );
-	}
-
-	/**
-	 * Reports whether any post uses the attachment as its featured image.
+	 * Checks span trashed and hidden holders. Each runs once for the whole
+	 * batch, since per-attachment queries would scan the posts table once per
+	 * attachment. One that cannot answer withholds every deletion.
 	 *
-	 * @param int $attachment_id Attachment ID.
-	 * @return bool True when a post's thumbnail points at it.
+	 * @param int[] $attachment_ids Attachments considered for deletion.
+	 * @return int[]|null Referenced attachment IDs, null when a check could not
+	 *                    answer.
 	 */
-	private function used_as_featured_image( int $attachment_id ): bool {
-		$posts = get_posts(
-			array(
-				'post_type'        => 'any',
-				'post_status'      => 'any',
-				'posts_per_page'   => 1,
-				'fields'           => 'ids',
-				'suppress_filters' => false,
-				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
-				'meta_query'       => array(
-					array(
-						'key'   => '_thumbnail_id',
-						'value' => (string) $attachment_id,
-					),
-				),
+	private function referenced_attachment_ids( array $attachment_ids ): ?array {
+		if ( array() === $attachment_ids ) {
+			return array();
+		}
+
+		$featured = $this->featured_image_attachment_ids( $attachment_ids );
+		$inlined  = $this->inlined_attachment_ids( $attachment_ids );
+		$listed   = $this->shortcode_attachment_ids();
+
+		if ( null === $featured || null === $inlined || null === $listed ) {
+			return null;
+		}
+
+		return array_values(
+			array_unique(
+				array_merge(
+					$featured,
+					$inlined,
+					array_intersect( $listed, $attachment_ids )
+				)
 			)
 		);
-
-		return array() !== $posts;
 	}
 
 	/**
-	 * Reports whether any post's content references the attachment's file,
+	 * Returns which of the attachments a post uses as its featured image.
+	 *
+	 * Direct query: WP_Query's 'any' drops exclude_from_search types and
+	 * statuses, and a posts_where filter narrowing the result would read as
+	 * unreferenced. Auto-drafts are excluded as abandoned editor sessions.
+	 *
+	 * @param int[] $attachment_ids Attachment IDs.
+	 * @return int[]|null Attachment IDs a post's thumbnail points at, null when
+	 *                    the query failed.
+	 */
+	private function featured_image_attachment_ids( array $attachment_ids ): ?array {
+		global $wpdb;
+
+		$placeholders = implode( ', ', array_fill( 0, count( $attachment_ids ), '%s' ) );
+
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
+		$values = $wpdb->get_col(
+			$wpdb->prepare(
+				"SELECT DISTINCT meta.meta_value FROM {$wpdb->postmeta} AS meta
+				 INNER JOIN {$wpdb->posts} AS posts ON posts.ID = meta.post_id
+				 WHERE meta.meta_key = '_thumbnail_id'
+					 AND meta.meta_value IN ( {$placeholders} )
+					 AND posts.post_status <> 'auto-draft'",
+				array_map( 'strval', $attachment_ids )
+			)
+		);
+		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
+
+		if ( '' !== $wpdb->last_error ) {
+			return null;
+		}
+
+		return array_map( 'intval', $values );
+	}
+
+	/**
+	 * Returns which of the attachments a post's content references by file,
 	 * sized variants included, by matching the upload-relative path stem.
 	 *
-	 * @param int $attachment_id Attachment ID.
-	 * @return bool True when a post's content contains the file URL.
+	 * @param int[] $attachment_ids Attachment IDs.
+	 * @return int[]|null Attachment IDs a post's content contains, null when the
+	 *                    query failed.
 	 */
-	private function used_in_post_content( int $attachment_id ): bool {
-		$file = get_post_meta( $attachment_id, '_wp_attached_file', true );
+	private function inlined_attachment_ids( array $attachment_ids ): ?array {
+		$stems = array();
 
-		if ( ! is_string( $file ) || '' === $file ) {
-			return false;
-		}
+		foreach ( $attachment_ids as $attachment_id ) {
+			$file = get_post_meta( $attachment_id, '_wp_attached_file', true );
 
-		// Drop the extension so sized variants (image-300x200.jpg) match too.
-		$stem = preg_replace( '/\.[^.\/]+$/', '', $file );
+			if ( ! is_string( $file ) || '' === $file ) {
+				continue;
+			}
 
-		if ( ! is_string( $stem ) || '' === $stem ) {
-			return false;
-		}
+			// Drop the extension so sized variants (image-300x200.jpg) match too.
+			$stem = preg_replace( '/\.[^.\/]+$/', '', $file );
 
-		global $wpdb;
-
-		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
-		$match = $wpdb->get_var(
-			$wpdb->prepare(
-				"SELECT ID FROM {$wpdb->posts}
-				 WHERE post_content LIKE %s
-					 AND post_status NOT IN ( 'auto-draft', 'trash', 'inherit' )
-				 LIMIT 1",
-				'%' . $wpdb->esc_like( $stem ) . '%'
-			)
-		);
-		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
-
-		return null !== $match;
-	}
-
-	/**
-	 * Reports whether any post's gallery or playlist shortcode lists the
-	 * attachment by ID.
-	 *
-	 * @param int $attachment_id Attachment ID.
-	 * @return bool True when a shortcode references it.
-	 */
-	private function used_in_media_shortcode( int $attachment_id ): bool {
-		global $wpdb;
-
-		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
-		$contents = $wpdb->get_col(
-			$wpdb->prepare(
-				"SELECT post_content FROM {$wpdb->posts}
-				 WHERE post_status NOT IN ( 'auto-draft', 'trash', 'inherit' )
-					 AND ( post_content LIKE %s OR post_content LIKE %s )",
-				'%' . $wpdb->esc_like( '[gallery' ) . '%',
-				'%' . $wpdb->esc_like( '[playlist' ) . '%'
-			)
-		);
-		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
-
-		if ( array() === $contents ) {
-			return false;
-		}
-
-		$rewriter = new Shortcode_ID_Rewriter();
-
-		foreach ( $contents as $content ) {
-			$ids = $rewriter->collect_shortcode_attachment_ids( (string) $content );
-
-			if ( in_array( $attachment_id, $ids, true ) ) {
-				return true;
+			if ( is_string( $stem ) && '' !== $stem ) {
+				$stems[ $attachment_id ] = $stem;
 			}
 		}
 
-		return false;
+		if ( array() === $stems ) {
+			return array();
+		}
+
+		global $wpdb;
+
+		// Matched on the upload directory rather than the full stem: the
+		// predicate count drives the scan cost, and a stem cannot appear
+		// without its directory. The exact stems are matched in PHP below.
+		$prefixes = array();
+
+		foreach ( $stems as $stem ) {
+			$slash               = strrpos( $stem, '/' );
+			$prefix              = false === $slash ? $stem : substr( $stem, 0, $slash + 1 );
+			$prefixes[ $prefix ] = true;
+		}
+
+		$clauses = array_fill( 0, count( $prefixes ), 'post_content LIKE %s' );
+		$likes   = array_map(
+			static fn ( string $prefix ): string => '%' . $wpdb->esc_like( $prefix ) . '%',
+			array_keys( $prefixes )
+		);
+
+		$used = array();
+
+		$completed = $this->scan_post_contents(
+			implode( ' OR ', $clauses ),
+			$likes,
+			static function ( string $content ) use ( $stems, &$used ): void {
+				foreach ( $stems as $attachment_id => $stem ) {
+					if ( str_contains( $content, $stem ) ) {
+						$used[ $attachment_id ] = true;
+					}
+				}
+			}
+		);
+
+		return $completed ? array_keys( $used ) : null;
+	}
+
+	/**
+	 * Returns every attachment ID a gallery or playlist shortcode lists.
+	 *
+	 * @return int[]|null Listed attachment IDs, null when the query failed.
+	 */
+	private function shortcode_attachment_ids(): ?array {
+		global $wpdb;
+
+		$rewriter = new Shortcode_ID_Rewriter();
+		$ids      = array();
+
+		$completed = $this->scan_post_contents(
+			'post_content LIKE %s OR post_content LIKE %s',
+			array(
+				'%' . $wpdb->esc_like( '[gallery' ) . '%',
+				'%' . $wpdb->esc_like( '[playlist' ) . '%',
+			),
+			static function ( string $content ) use ( $rewriter, &$ids ): void {
+				foreach ( $rewriter->collect_shortcode_attachment_ids( $content ) as $id ) {
+					$ids[ $id ] = true;
+				}
+			}
+		);
+
+		return $completed ? array_keys( $ids ) : null;
+	}
+
+	/**
+	 * Passes each matching post's content to a callback, a page at a time.
+	 *
+	 * Paged by ascending ID rather than by offset, which would rescan the
+	 * matched set for every page. Holding the whole set instead costs upwards
+	 * of a gigabyte on a site with many long shortcode-bearing posts.
+	 *
+	 * @param string   $where   Content clause, already carrying placeholders.
+	 * @param string[] $args    Placeholder values for the clause.
+	 * @param callable $collect Receives each matching post_content.
+	 * @return bool True when the scan finished, false when a query failed.
+	 */
+	private function scan_post_contents(
+		string $where,
+		array $args,
+		callable $collect
+	): bool {
+		global $wpdb;
+
+		$last = 0;
+
+		do {
+			// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber
+			$rows = $wpdb->get_results(
+				$wpdb->prepare(
+					"SELECT ID, post_content FROM {$wpdb->posts}
+					 WHERE post_status NOT IN ( 'auto-draft', 'inherit' )
+						 AND ( " . $where . ' )
+						 AND ID > %d
+					 ORDER BY ID
+					 LIMIT %d',
+					array_merge( $args, array( $last, self::SCAN_PAGE_SIZE ) )
+				)
+			);
+			// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber
+
+			// get_results() answers null for a query prepare() rejected.
+			if ( '' !== $wpdb->last_error || ! is_array( $rows ) ) {
+				return false;
+			}
+
+			foreach ( $rows as $row ) {
+				$last = (int) $row->ID;
+				$collect( (string) $row->post_content );
+			}
+
+			$page_count = count( $rows );
+			unset( $rows );
+		} while ( self::SCAN_PAGE_SIZE === $page_count );
+
+		return true;
 	}
 
 	/**

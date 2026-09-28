@@ -1,6 +1,6 @@
 <?php
 /**
- * Integration tests for the attention issues table schema upgrade.
+ * Integration tests for the attention issues table schema upgrade
  *
  * @package Safe_Publish
  */
