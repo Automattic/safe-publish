@@ -1204,69 +1204,16 @@ class Content_Processor {
 	}
 
 	/**
-	 * Processes gallery block to import media from all contained images.
+	 * Imports a gallery block's media.
+	 *
+	 * Nested blocks are routed to their own parsers; images in the gallery's
+	 * own markup are repointed by the shared inline media pass.
 	 *
 	 * @param array  $block           Gallery block data.
 	 * @param string $source_site_url Source site URL.
 	 * @return array Processed block.
 	 */
 	private function process_gallery_block( array $block, string $source_site_url ): array {
-		// Handle traditional gallery format with images in attributes.
-		if ( ! empty( $block['attrs']['images'] ) && is_array( $block['attrs']['images'] ) ) {
-			foreach ( $block['attrs']['images'] as $index => $image ) {
-				if ( empty( $image['url'] ) ) {
-					continue;
-				}
-
-				$original_url  = $image['url'];
-				$attachment_id = $this->media_importer->import_source_media_as_attachment(
-					$original_url,
-					$source_site_url
-				);
-
-				if ( null === $attachment_id ) {
-					continue; // Third-party src — skip this image's attrs.
-				}
-
-				if ( false === $attachment_id ) {
-					$this->failed_media[ $original_url ] = $block['blockName'];
-					continue;
-				}
-
-				$new_url = wp_get_attachment_url( $attachment_id );
-
-				if ( false === $new_url ) {
-					$this->failed_media[ $original_url ] = $block['blockName'];
-					continue;
-				}
-
-				// Update block attributes.
-				$block['attrs']['images'][ $index ]['url'] = $new_url;
-				$block['attrs']['images'][ $index ]['id']  = $attachment_id;
-
-				$url_with_parameters = Media_Importer::reapply_query_parameters( $original_url, $new_url );
-
-				// Update innerHTML with the appropriate URL for correct rendering.
-				if ( ! empty( $block['innerHTML'] ) ) {
-					$updated_html       = $this->update_img_src_in_html( $block['innerHTML'], $original_url, $url_with_parameters );
-					$updated_html       = $this->update_wp_image_class( $updated_html, $attachment_id );
-					$block['innerHTML'] = $updated_html;
-				}
-
-				// Update innerContent array if it exists (used by serialize_blocks).
-				if ( ! empty( $block['innerContent'] ) && is_array( $block['innerContent'] ) ) {
-					foreach ( $block['innerContent'] as $content_index => $content ) {
-						if ( is_string( $content ) ) {
-							$updated_content                         = $this->update_img_src_in_html( $content, $original_url, $url_with_parameters );
-							$updated_content                         = $this->update_wp_image_class( $updated_content, $attachment_id );
-							$block['innerContent'][ $content_index ] = $updated_content;
-						}
-					}
-				}
-			}
-		}
-
-		// Handle block-based gallery format with innerBlocks containing image blocks.
 		if ( ! empty( $block['innerBlocks'] ) && is_array( $block['innerBlocks'] ) ) {
 			foreach ( $block['innerBlocks'] as $index => $inner_block ) {
 				if ( ! empty( $inner_block['blockName'] ) && 'core/image' === $inner_block['blockName'] ) {
