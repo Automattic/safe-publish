@@ -39,6 +39,7 @@ class Attachment_Parent_Reconcile_Test extends Integration_Test_Case {
 	private const PARENT_SOURCE_ID = 6001;
 	private const CHILD_SOURCE_ID  = 6002;
 	private const IMAGE_ID         = 6501;
+	private const HIDDEN_STATUS    = 'sp_archived';
 
 	/**
 	 * Source post ID => mocked REST body served to the importer.
@@ -74,6 +75,8 @@ class Attachment_Parent_Reconcile_Test extends Integration_Test_Case {
 	protected function tearDown(): void {
 		$this->remove_image_byte_response_mock();
 		$this->remove_per_source_id_post_api_mock();
+		// Core registers post statuses without an unregister counterpart.
+		unset( $GLOBALS['wp_post_statuses'][ self::HIDDEN_STATUS ] );
 		delete_option( Options::OPTION_CONNECTED_SITE_URL );
 		parent::tearDown();
 	}
@@ -172,6 +175,58 @@ class Attachment_Parent_Reconcile_Test extends Integration_Test_Case {
 			$dest_parent,
 			(int) $this->dest_attachment()->post_parent,
 			'Attachment should be parented to its already-imported source parent'
+		);
+	}
+
+	/**
+	 * Verifies that an attachment parents to its source parent's destination
+	 * post even after that post is moved into a status kept out of site search.
+	 */
+	public function test_attachment_parents_to_parent_in_hidden_status(): void {
+		// ARRANGE: The same wiring as the published-parent case above, which is
+		// the positive control for this one.
+		$this->post_bodies = array(
+			self::PARENT_SOURCE_ID => $this->post_body(
+				self::PARENT_SOURCE_ID,
+				'<p>Parent body.</p>',
+				array()
+			),
+			self::CHILD_SOURCE_ID  => $this->post_body(
+				self::CHILD_SOURCE_ID,
+				$this->content_with_image(),
+				$this->media_map_owned_by( self::PARENT_SOURCE_ID )
+			),
+		);
+
+		// ARRANGE: Park the imported parent in a status 'any' denies.
+		// internal=true is what core derives exclude_from_search from.
+		register_post_status(
+			self::HIDDEN_STATUS,
+			array( 'internal' => true )
+		);
+		$dest_parent = $this->import( self::PARENT_SOURCE_ID );
+		wp_update_post(
+			array(
+				'ID'          => $dest_parent,
+				'post_status' => self::HIDDEN_STATUS,
+			)
+		);
+		$this->assertTrue(
+			get_post_status_object( self::HIDDEN_STATUS )->exclude_from_search
+		);
+		$this->assertSame(
+			self::HIDDEN_STATUS,
+			get_post_status( $dest_parent )
+		);
+
+		// ACT: Import the child that carries the parent's image.
+		$this->import( self::CHILD_SOURCE_ID );
+
+		// ASSERT: The forward pass still finds the parent and attaches to it.
+		$this->assertSame(
+			$dest_parent,
+			(int) $this->dest_attachment()->post_parent,
+			'A hidden-status parent should still adopt its attachment'
 		);
 	}
 

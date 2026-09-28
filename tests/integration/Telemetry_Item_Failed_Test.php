@@ -245,6 +245,52 @@ class Telemetry_Item_Failed_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that a refusal over a trashed claim reports the bounded
+	 * error_code trashed_copy_exists instead of the unknown fallback.
+	 */
+	public function test_trashed_claim_refusal_reports_bounded_error_code(): void {
+		// ARRANGE: A session, a connected source, and a trashed post claiming
+		// the source ID about to be imported.
+		$session_id = $this->create_session( 'single' );
+		update_option(
+			Options::OPTION_CONNECTED_SITE_URL,
+			'https://source.example.com'
+		);
+
+		$source_url = Options::get_connected_site_url_with_path();
+		$claim      = self::factory()->post->create(
+			array(
+				'post_title' => 'Trashed claim',
+				'meta_input' => array(
+					Options::META_SOURCE_POST_ID  => 4343,
+					Options::META_SOURCE_SITE_URL => $source_url,
+				),
+			)
+		);
+		wp_trash_post( $claim );
+		$this->assertSame( 'trash', get_post_status( $claim ) );
+
+		// ACT: Import the source post that claim holds.
+		$this->import_service->import_post(
+			array(
+				'id'        => 4343,
+				'title'     => 'Trashed claim',
+				'link'      => 'https://source.example.com/post-4343',
+				'post_type' => 'posts',
+			),
+			$session_id
+		);
+
+		// ASSERT: The refusal's own code reaches telemetry.
+		$events = $this->queue->events();
+		$this->assertCount( 1, $events );
+		$this->assertSame(
+			'trashed_copy_exists',
+			$events[0]['properties']['error_code']
+		);
+	}
+
+	/**
 	 * Creates a session of the given type and returns its id.
 	 *
 	 * @param string $session_type Either 'single' or 'bulk'.

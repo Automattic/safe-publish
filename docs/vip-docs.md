@@ -151,7 +151,7 @@ Safe Publish supports importing a single post or many posts at once. Both paths 
 1. On **Manage → Posts**, use the **Import** row action.
 2. The import starts right away. If the destination post is already published, confirm the overwrite first, because it changes the live site immediately.
 
-If a post with the same source post ID already exists on the destination, Safe Publish updates that post rather than creating a duplicate. If no matching post exists, it creates a new one.
+If a post with the same source post ID already exists on the destination, Safe Publish updates that post rather than creating a duplicate. If no matching post exists, it creates a new one. If the only matching post is in the trash, the import is refused rather than creating a second linked copy; restore that post to update it, or delete it permanently to import a fresh copy.
 
 By default, importing a child post fails if its parent is not present on the destination, to avoid creating orphaned content. Developers can change this with the `safe_publish_import_allow_orphans` filter (see [Filters](#filters)).
 
@@ -197,7 +197,7 @@ When a post is imported, Safe Publish processes its content so that it renders c
 - **Media is deduplicated** by its original URL. If the same source file has already been imported, Safe Publish reuses the existing attachment on the destination instead of downloading it again.
 - **Third-party media is left untouched.** Files hosted on domains other than the source site are not downloaded; their original URLs are preserved as written.
 
-Safe Publish records where imported content came from in post metadata — including the source post ID and source permalink — so that subsequent imports of the same post update the existing post rather than duplicating it.
+Safe Publish records where imported content came from in post metadata — including the source post ID and source permalink — so that subsequent imports of the same post update the existing post rather than duplicating it, except when that post is in the trash.
 
 ## Author attribution
 

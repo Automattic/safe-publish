@@ -126,6 +126,7 @@ class Telemetry_Events {
 		'terms_update_failed',
 		'concurrent_import_blocked',
 		'concurrent_import_lost_race',
+		'trashed_copy_exists',
 		'unexpected_exception',
 	);
 

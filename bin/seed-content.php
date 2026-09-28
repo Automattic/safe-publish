@@ -43,6 +43,7 @@
 declare(strict_types=1);
 
 use Safe_Publish\Seeder\Content_Generator;
+use Safe_Publish\Utils\Source_Identity_Lookup;
 
 if ( ! defined( 'WP_CLI' ) || ! WP_CLI ) {
 	die( 'This script must be run via WP-CLI.' . PHP_EOL );
@@ -337,8 +338,11 @@ function safe_publish_seeder_update_content(
 ): void {
 	$post_ids = get_posts(
 		array(
-			'post_type'              => '' !== $type_filter ? $type_filter : 'any',
-			'post_status'            => 'any',
+			'post_type'              => '' !== $type_filter
+				? $type_filter
+				: Source_Identity_Lookup::post_types(),
+			// Trash excluded: The update below writes a live status back.
+			'post_status'            => Source_Identity_Lookup::post_stati(),
 			'posts_per_page'         => -1, // phpcs:ignore WordPress.WP.PostsPerPage.posts_per_page_posts_per_page -- development tool.
 			'meta_query'             => array( // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- development tool.
 				array(
@@ -474,8 +478,8 @@ function safe_publish_seeder_delete_content(): void {
 
 	$ids = get_posts(
 		array(
-			'post_type'              => 'any',
-			'post_status'            => 'any',
+			'post_type'              => Source_Identity_Lookup::post_types(),
+			'post_status'            => Source_Identity_Lookup::post_stati( true ),
 			'posts_per_page'         => -1, // phpcs:ignore WordPress.WP.PostsPerPage.posts_per_page_posts_per_page -- development tool.
 			'meta_query'             => $meta_query, // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- development tool.
 			'fields'                 => 'ids',

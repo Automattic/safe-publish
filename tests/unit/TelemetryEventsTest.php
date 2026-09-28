@@ -31,6 +31,7 @@ class TelemetryEventsTest extends TestCase {
 			'content_cleanup_failed',
 			'content_verification_failed',
 			'content_restore_failed',
+			'trashed_copy_exists',
 		);
 
 		// ACT: Pass each code through the normalizer.

@@ -825,10 +825,13 @@ class Content_Processor_Block_ID_Remap_Test extends Integration_Test_Case {
 			array()
 		);
 
-		// ASSERT: url only host-swapped, not re-derived.
+		// ASSERT: id still resolved — a claim with no term has no taxonomy to
+		// mismatch — but the url is only host-swapped, not re-derived.
+		$attrs = $this->first_nav_link_attrs( (string) $result );
+		$this->assertSame( $phantom_term, $attrs['id'] ?? 0 );
 		$this->assertSame(
 			'http://example.org/category/news',
-			$this->first_nav_link_url( (string) $result )
+			$attrs['url'] ?? ''
 		);
 	}
 
@@ -982,6 +985,593 @@ class Content_Processor_Block_ID_Remap_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that a taxonomy link claimed by terms in two taxonomies
+	 * resolves to the one its type attr declares, not the newest claim.
+	 */
+	public function test_taxonomy_link_picks_declared_taxonomy_over_newer_claim(): void {
+		// ARRANGE: A category and a newer tag both claiming one source term.
+		$this->set_permalink_structure( '/%postname%/' );
+		create_initial_taxonomies();
+		$source_id = 99101;
+		$category  = $this->claiming_term( 'category', $source_id );
+		$tag       = $this->claiming_term( 'post_tag', $source_id );
+		$this->assertGreaterThan( $category, $tag );
+
+		$content = $this->nav_block_content(
+			array(
+				$this->taxonomy_link(
+					$source_id,
+					self::SOURCE_SITE_URL . '/category/news'
+				),
+			)
+		);
+
+		// ACT: Process a link declaring type=category.
+		$result = $this->processor->process_content(
+			$content,
+			self::SOURCE_SITE_URL,
+			array()
+		);
+
+		// ASSERT: The category won, and the url is its archive.
+		$expected = get_term_link( $category );
+		$this->assertIsString( $expected );
+		$attrs = $this->first_nav_link_attrs( (string) $result );
+		$this->assertSame( $category, $attrs['id'] ?? 0 );
+		$this->assertSame( $expected, $attrs['url'] ?? '' );
+		$this->assertSame( array(), $this->processor->get_warnings() );
+	}
+
+	/**
+	 * Verifies that a taxonomy link declaring the editor's tag alias resolves
+	 * to the post_tag claim rather than the category one.
+	 */
+	public function test_taxonomy_link_resolves_tag_alias_to_post_tag(): void {
+		// ARRANGE: The same two claims, with the tag created first so it
+		// cannot win on recency alone.
+		$source_id = 99102;
+		$tag       = $this->claiming_term( 'post_tag', $source_id );
+		$category  = $this->claiming_term( 'category', $source_id );
+		$this->assertGreaterThan( $tag, $category );
+
+		$content = $this->nav_block_content(
+			array(
+				$this->taxonomy_link(
+					$source_id,
+					self::SOURCE_SITE_URL . '/tag/news',
+					'tag'
+				),
+			)
+		);
+
+		// ACT: Process a link declaring type=tag.
+		$result = $this->processor->process_content(
+			$content,
+			self::SOURCE_SITE_URL,
+			array()
+		);
+
+		// ASSERT: The post_tag term won.
+		$attrs = $this->first_nav_link_attrs( (string) $result );
+		$this->assertSame( $tag, $attrs['id'] ?? 0 );
+	}
+
+	/**
+	 * Verifies that a taxonomy link whose only claim sits in another taxonomy
+	 * keeps its source id and is reported as unmapped.
+	 */
+	public function test_taxonomy_link_unmapped_when_only_claim_is_another_taxonomy(): void {
+		// ARRANGE: A tag holding the only claim on the source term.
+		$source_id = 99103;
+		$this->claiming_term( 'post_tag', $source_id );
+
+		$content = $this->nav_block_content(
+			array(
+				$this->taxonomy_link(
+					$source_id,
+					self::SOURCE_SITE_URL . '/category/news'
+				),
+			)
+		);
+
+		// ACT: Process a link declaring type=category.
+		$result = $this->processor->process_content(
+			$content,
+			self::SOURCE_SITE_URL,
+			array()
+		);
+
+		// ASSERT: id untouched, url only host-swapped, one warning raised
+		// naming the mismatch so the admin is not told to import the term.
+		$attrs = $this->first_nav_link_attrs( (string) $result );
+		$this->assertSame( $source_id, $attrs['id'] ?? 0 );
+		$this->assertSame(
+			'http://example.org/category/news',
+			$attrs['url'] ?? ''
+		);
+		$this->assertSame(
+			array(
+				array(
+					'type'      => 'unmapped_block_reference',
+					'kind'      => 'term',
+					'block'     => 'core/navigation-link',
+					'source_id' => $source_id,
+					'reason'    => 'declared_taxonomy_mismatch',
+				),
+			),
+			$this->processor->get_warnings()
+		);
+	}
+
+	/**
+	 * Verifies that a taxonomy link carrying no type attr — core omits it on
+	 * some links — still resolves, keeping the newest claim.
+	 */
+	public function test_taxonomy_link_without_type_keeps_newest_claim(): void {
+		// ARRANGE: A category and a newer tag both claiming one source term.
+		$source_id = 99104;
+		$this->claiming_term( 'category', $source_id );
+		$tag = $this->claiming_term( 'post_tag', $source_id );
+
+		$content = $this->nav_block_content(
+			array(
+				$this->taxonomy_link(
+					$source_id,
+					self::SOURCE_SITE_URL . '/category/news',
+					null
+				),
+			)
+		);
+
+		// ACT: Process a link declaring no type.
+		$result = $this->processor->process_content(
+			$content,
+			self::SOURCE_SITE_URL,
+			array()
+		);
+
+		// ASSERT: The newest claim won, as before the taxonomy check.
+		$attrs = $this->first_nav_link_attrs( (string) $result );
+		$this->assertSame( $tag, $attrs['id'] ?? 0 );
+		$this->assertArrayNotHasKey( 'type', $attrs );
+	}
+
+	/**
+	 * Verifies that a hyphenated taxonomy matches the underscored form the
+	 * editor writes into the type attr.
+	 */
+	public function test_taxonomy_link_matches_hyphenated_taxonomy_declared_with_underscore(): void {
+		// ARRANGE: A hyphen-slugged taxonomy claim plus a newer category one.
+		register_taxonomy(
+			'sp-topic',
+			'post',
+			array(
+				'query_var' => false,
+				'rewrite'   => false,
+			)
+		);
+		$source_id = 99105;
+		$topic     = $this->claiming_term( 'sp-topic', $source_id );
+		$this->claiming_term( 'category', $source_id );
+
+		$content = $this->nav_block_content(
+			array(
+				$this->taxonomy_link(
+					$source_id,
+					self::SOURCE_SITE_URL . '/topic/news',
+					'sp_topic'
+				),
+			)
+		);
+
+		// ACT: Process a link declaring the editor's underscored form.
+		$result = $this->processor->process_content(
+			$content,
+			self::SOURCE_SITE_URL,
+			array()
+		);
+
+		// ASSERT: The hyphenated taxonomy's term won over the newer category.
+		$attrs = $this->first_nav_link_attrs( (string) $result );
+		$this->assertSame( $topic, $attrs['id'] ?? 0 );
+
+		unregister_taxonomy( 'sp-topic' );
+	}
+
+	/**
+	 * Verifies that two claims inside the declared taxonomy still resolve to
+	 * the newest, matching the copy the term import writes to.
+	 */
+	public function test_taxonomy_link_keeps_newest_claim_within_declared_taxonomy(): void {
+		// ARRANGE: Two categories claiming one source term.
+		$source_id = 99106;
+		$older     = $this->claiming_term( 'category', $source_id );
+		$newer     = $this->claiming_term( 'category', $source_id );
+		$this->assertGreaterThan( $older, $newer );
+
+		$content = $this->nav_block_content(
+			array(
+				$this->taxonomy_link(
+					$source_id,
+					self::SOURCE_SITE_URL . '/category/news'
+				),
+			)
+		);
+
+		// ACT: Process a link declaring type=category.
+		$result = $this->processor->process_content(
+			$content,
+			self::SOURCE_SITE_URL,
+			array()
+		);
+
+		// ASSERT: The newest of the two matching claims won.
+		$attrs = $this->first_nav_link_attrs( (string) $result );
+		$this->assertSame( $newer, $attrs['id'] ?? 0 );
+	}
+
+	/**
+	 * Verifies that a taxonomy submenu honors its declared type too, as both
+	 * nav blocks share the term attr registry.
+	 */
+	public function test_taxonomy_submenu_picks_claim_matching_declared_type(): void {
+		// ARRANGE: A category and a newer tag both claiming one source term.
+		$source_id = 99107;
+		$category  = $this->claiming_term( 'category', $source_id );
+		$this->claiming_term( 'post_tag', $source_id );
+
+		$content = $this->nav_block_content(
+			array(
+				array(
+					'name'  => 'core/navigation-submenu',
+					'attrs' => array(
+						'id'    => $source_id,
+						'kind'  => 'taxonomy',
+						'type'  => 'category',
+						'label' => 'News',
+						'url'   => self::SOURCE_SITE_URL . '/category/news',
+					),
+				),
+			)
+		);
+
+		// ACT: Process a submenu declaring type=category.
+		$result = $this->processor->process_content(
+			$content,
+			self::SOURCE_SITE_URL,
+			array()
+		);
+
+		// ASSERT: The category won over the newer tag.
+		$attrs = $this->first_nav_link_attrs( (string) $result );
+		$this->assertSame( $category, $attrs['id'] ?? 0 );
+	}
+
+	/**
+	 * Verifies that a post-type link resolves to the claim matching its
+	 * declared type rather than the newest one.
+	 */
+	public function test_post_link_picks_claim_matching_declared_type(): void {
+		// ARRANGE: A page and a newer post both claiming one source post.
+		$source_id = 99201;
+		$page      = $this->claiming_post( 'page', $source_id );
+		$newer     = $this->claiming_post( 'post', $source_id );
+		$this->assertGreaterThan( $page, $newer );
+
+		$content = $this->nav_block_content(
+			array(
+				$this->post_link(
+					$source_id,
+					self::SOURCE_SITE_URL . '/about',
+					'page'
+				),
+			)
+		);
+
+		// ACT: Process a link declaring type=page.
+		$result = $this->processor->process_content(
+			$content,
+			self::SOURCE_SITE_URL,
+			array()
+		);
+
+		// ASSERT: The page won over the newer post, type left as authored.
+		$attrs = $this->first_nav_link_attrs( (string) $result );
+		$this->assertSame( $page, $attrs['id'] ?? 0 );
+		$this->assertSame( 'page', $attrs['type'] ?? '' );
+	}
+
+	/**
+	 * Verifies that two claims of the declared post type still resolve to the
+	 * newest, matching the copy the import writes to.
+	 */
+	public function test_post_link_keeps_newest_claim_within_declared_type(): void {
+		// ARRANGE: Two pages claiming one source post.
+		$source_id = 99202;
+		$older     = $this->claiming_post( 'page', $source_id );
+		$newer     = $this->claiming_post( 'page', $source_id );
+		$this->assertGreaterThan( $older, $newer );
+
+		$content = $this->nav_block_content(
+			array(
+				$this->post_link(
+					$source_id,
+					self::SOURCE_SITE_URL . '/about',
+					'page'
+				),
+			)
+		);
+
+		// ACT: Process a link declaring type=page.
+		$result = $this->processor->process_content(
+			$content,
+			self::SOURCE_SITE_URL,
+			array()
+		);
+
+		// ASSERT: The newest claim won.
+		$attrs = $this->first_nav_link_attrs( (string) $result );
+		$this->assertSame( $newer, $attrs['id'] ?? 0 );
+	}
+
+	/**
+	 * Verifies that a post-type link whose only claim is another post type is
+	 * still repointed, with its declared type realigned to that post so the
+	 * editor resolves the entity.
+	 */
+	public function test_post_link_realigns_declared_type_to_sole_claim(): void {
+		// ARRANGE: A post holding the only claim on the source post.
+		$source_id = 99203;
+		$dest_post = $this->claiming_post( 'post', $source_id );
+
+		$content = $this->nav_block_content(
+			array(
+				$this->post_link(
+					$source_id,
+					self::SOURCE_SITE_URL . '/about',
+					'page'
+				),
+			)
+		);
+
+		// ACT: Process a link declaring the now-stale type=page.
+		$result = $this->processor->process_content(
+			$content,
+			self::SOURCE_SITE_URL,
+			array()
+		);
+
+		// ASSERT: Repointed, url re-derived, type realigned, no warnings.
+		$attrs = $this->first_nav_link_attrs( (string) $result );
+		$this->assertSame( $dest_post, $attrs['id'] ?? 0 );
+		$this->assertSame( 'post', $attrs['type'] ?? '' );
+		$this->assertSame(
+			get_permalink( $dest_post ),
+			$attrs['url'] ?? ''
+		);
+		$this->assertSame( array(), $this->processor->get_warnings() );
+	}
+
+	/**
+	 * Verifies that a post-type link carrying no declared type resolves to the
+	 * newest claim and gains no type attr.
+	 */
+	public function test_post_link_without_declared_type_keeps_newest_claim(): void {
+		// ARRANGE: A page and a newer post both claiming one source post.
+		$source_id = 99204;
+		$this->claiming_post( 'page', $source_id );
+		$newer = $this->claiming_post( 'post', $source_id );
+
+		$url     = self::SOURCE_SITE_URL . '/about';
+		$content = $this->nav_block_content(
+			array( $this->post_link( $source_id, $url ) )
+		);
+
+		// ACT: Process a link with no type attr.
+		$result = $this->processor->process_content(
+			$content,
+			self::SOURCE_SITE_URL,
+			array()
+		);
+
+		// ASSERT: Newest claim won and no type attr was invented.
+		$attrs = $this->first_nav_link_attrs( (string) $result );
+		$this->assertSame( $newer, $attrs['id'] ?? 0 );
+		$this->assertArrayNotHasKey( 'type', $attrs );
+	}
+
+	/**
+	 * Verifies that a hyphen-slugged post type matches the underscored form
+	 * the editor writes into the type attr, and is stored as the registered
+	 * slug so the editor can resolve it.
+	 */
+	public function test_post_link_matches_hyphenated_type_declared_with_underscore(): void {
+		// ARRANGE: A hyphen-slugged CPT claim plus a newer post one.
+		register_post_type( 'sp-thing', array( 'public' => true ) );
+		$source_id = 99205;
+		$thing     = $this->claiming_post( 'sp-thing', $source_id );
+		$this->claiming_post( 'post', $source_id );
+
+		$content = $this->nav_block_content(
+			array(
+				$this->post_link(
+					$source_id,
+					self::SOURCE_SITE_URL . '/thing',
+					'sp_thing'
+				),
+			)
+		);
+
+		// ACT: Process a link declaring the editor's underscored form.
+		$result = $this->processor->process_content(
+			$content,
+			self::SOURCE_SITE_URL,
+			array()
+		);
+
+		// ASSERT: The CPT won and its type is stored as the registered slug,
+		// which is the only form the editor resolves.
+		$attrs = $this->first_nav_link_attrs( (string) $result );
+		$this->assertSame( $thing, $attrs['id'] ?? 0 );
+		$this->assertSame( 'sp-thing', $attrs['type'] ?? '' );
+
+		unregister_post_type( 'sp-thing' );
+	}
+
+	/**
+	 * Verifies that a hyphen-slugged post type also matches the raw slug the
+	 * classic-menu converter writes.
+	 */
+	public function test_post_link_matches_hyphenated_type_declared_as_slug(): void {
+		// ARRANGE: A hyphen-slugged CPT claim plus a newer post one.
+		register_post_type( 'sp-thing', array( 'public' => true ) );
+		$source_id = 99206;
+		$thing     = $this->claiming_post( 'sp-thing', $source_id );
+		$this->claiming_post( 'post', $source_id );
+
+		$content = $this->nav_block_content(
+			array(
+				$this->post_link(
+					$source_id,
+					self::SOURCE_SITE_URL . '/thing',
+					'sp-thing'
+				),
+			)
+		);
+
+		// ACT: Process a link declaring the raw slug.
+		$result = $this->processor->process_content(
+			$content,
+			self::SOURCE_SITE_URL,
+			array()
+		);
+
+		// ASSERT: The CPT won and the slug form survived realignment.
+		$attrs = $this->first_nav_link_attrs( (string) $result );
+		$this->assertSame( $thing, $attrs['id'] ?? 0 );
+		$this->assertSame( 'sp-thing', $attrs['type'] ?? '' );
+
+		unregister_post_type( 'sp-thing' );
+	}
+
+	/**
+	 * Verifies that a core/block ref is repointed on its ref alone, ignoring
+	 * any stray type attr, since the rule carries no post-type kind.
+	 */
+	public function test_reusable_block_ref_ignores_stray_type_attr(): void {
+		// ARRANGE: A wp_block holding the only claim on the source post.
+		$source_id = 99207;
+		$dest_post = $this->claiming_post( 'wp_block', $source_id );
+
+		$content = '<!-- wp:block ' . wp_json_encode(
+			array(
+				'ref'  => $source_id,
+				'type' => 'page',
+			)
+		) . ' /-->';
+
+		// ACT: Process a reusable block carrying a stray type attr.
+		$result = $this->processor->process_content(
+			$content,
+			self::SOURCE_SITE_URL,
+			array()
+		);
+
+		// ASSERT: Repointed and the stray attr left alone.
+		$attrs = parse_blocks( (string) $result )[0]['attrs'] ?? array();
+		$this->assertSame( $dest_post, $attrs['ref'] ?? 0 );
+		$this->assertSame( 'page', $attrs['type'] ?? '' );
+	}
+
+	/**
+	 * Verifies that a post-type submenu honors its declared type too.
+	 */
+	public function test_post_submenu_picks_claim_matching_declared_type(): void {
+		// ARRANGE: A page and a newer post both claiming one source post.
+		$source_id = 99208;
+		$page      = $this->claiming_post( 'page', $source_id );
+		$this->claiming_post( 'post', $source_id );
+
+		$content = $this->nav_block_content(
+			array(
+				$this->post_link(
+					$source_id,
+					self::SOURCE_SITE_URL . '/about',
+					'page',
+					'core/navigation-submenu'
+				),
+			)
+		);
+
+		// ACT: Process a submenu declaring type=page.
+		$result = $this->processor->process_content(
+			$content,
+			self::SOURCE_SITE_URL,
+			array()
+		);
+
+		// ASSERT: The page won over the newer post.
+		$attrs = $this->first_nav_link_attrs( (string) $result );
+		$this->assertSame( $page, $attrs['id'] ?? 0 );
+	}
+
+	/**
+	 * Verifies that a session-mapped ref realigns its declared type too, so a
+	 * bulk batch and a single import agree.
+	 */
+	public function test_session_mapped_post_link_realigns_declared_type(): void {
+		// ARRANGE: An in-batch destination post of a different type.
+		$source_id = 99209;
+		$dest_post = self::factory()->post->create(
+			array( 'post_type' => 'post' )
+		);
+
+		$content = $this->nav_block_content(
+			array(
+				$this->post_link(
+					$source_id,
+					self::SOURCE_SITE_URL . '/about',
+					'page'
+				),
+			)
+		);
+
+		// ACT: Process with the session map naming the in-batch copy.
+		$result = $this->processor->process_content(
+			$content,
+			self::SOURCE_SITE_URL,
+			array( 'session_id_map' => array( $source_id => $dest_post ) )
+		);
+
+		// ASSERT: Repointed with the declared type realigned.
+		$attrs = $this->first_nav_link_attrs( (string) $result );
+		$this->assertSame( $dest_post, $attrs['id'] ?? 0 );
+		$this->assertSame( 'post', $attrs['type'] ?? '' );
+	}
+
+	/**
+	 * Creates a destination term in the taxonomy claiming the source term id.
+	 *
+	 * @param string $taxonomy  Destination taxonomy.
+	 * @param int    $source_id Source term id to claim.
+	 * @return int Created term id.
+	 */
+	private function claiming_term( string $taxonomy, int $source_id ): int {
+		$term_id = self::factory()->term->create(
+			array( 'taxonomy' => $taxonomy )
+		);
+		$this->assertIsInt( $term_id );
+		update_term_meta( $term_id, Options::META_SOURCE_TERM_ID, $source_id );
+		update_term_meta(
+			$term_id,
+			Options::META_SOURCE_TERM_URL,
+			self::SOURCE_SITE_URL
+		);
+
+		return $term_id;
+	}
+
+	/**
 	 * Wraps a list of nav-link/submenu shapes in a core/navigation block,
 	 * matching the serializer output the editor would produce.
 	 *
@@ -1000,42 +1590,135 @@ class Content_Processor_Block_ID_Remap_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Creates a destination post of the type claiming the source post id.
+	 *
+	 * @param string $post_type Destination post type.
+	 * @param int    $source_id Source post ID to claim.
+	 * @return int Created post id.
+	 */
+	private function claiming_post( string $post_type, int $source_id ): int {
+		$post_id = self::factory()->post->create(
+			array( 'post_type' => $post_type )
+		);
+		$this->assertIsInt( $post_id );
+		update_post_meta( $post_id, Options::META_SOURCE_POST_ID, $source_id );
+		update_post_meta(
+			$post_id,
+			Options::META_SOURCE_SITE_URL,
+			self::SOURCE_SITE_URL
+		);
+
+		return $post_id;
+	}
+
+	/**
 	 * Builds a post-type nav-link inner-block shape.
 	 *
-	 * @param int    $source_id Source post ID for the id attr.
-	 * @param string $url       Link url attr.
+	 * @param int         $source_id Source post ID for the id attr.
+	 * @param string      $url       Link url attr.
+	 * @param string|null $type      Declared post type; null omits the attr.
+	 * @param string      $name      Block name.
 	 * @return array{name:string, attrs:array<string,mixed>} Inner-block shape.
 	 */
-	private function post_link( int $source_id, string $url ): array {
+	private function post_link(
+		int $source_id,
+		string $url,
+		?string $type = null,
+		string $name = 'core/navigation-link'
+	): array {
+		$attrs = array(
+			'id'   => $source_id,
+			'kind' => 'post-type',
+		);
+
+		if ( null !== $type ) {
+			$attrs['type'] = $type;
+		}
+
+		$attrs['label'] = 'About';
+		$attrs['url']   = $url;
+
 		return array(
-			'name'  => 'core/navigation-link',
-			'attrs' => array(
-				'id'    => $source_id,
-				'kind'  => 'post-type',
-				'label' => 'About',
-				'url'   => $url,
-			),
+			'name'  => $name,
+			'attrs' => $attrs,
 		);
 	}
 
 	/**
 	 * Builds a taxonomy nav-link inner-block shape.
 	 *
-	 * @param int    $source_id Source term ID for the id attr.
-	 * @param string $url       Link url attr.
+	 * @param int         $source_id Source term ID for the id attr.
+	 * @param string      $url       Link url attr.
+	 * @param string|null $type      Declared taxonomy; null omits the attr.
 	 * @return array{name:string, attrs:array<string,mixed>} Inner-block shape.
 	 */
-	private function taxonomy_link( int $source_id, string $url ): array {
+	private function taxonomy_link(
+		int $source_id,
+		string $url,
+		?string $type = 'category'
+	): array {
+		$attrs = array(
+			'id'   => $source_id,
+			'kind' => 'taxonomy',
+		);
+
+		if ( null !== $type ) {
+			$attrs['type'] = $type;
+		}
+
+		$attrs['label'] = 'News';
+		$attrs['url']   = $url;
+
 		return array(
 			'name'  => 'core/navigation-link',
-			'attrs' => array(
-				'id'    => $source_id,
-				'kind'  => 'taxonomy',
-				'type'  => 'category',
-				'label' => 'News',
-				'url'   => $url,
-			),
+			'attrs' => $attrs,
 		);
+	}
+
+	/**
+	 * Returns the attrs of the first nav-link or submenu in the content.
+	 *
+	 * @param string $content Serialized block content.
+	 * @return array<string, mixed> Attrs, or empty when none is found.
+	 */
+	private function first_nav_link_attrs( string $content ): array {
+		foreach ( parse_blocks( $content ) as $block ) {
+			$found = $this->find_nav_link_attrs( $block );
+			if ( array() !== $found ) {
+				return $found;
+			}
+		}
+
+		return array();
+	}
+
+	/**
+	 * Recursively finds the first nav-link or submenu attrs in a subtree.
+	 *
+	 * @param array<string, mixed> $block Parsed block.
+	 * @return array<string, mixed> Attrs, or empty when not found.
+	 */
+	private function find_nav_link_attrs( array $block ): array {
+		$name = $block['blockName'] ?? '';
+		if (
+			(
+				'core/navigation-link' === $name
+				|| 'core/navigation-submenu' === $name
+			)
+			&& isset( $block['attrs'] )
+			&& is_array( $block['attrs'] )
+		) {
+			return $block['attrs'];
+		}
+
+		foreach ( $block['innerBlocks'] ?? array() as $inner ) {
+			$found = $this->find_nav_link_attrs( $inner );
+			if ( array() !== $found ) {
+				return $found;
+			}
+		}
+
+		return array();
 	}
 
 	/**
