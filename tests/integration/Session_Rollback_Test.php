@@ -597,9 +597,9 @@ class Session_Rollback_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Verifies that rolling back a post keeps an attachment another attachment
-	 * uses as its featured image, the poster frame core stores on video and
-	 * audio attachments.
+	 * Verifies that rolling back a post keeps an attachment a video outside
+	 * the rollback batch uses as its featured image, the poster frame core
+	 * stores on video and audio attachments.
 	 */
 	public function test_rollback_keeps_media_used_as_attachment_poster(): void {
 		// ARRANGE: X is parented to A but is a video attachment's poster.
@@ -619,6 +619,88 @@ class Session_Rollback_Test extends Integration_Test_Case {
 		// ASSERT: A is gone but the video keeps its poster.
 		$this->assertNull( get_post( $seed['post_id'] ) );
 		$this->assertSame( $seed['attachment_id'], get_post_thumbnail_id( $video ) );
+	}
+
+	/**
+	 * Verifies that rolling back a post deletes a video it owns together with
+	 * the poster that video holds, rather than stranding the poster.
+	 */
+	public function test_rollback_deletes_a_video_with_the_poster_it_holds(): void {
+		// ARRANGE: A owns a video holding X as its poster.
+		$seed = $this->seed_video_holding_poster();
+
+		// ACT: Roll back A.
+		$result = $this->rollback_service->rollback_item( $seed['item_id'] );
+
+		// ASSERT: Post, video and poster are gone, with nothing omitted.
+		$this->assertIsArray( $result );
+		$this->assertSame( array(), $result['omissions'] );
+		$this->assertNull( get_post( $seed['post_id'] ) );
+		$this->assertNull( get_post( $seed['video_id'] ) );
+		$this->assertNull( get_post( $seed['attachment_id'] ) );
+	}
+
+	/**
+	 * Verifies that a video a surviving post still shows keeps both itself and
+	 * the poster it holds.
+	 */
+	public function test_rollback_keeps_the_poster_of_a_surviving_video(): void {
+		// ARRANGE: B shows A's video inline; a featured image cannot hold a
+		// video, since set_post_thumbnail() drops the meta for one.
+		$seed = $this->seed_video_holding_poster();
+		$this->factory()->post->create(
+			array(
+				'post_title'   => 'B',
+				'post_content' => '<video src="'
+					. wp_get_attachment_url( $seed['video_id'] ) . '"></video>',
+			)
+		);
+
+		// ACT: Roll back A.
+		$this->rollback_service->rollback_item( $seed['item_id'] );
+
+		// ASSERT: A is gone but the video and its poster both survive.
+		$this->assertNull( get_post( $seed['post_id'] ) );
+		$this->assertNotNull( get_post( $seed['video_id'] ) );
+		$this->assertNotNull( get_post( $seed['attachment_id'] ) );
+		$this->assertSame(
+			$seed['attachment_id'],
+			get_post_thumbnail_id( $seed['video_id'] )
+		);
+	}
+
+	/**
+	 * Verifies that keeping a video keeps the poster it holds along with the
+	 * poster that one holds in turn.
+	 */
+	public function test_rollback_keeps_a_chain_of_posters_behind_a_video(): void {
+		// ARRANGE: A owns video -> X -> Y, the deeper link written first so a
+		// resolver that walked the links in row order would miss Y.
+		$seed  = $this->create_shared_media_item();
+		$inner = $this->seed_imported_attachment( $seed['post_id'] );
+		$video = $this->seed_imported_attachment(
+			$seed['post_id'],
+			'video/mp4',
+			'mp4'
+		);
+		set_post_thumbnail( $seed['attachment_id'], $inner );
+		set_post_thumbnail( $video, $seed['attachment_id'] );
+		$this->factory()->post->create(
+			array(
+				'post_title'   => 'B',
+				'post_content' => '<video src="'
+					. wp_get_attachment_url( $video ) . '"></video>',
+			)
+		);
+
+		// ACT: Roll back A.
+		$this->rollback_service->rollback_item( $seed['item_id'] );
+
+		// ASSERT: A is gone but the whole chain survives.
+		$this->assertNull( get_post( $seed['post_id'] ) );
+		$this->assertNotNull( get_post( $video ) );
+		$this->assertNotNull( get_post( $seed['attachment_id'] ) );
+		$this->assertNotNull( get_post( $inner ) );
 	}
 
 	/**
@@ -1189,6 +1271,29 @@ class Session_Rollback_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Creates an imported post owning a video and the image it holds as its
+	 * poster, both import-created and parented to that post.
+	 *
+	 * @return array{item_id: int, post_id: int, attachment_id: int, video_id: int} Created IDs.
+	 */
+	private function seed_video_holding_poster(): array {
+		$seed             = $this->create_shared_media_item();
+		$seed['video_id'] = $this->seed_imported_attachment(
+			$seed['post_id'],
+			'video/mp4',
+			'mp4'
+		);
+
+		set_post_thumbnail( $seed['video_id'], $seed['attachment_id'] );
+		$this->assertSame(
+			$seed['attachment_id'],
+			get_post_thumbnail_id( $seed['video_id'] )
+		);
+
+		return $seed;
+	}
+
+	/**
 	 * Writes a post status core would reject on the ordinary update path.
 	 *
 	 * @param int    $post_id Post to park.
@@ -1211,15 +1316,21 @@ class Session_Rollback_Test extends Integration_Test_Case {
 	/**
 	 * Creates a plugin-imported attachment parented to a post.
 	 *
-	 * @param int $parent_id Owning post ID.
+	 * @param int    $parent_id Owning post ID.
+	 * @param string $mime_type Attachment mime type.
+	 * @param string $extension File extension matching the mime type.
 	 * @return int Attachment ID carrying import-origin meta.
 	 */
-	private function seed_imported_attachment( int $parent_id ): int {
+	private function seed_imported_attachment(
+		int $parent_id,
+		string $mime_type = 'image/jpeg',
+		string $extension = 'jpg'
+	): int {
 		$attachment_id = $this->factory()->attachment->create(
 			array(
 				'post_parent'    => $parent_id,
-				'post_mime_type' => 'image/jpeg',
-				'post_title'     => 'Imported Image',
+				'post_mime_type' => $mime_type,
+				'post_title'     => 'Imported Media',
 			)
 		);
 		$this->assertIsInt( $attachment_id );
@@ -1229,12 +1340,12 @@ class Session_Rollback_Test extends Integration_Test_Case {
 		update_post_meta(
 			$attachment_id,
 			'_wp_attached_file',
-			"2026/08/imported-{$attachment_id}.jpg"
+			"2026/08/imported-{$attachment_id}.{$extension}"
 		);
 		update_post_meta(
 			$attachment_id,
 			Options::META_ORIGINAL_URL,
-			'https://example.com/image.jpg'
+			"https://example.com/media.{$extension}"
 		);
 		update_post_meta(
 			$attachment_id,
