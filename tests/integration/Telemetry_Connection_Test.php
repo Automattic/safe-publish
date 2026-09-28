@@ -1,6 +1,6 @@
 <?php
 /**
- * Telemetry connection-test integration tests.
+ * Telemetry connection-test integration tests
  *
  * @package Safe_Publish
  */

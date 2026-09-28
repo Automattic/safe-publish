@@ -1,6 +1,6 @@
 <?php
 /**
- * Integration tests for the reconciliation producer contract.
+ * Integration tests for the reconciliation producer contract
  *
  * @package Safe_Publish
  */

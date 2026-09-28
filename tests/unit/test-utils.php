@@ -1,6 +1,6 @@
 <?php
 /**
- * Test utility functions.
+ * Test utility functions
  *
  * @package Safe_Publish
  */

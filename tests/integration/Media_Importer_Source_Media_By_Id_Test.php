@@ -1,6 +1,6 @@
 <?php
 /**
- * Integration tests for Media_Importer::import_source_media_by_id().
+ * Integration tests for Media_Importer::import_source_media_by_id()
  *
  * @package Safe_Publish
  */

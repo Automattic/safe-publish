@@ -11,6 +11,7 @@ namespace Safe_Publish\API;
 
 use Safe_Publish\Auth\HMAC_Authenticator;
 use Safe_Publish\Utils\Datetime_Sanitizer;
+use Throwable;
 use WP_Error;
 use WP_Post;
 use WP_Post_Type;
@@ -392,9 +393,15 @@ final class Catalog_REST_Controller {
 	 * (e.g. wp_navigation) through despite public=false. Custom CPTs that
 	 * meet the contract come through automatically.
 	 *
+	 * Raw fields come from the type's own REST controller — third-party
+	 * code — so a type whose controller throws is left out and audited.
+	 *
+	 * @param WP_REST_Request $request Incoming REST request.
 	 * @return WP_REST_Response List of catalog-eligible post types.
 	 */
-	public function handle_post_types_request(): WP_REST_Response {
+	public function handle_post_types_request(
+		WP_REST_Request $request
+	): WP_REST_Response {
 		$internal_blocklist = array( 'attachment' );
 
 		$items = array();
@@ -408,6 +415,13 @@ final class Catalog_REST_Controller {
 			if ( true !== $object->public
 				&& ! in_array( $slug, self::ALLOW_NON_PUBLIC, true )
 			) {
+				continue;
+			}
+
+			try {
+				$raw_fields = self::get_raw_fields( $object );
+			} catch ( Throwable $error ) {
+				$this->log_post_type_skipped( $request, $slug, $error );
 				continue;
 			}
 
@@ -427,11 +441,35 @@ final class Catalog_REST_Controller {
 				'description' => is_string( $object->description )
 					? $object->description
 					: '',
-				'raw_fields'  => self::get_raw_fields( $object ),
+				'raw_fields'  => $raw_fields,
 			);
 		}
 
 		return new WP_REST_Response( $items, 200 );
+	}
+
+	/**
+	 * Audits a post type left out of the catalog.
+	 *
+	 * @param WP_REST_Request $request Incoming REST request.
+	 * @param string          $slug    Slug of the omitted post type.
+	 * @param Throwable       $error   Error thrown by its REST controller.
+	 */
+	private function log_post_type_skipped(
+		WP_REST_Request $request,
+		string $slug,
+		Throwable $error
+	): void {
+		$this->dispatch_logger->catalog_post_type_skipped(
+			$slug,
+			$error::class,
+			$error->getMessage(),
+			$request->get_route(),
+			(string) $request->get_header( 'X-Safe-Publish-Action' ),
+			HTTP_Client::parse_destination_site_url(
+				(string) $request->get_header( 'User-Agent' )
+			)
+		);
 	}
 
 	/**

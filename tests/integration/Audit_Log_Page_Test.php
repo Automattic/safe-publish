@@ -1,6 +1,6 @@
 <?php
 /**
- * Integration tests for the Audit Log AJAX endpoint.
+ * Integration tests for the Audit Log AJAX endpoint
  *
  * @package Safe_Publish
  */

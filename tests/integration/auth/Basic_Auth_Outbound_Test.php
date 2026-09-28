@@ -1,6 +1,6 @@
 <?php
 /**
- * Integration tests for Basic Auth outbound request handling.
+ * Integration tests for Basic Auth outbound request handling
  *
  * @package Safe_Publish
  */

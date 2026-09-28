@@ -1,6 +1,6 @@
 <?php
 /**
- * Shortcode_Media_Rewriter unit tests.
+ * Shortcode_Media_Rewriter unit tests
  *
  * @package Safe_Publish
  */

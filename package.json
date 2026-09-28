@@ -1,6 +1,6 @@
 {
   "name": "safe-publish",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "author": "WPVIP",
   "description": "Safe Publish plugin",
   "license": "GPL-2.0-or-later",
@@ -41,6 +41,7 @@
     "playground:reset": "npm run playground -- --reset",
     "plugin-zip": "npm run build && composer install --prefer-dist --optimize-autoloader --no-dev && wp-scripts plugin-zip --no-root-folder",
     "postinstall": "composer install",
+    "prepare": "husky",
     "release": "./bin/release",
     "seed": "./bin/seed",
     "seed:degradations": "./bin/seed-degradations",
@@ -51,8 +52,8 @@
     "seed:update:destination": "./bin/seed mode=update site=destination",
     "start": "wp-scripts start --webpack-src-dir=src --output-path=build",
     "test": "npm run test:php && npm run test:js",
-    "test:e2e": "wp-scripts test-playwright",
-    "test:e2e:debug": "wp-scripts test-playwright --debug",
+    "test:e2e": "./bin/test-e2e",
+    "test:e2e:debug": "./bin/test-e2e --debug",
     "test:e2e:help": "wp-scripts test-playwright --help",
     "test:php": "composer test",
     "test:php:coverage": "composer test-coverage",
@@ -83,13 +84,13 @@
     "@wordpress/date": "5.33.1",
     "@wordpress/e2e-test-utils-playwright": "^1.53.0",
     "@wordpress/element": "6.33.1",
-    "@wordpress/env": "11.13.0",
+    "@wordpress/env": "11.15.0",
     "@wordpress/eslint-plugin": "25.9.0",
     "@wordpress/i18n": "6.6.1",
     "@wordpress/icons": "11.0.1",
     "@wordpress/prettier-config": "4.53.0",
     "@wordpress/primitives": "4.33.1",
-    "@wordpress/scripts": "34.1.0",
+    "@wordpress/scripts": "34.2.0",
     "eslint": "9.39.5",
     "happy-dom": "20.11.2",
     "husky": "9.1.7",
@@ -103,7 +104,11 @@
     "vitest": "4.1.11"
   },
   "stylelint": {
-    "extends": "./node_modules/@wordpress/scripts/config/.stylelintrc.json"
+    "extends": "./node_modules/@wordpress/scripts/config/.stylelintrc.json",
+    "ignoreFiles": [
+      ".playwright-mcp/**",
+      ".scratch/**"
+    ]
   },
   "lint-staged": {
     "*.{js,jsx,ts,tsx}": [
