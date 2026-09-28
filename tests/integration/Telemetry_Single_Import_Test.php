@@ -1,6 +1,6 @@
 <?php
 /**
- * Telemetry single-import integration tests.
+ * Telemetry single-import integration tests
  *
  * @package Safe_Publish
  */

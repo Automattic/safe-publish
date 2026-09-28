@@ -1,6 +1,6 @@
 <?php
 /**
- * Media source URL derivation integration tests.
+ * Media source URL derivation integration tests
  *
  * @package Safe_Publish
  */

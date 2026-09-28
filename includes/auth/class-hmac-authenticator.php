@@ -1,6 +1,6 @@
 <?php
 /**
- * HMAC Authenticator class.
+ * HMAC Authenticator class
  *
  * @package Safe_Publish
  */

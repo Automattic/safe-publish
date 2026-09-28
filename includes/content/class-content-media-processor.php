@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace Safe_Publish\Content;
 
 use Safe_Publish\Media\Media_Importer;
+use Safe_Publish\Validators\URL_Validator;
 use WP_HTML_Decoder;
 use WP_HTML_Tag_Processor;
 
@@ -493,7 +494,10 @@ class Content_Media_Processor {
 	 * @return bool True if the extension maps to an allowed type.
 	 */
 	public function has_uploadable_file_extension( string $url ): bool {
-		$path = wp_parse_url( $url, PHP_URL_PATH );
+		$path = wp_parse_url(
+			URL_Validator::normalize_url_whitespace( $url ),
+			PHP_URL_PATH
+		);
 
 		if ( ! is_string( $path ) ) {
 			return false;

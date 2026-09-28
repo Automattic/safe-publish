@@ -1,6 +1,6 @@
 <?php
 /**
- * Verifies imported meta and terms come from the source, not the request.
+ * Verifies imported meta and terms come from the source, not the request
  *
  * @package Safe_Publish
  */

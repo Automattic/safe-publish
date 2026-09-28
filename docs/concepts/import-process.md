@@ -86,7 +86,7 @@ If an `<a>` tag's `href` ends in a file extension allowed by WordPress, it is pr
 
 ### Inline Image ID References
 
-An inline `<img>` carries two attachment-ID references alongside its URL — the `wp-image-{id}` class and the `data-id` attribute. Once the `src` is repointed at the destination file, both are rewritten from the source ID to the destination attachment ID (an existing reference only; neither is fabricated). This keeps WordPress' runtime responsive-image (`srcset`) output and editor media linkage working for migrated classic-editor and legacy-gallery images. Gutenberg `core/image` blocks are already repointed by their dedicated parser.
+An inline `<img>` carries two attachment-ID references alongside its URL — the `wp-image-{id}` class and the `data-id` attribute. Once the `src` is repointed at the destination file, both are rewritten from the source ID to the destination attachment ID (an existing reference only; neither is fabricated). This keeps WordPress' runtime responsive-image (`srcset`) output and editor media linkage working for migrated classic-editor and legacy-gallery images. Gutenberg `core/image` blocks are already repointed by their dedicated parser, which also adds the class when the source markup carries none.
 
 ### Featured Image
 
@@ -168,7 +168,9 @@ For hierarchical post types (pages and any custom post type registered with `'hi
 - **Top-level source posts** (source `parent = 0`) are imported as top-level on the destination. No resolution is performed.
 - **Non-hierarchical post types** ignore the source `parent` entirely.
 - **Match found**: `post_parent` is set to the destination post ID.
-- **No match (strict default)**: the import aborts with an error that identifies the unresolved parent. The error distinguishes "has not been imported on this site" (the parent was never imported and is not part of the current batch) from "failed to import earlier in this batch" (the parent was part of the bulk batch but did not succeed).
+- **No match (strict default)**: the import aborts with an error that identifies the unresolved parent. The error distinguishes "could not be resolved on this site" (no destination post the import can parent under claims that parent, and it is not part of the current batch) from "failed to import earlier in this batch" (the parent was part of the bulk batch but did not succeed).
+
+A destination parent is resolvable whatever its post status, including statuses a plugin registers as hidden from site search. Trashed parents are not: parenting a new post under one would orphan it in the UI.
 
 Bulk imports run in two passes. Pass 1 fetches each post's REST payload without writing to the database; pass 2 then processes the batch in topological order so the destination parent exists by the time its children look it up. Posts in a cycle (or whose parent is outside the batch) are processed at the end of pass 2 and route through the same unresolvable-parent path.
 
@@ -244,6 +246,7 @@ Bulk imports process multiple posts sequentially:
 
 ### Failure Behavior
 
+- **Trashed destination post**: Import is refused when the only destination post linked to the source post is in the trash, so a second linked copy is never created. Restore that post to update it, or delete it permanently to import a fresh copy.
 - **Inline media download failures**: Import is aborted; any attachments already created during the run are deleted.
 - **Featured image failures**: Import is aborted.
 - **Meta/term failures**: Import is aborted; for new posts, the post and its attachments are deleted. For updates, the post is rolled back to its pre-update state.
@@ -306,6 +309,18 @@ Navigation links and submenus are the exception: they carry an explicit entity r
 ### Navigation links to draft targets may 404 or open the wrong page
 
 Navigation links and submenus are re-derived only when their target was already published at import. If the target was a draft, its slug isn't final, so the link keeps the host-swapped source path and behaves like an [internal body link](#internal-body-links-may-404-or-open-the-wrong-page) — it can 404 or open the wrong page under a slug collision or a different permalink structure. Re-import the referring content after the target is published to re-derive the URL; the Retry action does not cover this case.
+
+### Navigation links to a term in another taxonomy are left unrepointed
+
+A navigation link or submenu that points at a taxonomy term also names the taxonomy that term belongs to, and is repointed only to a destination term in that same taxonomy. If no imported term sits in that taxonomy — for example when the source term changed taxonomy and only its older copy was imported — the link keeps its source reference and is reported under Needs attention instead of being sent to an unrelated term. Import the term into the taxonomy the link names, then use the Retry action.
+
+### Navigation links may have their declared post type realigned
+
+A navigation link or submenu that points at a post also names that post's type. When several imported posts claim the same source post, the one whose type the link names wins, so a link declaring a page is never sent to a post claiming the same source ID.
+
+When the only imported post is of another type — which happens when the source post changed type after the link was authored, since WordPress leaves the stored type behind — the link is still repointed to that post, and its declared type is realigned to match. The link text, and the post it points at, are unchanged.
+
+The realigned value is the post type's registered slug, because that is the only form the block editor resolves. This also settles links to a post type whose slug contains a hyphen: the editor stores its own underscored form (`my-cpt` as `my_cpt`), which the editor itself then fails to resolve, marking the link invalid even though it works on the front end. Imported links carry the registered slug instead.
 
 ### Some sideloaded files carry no source library metadata
 

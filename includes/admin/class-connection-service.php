@@ -1,6 +1,6 @@
 <?php
 /**
- * Connection read service.
+ * Connection read service
  *
  * @package Safe_Publish
  */
