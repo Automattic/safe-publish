@@ -1,6 +1,6 @@
 <?php
 /**
- * Shared seeder-import fixture for parity integration tests.
+ * Shared seeder-import fixture for parity integration tests
  *
  * @package Safe_Publish
  */

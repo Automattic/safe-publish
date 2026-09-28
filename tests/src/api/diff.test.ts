@@ -1,5 +1,5 @@
 /**
- * Tests for diff API functions
+ * Tests for diff API functions.
  */
 import { describe, expect, it, vi, beforeEach, type Mock } from 'vitest';
 

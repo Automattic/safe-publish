@@ -1,6 +1,6 @@
 <?php
 /**
- * Term Conflict value object.
+ * Term Conflict value object
  *
  * @package Safe_Publish
  */

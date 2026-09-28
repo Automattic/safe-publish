@@ -1,6 +1,6 @@
 <?php
 /**
- * Integration tests for pulling a cross-post [gallery id="B"] rendered set.
+ * Integration tests for pulling a cross-post [gallery id="B"] rendered set
  *
  * @package Safe_Publish
  */

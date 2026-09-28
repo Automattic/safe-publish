@@ -1,0 +1,32 @@
+#!/bin/sh
+#
+# Run the Playwright end-to-end suite against this checkout's development
+# site, forwarding any extra args to wp-scripts.
+#
+# Usage: bin/test-e2e [playwright args...]
+
+set -e
+
+cd "$(git rev-parse --show-toplevel)"
+
+# A pre-set WP_BASE_URL takes precedence. Otherwise the target is this
+# checkout's development instance, which bin/setup-env puts in import mode
+# and pins to host.docker.internal.
+if [ -z "$WP_BASE_URL" ]; then
+	. ./bin/lib/devports
+	WP_BASE_URL="http://host.docker.internal:$WP_ENV_PORT"
+fi
+export WP_BASE_URL
+
+# Fail fast: Without this probe an unreachable site burns 60 seconds of
+# Playwright retries. Reachability, not health — no -f, so a 500 or
+# maintenance 503 keeps its own error. Connect timeout bounds a black-holed
+# host; max-time tolerates a cold one.
+if ! curl -s -o /dev/null --connect-timeout 3 --max-time 30 "$WP_BASE_URL"; then
+	echo "Cannot reach $WP_BASE_URL. Is \`npm run dev\` running?" >&2
+	exit 1
+fi
+
+echo "Running end-to-end tests against $WP_BASE_URL"
+
+exec npx wp-scripts test-playwright "$@"

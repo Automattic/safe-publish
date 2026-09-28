@@ -1,6 +1,6 @@
 <?php
 /**
- * Per-source-id mock for the WordPress single-post REST endpoint.
+ * Per-source-id mock for the WordPress single-post REST endpoint
  *
  * @package Safe_Publish
  */

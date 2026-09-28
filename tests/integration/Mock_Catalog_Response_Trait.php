@@ -1,6 +1,6 @@
 <?php
 /**
- * Shared HTTP mock for the source catalog endpoint in integration tests.
+ * Shared HTTP mock for the source catalog endpoint in integration tests
  *
  * @package Safe_Publish
  */
