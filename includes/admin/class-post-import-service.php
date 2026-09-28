@@ -1921,6 +1921,7 @@ class Post_Import_Service {
 					'kind'      => (string) $warning['kind'],
 					'block'     => (string) ( $warning['block'] ?? '' ),
 					'source_id' => (int) $warning['source_id'],
+					'reason'    => (string) ( $warning['reason'] ?? '' ),
 				),
 			);
 		}
