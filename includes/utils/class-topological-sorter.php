@@ -1,6 +1,6 @@
 <?php
 /**
- * Topological_Sorter utility class.
+ * Topological_Sorter utility class
  *
  * @package Safe_Publish
  */

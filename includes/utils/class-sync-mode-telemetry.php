@@ -1,6 +1,6 @@
 <?php
 /**
- * Sync Mode Telemetry class.
+ * Sync Mode Telemetry class
  *
  * @package Safe_Publish
  */

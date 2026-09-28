@@ -1,6 +1,6 @@
 <?php
 /**
- * Telemetry Event Queue class.
+ * Telemetry Event Queue class
  *
  * @package Safe_Publish
  */

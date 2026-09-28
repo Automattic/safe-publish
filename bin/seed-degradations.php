@@ -1,7 +1,7 @@
 <?php
 /**
  * Seeds import degradations so the admin "Needs attention" and "orphan
- * failures" drawers can be exercised in a local environment.
+ * failures" drawers can be exercised in a local environment
  *
  * Important: For all typical uses, run the bin/seed-degradations script. This
  * file shouldn't be invoked directly, unless you are already inside a WP-CLI

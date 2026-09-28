@@ -1,6 +1,6 @@
 <?php
 /**
- * Audit read service integration tests.
+ * Audit read service integration tests
  *
  * @package Safe_Publish
  */

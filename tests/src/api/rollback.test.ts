@@ -1,5 +1,5 @@
 /**
- * Tests for rollback API helpers
+ * Tests for rollback API helpers.
  */
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import {

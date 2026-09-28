@@ -1,6 +1,6 @@
 <?php
 /**
- * Integration test for media sideload filter cleanup.
+ * Integration test for media sideload filter cleanup
  *
  * @package Safe_Publish
  */

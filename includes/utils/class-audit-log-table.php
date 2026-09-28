@@ -1,6 +1,6 @@
 <?php
 /**
- * Audit Log Table class.
+ * Audit Log Table class
  *
  * @package Safe_Publish
  */

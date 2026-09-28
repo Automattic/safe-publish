@@ -1,6 +1,6 @@
 <?php
 /**
- * Authentication parameter builder for outbound REST requests.
+ * Authentication parameter builder for outbound REST requests
  *
  * @package Safe_Publish
  */

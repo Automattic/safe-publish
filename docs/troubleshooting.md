@@ -214,6 +214,7 @@ add_filter(
 1. Confirm the post type is still registered on the source with `show_in_rest` set to `true` and `public` set to `true`. Safe Publish also allows `wp_navigation` and `wp_block` despite `public` being false.
 2. A truthy but non-boolean `show_in_rest` value, such as `1`, registers the REST route but excludes the type from the catalog. Use `true`.
 3. Where the source registers the type conditionally, confirm the registration also runs for REST requests.
+4. The source leaves out any type whose REST controller throws. Check the dispatch channel of the source's Audit Log for a `CATALOG_POST_TYPE_SKIPPED` event naming the type.
 
 #### Post creation failed
 
@@ -277,6 +278,19 @@ If duplicates still occur:
 1. **Check Manage → Posts** to see whether both destination posts are tracked.
 2. Delete duplicate drafts manually.
 
+#### Import refused because a trashed post is still linked
+
+**Symptoms**: Importing reports that a trashed post is still linked to the source post
+
+**Solutions**:
+
+The destination post that was linked to this source post is in the trash. Importing would create a second post linked to the same source post, so Safe Publish refuses instead. The row's Local Status usually reads **Trashed**, but the refusal follows the source post ID stored in post metadata, not the row: a trashed post of any type carrying that ID refuses the import even when the row reads **Not imported**. The message names the post's title and ID so you can find it.
+
+Open the trash for that post's type in WordPress, then choose the outcome you want:
+
+1. **Restore the post** to keep its history, then import again to update it.
+2. **Delete it permanently**, then import again to create a fresh copy.
+
 #### Embedded posts display as plain links
 
 This is a known limitation of WordPress' embed cache when imported posts reference each other while still in draft. See [Embedded posts may render as plain links](concepts/import-process.md#embedded-posts-may-render-as-plain-links) for the cause and recovery steps.
@@ -288,6 +302,14 @@ Links inside post body content are migrated by host swap only, preserving the pa
 #### Navigation links to draft targets 404 or open the wrong page
 
 A navigation link or submenu whose target was a draft at import keeps the host-swapped source path instead of being re-derived, so it can break under a slug collision or a different permalink structure. See [Navigation links to draft targets may 404 or open the wrong page](concepts/import-process.md#navigation-links-to-draft-targets-may-404-or-open-the-wrong-page) for the fix.
+
+#### A navigation link to a term stays on the Needs attention tab
+
+A navigation link or submenu is repointed only to a destination term in the taxonomy the link names, so a source term that moved to another taxonomy can leave the link unrepointed. See [Navigation links to a term in another taxonomy are left unrepointed](concepts/import-process.md#navigation-links-to-a-term-in-another-taxonomy-are-left-unrepointed) for the fix.
+
+#### A navigation link names a different post type after import
+
+A navigation link or submenu stores the type of the post it points at. When the source post changed type after the link was authored, the imported link is repointed to that post and its declared type is realigned to match, so the block editor can resolve the target instead of marking the link invalid. See [Navigation links may have their declared post type realigned](concepts/import-process.md#navigation-links-may-have-their-declared-post-type-realigned).
 
 #### A sideloaded image has no title, caption, or alt in the media library
 

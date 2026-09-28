@@ -1,6 +1,6 @@
 <?php
 /**
- * PHPUnit bootstrap file for unit tests.
+ * PHPUnit bootstrap file for unit tests
  *
  * @package Safe_Publish
  */

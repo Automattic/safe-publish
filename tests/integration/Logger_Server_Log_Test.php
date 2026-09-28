@@ -1,6 +1,6 @@
 <?php
 /**
- * Integration tests for the Logger server-log axis and PII-free skeleton.
+ * Integration tests for the Logger server-log axis and PII-free skeleton
  *
  * @package Safe_Publish
  */

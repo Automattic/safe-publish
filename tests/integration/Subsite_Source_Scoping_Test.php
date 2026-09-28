@@ -1,6 +1,6 @@
 <?php
 /**
- * Source-scoping integration tests for subsite connections.
+ * Source-scoping integration tests for subsite connections
  *
  * @package Safe_Publish
  */

@@ -1,6 +1,6 @@
 <?php
 /**
- * Connection service integration tests.
+ * Connection service integration tests
  *
  * @package Safe_Publish
  */

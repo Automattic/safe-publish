@@ -1,6 +1,6 @@
 <?php
 /**
- * Tests that untitled source posts stay visible in the catalog listing.
+ * Tests that untitled source posts stay visible in the catalog listing
  *
  * @package Safe_Publish
  */
