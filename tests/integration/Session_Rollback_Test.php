@@ -23,6 +23,23 @@ use WP_Error;
  */
 class Session_Rollback_Test extends Integration_Test_Case {
 
+	use Failing_Query_Trait;
+
+	/**
+	 * Probe post type registered exclude_from_search.
+	 */
+	private const HIDDEN_TYPE = 'sp_hidden';
+
+	/**
+	 * Probe post status registered internal, so exclude_from_search too.
+	 */
+	private const HIDDEN_STATUS = 'sp_internal';
+
+	/**
+	 * Post status that is never registered.
+	 */
+	private const UNKNOWN_STATUS = 'sp_unregistered';
+
 	/**
 	 * History repository instance.
 	 *
@@ -49,6 +66,30 @@ class Session_Rollback_Test extends Integration_Test_Case {
 
 		Audit_Log_Table::create_table();
 		Audit_Log_Table::clear( 'import' );
+
+		register_post_type(
+			self::HIDDEN_TYPE,
+			array(
+				'public'              => true,
+				'exclude_from_search' => true,
+				'supports'            => array( 'title', 'editor', 'thumbnail' ),
+			)
+		);
+		register_post_status( self::HIDDEN_STATUS, array( 'internal' => true ) );
+	}
+
+	/**
+	 * Tear down test environment.
+	 */
+	#[\Override]
+	protected function tearDown(): void {
+		$this->restore_failing_queries();
+
+		unregister_post_type( self::HIDDEN_TYPE );
+		// Core registers statuses into a global with no unregister counterpart.
+		unset( $GLOBALS['wp_post_statuses'][ self::HIDDEN_STATUS ] );
+
+		parent::tearDown();
 	}
 
 	/**
@@ -236,6 +277,396 @@ class Session_Rollback_Test extends Integration_Test_Case {
 		// ASSERT: B keeps its featured image.
 		$this->assertNotNull( get_post( $post_b ) );
 		$this->assertNotNull( get_post( $shared_x ) );
+	}
+
+	/**
+	 * Verifies that rolling back a post keeps an attachment a trashed post uses
+	 * as its featured image, which untrashing would need back.
+	 */
+	public function test_rollback_keeps_media_featured_by_trashed_post(): void {
+		// ARRANGE: X is parented to A but is trashed B's featured image.
+		$seed   = $this->create_shared_media_item();
+		$post_b = $this->factory()->post->create( array( 'post_title' => 'B' ) );
+		set_post_thumbnail( $post_b, $seed['attachment_id'] );
+		wp_trash_post( $post_b );
+		$this->assertSame( 'trash', get_post_status( $post_b ) );
+
+		// ACT: Roll back A while B sits in the trash.
+		$this->rollback_service->rollback_item( $seed['item_id'] );
+
+		// ASSERT: A is gone but the attachment B still points at survives.
+		$this->assertNull( get_post( $seed['post_id'] ) );
+		$this->assertNotNull( get_post( $seed['attachment_id'] ) );
+
+		// ASSERT: Untrashing B yields a featured image that still resolves.
+		wp_untrash_post( $post_b );
+		$this->assertSame(
+			$seed['attachment_id'],
+			get_post_thumbnail_id( $post_b )
+		);
+	}
+
+	/**
+	 * Verifies that rolling back a post keeps an attachment a trashed post
+	 * still shows inline.
+	 */
+	public function test_rollback_keeps_media_inlined_by_trashed_post(): void {
+		// ARRANGE: X is parented to A but inlined by trashed B.
+		$seed   = $this->create_shared_media_item();
+		$url    = wp_get_attachment_url( $seed['attachment_id'] );
+		$post_b = $this->factory()->post->create(
+			array(
+				'post_title'   => 'B',
+				'post_content' => '<img src="' . $url . '">',
+			)
+		);
+		wp_trash_post( $post_b );
+		$this->assertSame( 'trash', get_post_status( $post_b ) );
+
+		// ACT: Roll back A while B sits in the trash.
+		$this->rollback_service->rollback_item( $seed['item_id'] );
+
+		// ASSERT: A is gone but the inlined attachment survives.
+		$this->assertNull( get_post( $seed['post_id'] ) );
+		$this->assertNotNull( get_post( $seed['attachment_id'] ) );
+
+		// ASSERT: Untrashing B yields content still pointing at the file.
+		wp_untrash_post( $post_b );
+		$this->assertStringContainsString(
+			(string) $url,
+			(string) get_post_field( 'post_content', $post_b )
+		);
+	}
+
+	/**
+	 * Verifies that rolling back a post keeps an attachment a trashed post's
+	 * gallery shortcode lists by ID.
+	 */
+	public function test_rollback_keeps_media_in_trashed_gallery(): void {
+		// ARRANGE: X is parented to A but listed in trashed B's gallery.
+		$seed   = $this->create_shared_media_item();
+		$post_b = $this->factory()->post->create(
+			array(
+				'post_title'   => 'B',
+				'post_content' => '[gallery ids="' . $seed['attachment_id'] . '"]',
+			)
+		);
+		wp_trash_post( $post_b );
+		$this->assertSame( 'trash', get_post_status( $post_b ) );
+
+		// ACT: Roll back A while B sits in the trash.
+		$this->rollback_service->rollback_item( $seed['item_id'] );
+
+		// ASSERT: A is gone but the gallery's attachment survives.
+		$this->assertNull( get_post( $seed['post_id'] ) );
+		$this->assertNotNull( get_post( $seed['attachment_id'] ) );
+
+		// ASSERT: Untrashing B yields a gallery still listing the ID.
+		wp_untrash_post( $post_b );
+		$this->assertStringContainsString(
+			'ids="' . $seed['attachment_id'] . '"',
+			(string) get_post_field( 'post_content', $post_b )
+		);
+	}
+
+	/**
+	 * Verifies that rolling back a post keeps an attachment a post of an
+	 * exclude_from_search post type uses as its featured image.
+	 */
+	public function test_rollback_keeps_media_featured_by_hidden_post_type(): void {
+		// ARRANGE: X is parented to A but featured by a hidden-type post.
+		$this->assertTrue(
+			get_post_type_object( self::HIDDEN_TYPE )->exclude_from_search
+		);
+		$seed   = $this->create_shared_media_item();
+		$post_b = $this->factory()->post->create(
+			array(
+				'post_title' => 'B',
+				'post_type'  => self::HIDDEN_TYPE,
+			)
+		);
+		set_post_thumbnail( $post_b, $seed['attachment_id'] );
+
+		// ACT: Roll back A.
+		$this->rollback_service->rollback_item( $seed['item_id'] );
+
+		// ASSERT: A is gone but the hidden-type post keeps its featured image.
+		$this->assertNull( get_post( $seed['post_id'] ) );
+		$this->assertSame(
+			$seed['attachment_id'],
+			get_post_thumbnail_id( $post_b )
+		);
+	}
+
+	/**
+	 * Verifies that rolling back a post keeps an attachment a post in an
+	 * internal post status uses as its featured image.
+	 */
+	public function test_rollback_keeps_media_featured_by_hidden_status(): void {
+		// ARRANGE: X is parented to A but featured by a hidden-status post.
+		$this->assertTrue(
+			get_post_status_object( self::HIDDEN_STATUS )->exclude_from_search
+		);
+		$seed   = $this->create_shared_media_item();
+		$post_b = $this->factory()->post->create(
+			array(
+				'post_title'  => 'B',
+				'post_status' => self::HIDDEN_STATUS,
+			)
+		);
+		set_post_thumbnail( $post_b, $seed['attachment_id'] );
+		$this->assertSame(
+			self::HIDDEN_STATUS,
+			get_post_field( 'post_status', $post_b )
+		);
+
+		// ACT: Roll back A.
+		$this->rollback_service->rollback_item( $seed['item_id'] );
+
+		// ASSERT: A is gone but the hidden-status post keeps its image.
+		$this->assertNull( get_post( $seed['post_id'] ) );
+		$this->assertSame(
+			$seed['attachment_id'],
+			get_post_thumbnail_id( $post_b )
+		);
+	}
+
+	/**
+	 * Verifies that rolling back a post keeps an attachment featured by a post
+	 * parked in a status no longer registered, as a deactivated editorial
+	 * workflow plugin leaves behind.
+	 */
+	public function test_rollback_keeps_media_featured_by_unregistered_status(): void {
+		// ARRANGE: X is parented to A but featured by B, whose status is gone.
+		$this->assertNull( get_post_status_object( self::UNKNOWN_STATUS ) );
+		$seed   = $this->create_shared_media_item();
+		$post_b = $this->factory()->post->create( array( 'post_title' => 'B' ) );
+		set_post_thumbnail( $post_b, $seed['attachment_id'] );
+		$this->force_post_status( $post_b, self::UNKNOWN_STATUS );
+
+		// ACT: Roll back A.
+		$this->rollback_service->rollback_item( $seed['item_id'] );
+
+		// ASSERT: A is gone but B keeps its featured image.
+		$this->assertNull( get_post( $seed['post_id'] ) );
+		$this->assertSame(
+			$seed['attachment_id'],
+			get_post_thumbnail_id( $post_b )
+		);
+	}
+
+	/**
+	 * Verifies that a query filter narrowing the featured-image lookup cannot
+	 * cause a deletion, since a hidden holder would otherwise read as none.
+	 */
+	public function test_rollback_keeps_media_a_query_filter_would_hide(): void {
+		// ARRANGE: A owns a held attachment and an unheld one; a filter would
+		// narrow any featured-image lookup made through WP_Query to nothing.
+		$session_id = $this->repository->create_session( 'https://example.com', 'bulk' );
+		$post_a     = $this->factory()->post->create( array( 'post_title' => 'A' ) );
+		$held       = $this->seed_imported_attachment( $post_a );
+		$unheld     = $this->seed_imported_attachment( $post_a );
+		$post_b     = $this->factory()->post->create( array( 'post_title' => 'B' ) );
+		set_post_thumbnail( $post_b, $held );
+		$item_a = $this->repository->log_import_action(
+			$session_id,
+			1,
+			'A',
+			'success',
+			$post_a
+		);
+
+		$narrow = static fn ( string $where ): string => str_contains( $where, '_thumbnail_id' )
+			? $where . ' AND 1=0'
+			: $where;
+		add_filter( 'posts_where', $narrow );
+
+		try {
+			// ACT: Roll back A.
+			$this->rollback_service->rollback_item( $item_a );
+		} finally {
+			remove_filter( 'posts_where', $narrow );
+		}
+
+		// ASSERT: The held attachment survives the filter that would hide it.
+		$this->assertNull( get_post( $post_a ) );
+		$this->assertSame( $held, get_post_thumbnail_id( $post_b ) );
+
+		// ASSERT: The unheld one is still deleted, so the filter did not simply
+		// stop the rollback from collecting the post's media.
+		$this->assertNull( get_post( $unheld ) );
+	}
+
+	/**
+	 * Verifies that one rollback both keeps a referenced attachment and deletes
+	 * an unreferenced one, so the batched usage checks stay per-attachment.
+	 */
+	public function test_rollback_separates_referenced_media_within_one_batch(): void {
+		// ARRANGE: A owns four attachments; three are held by surviving posts,
+		// one by each reference kind, and the fourth is held by nothing.
+		$session_id = $this->repository->create_session( 'https://example.com', 'bulk' );
+		$post_a     = $this->factory()->post->create( array( 'post_title' => 'A' ) );
+		$featured   = $this->seed_imported_attachment( $post_a );
+		$inlined    = $this->seed_imported_attachment( $post_a );
+		$listed     = $this->seed_imported_attachment( $post_a );
+		$orphan     = $this->seed_imported_attachment( $post_a );
+
+		$holder = $this->factory()->post->create(
+			array(
+				'post_title'   => 'B',
+				'post_content' => '<img src="' . wp_get_attachment_url( $inlined ) . '">'
+					. '[gallery ids="' . $listed . '"]',
+			)
+		);
+		set_post_thumbnail( $holder, $featured );
+
+		$item_a = $this->repository->log_import_action(
+			$session_id,
+			1,
+			'A',
+			'success',
+			$post_a
+		);
+
+		// ACT: Roll back A.
+		$result = $this->rollback_service->rollback_item( $item_a );
+
+		// ASSERT: Each held attachment survives and the unheld one is deleted.
+		$this->assertIsArray( $result );
+		$this->assertNull( get_post( $post_a ) );
+		$this->assertNotNull( get_post( $featured ) );
+		$this->assertNotNull( get_post( $inlined ) );
+		$this->assertNotNull( get_post( $listed ) );
+		$this->assertNull( get_post( $orphan ) );
+		$this->assertSame( array(), $result['omissions'] );
+	}
+
+	/**
+	 * Verifies that a holder past the first scan page still keeps its media,
+	 * so paging does not truncate the usage checks.
+	 */
+	public function test_rollback_keeps_media_held_beyond_the_first_scan_page(): void {
+		// ARRANGE: 600 gallery posts precede the one holding the attachment.
+		$seed = $this->create_shared_media_item();
+		for ( $i = 0; $i < 600; $i++ ) {
+			$this->factory()->post->create(
+				array( 'post_content' => '[gallery ids="9001"]' )
+			);
+		}
+		$post_b = $this->factory()->post->create(
+			array(
+				'post_title'   => 'B',
+				'post_content' => '[gallery ids="' . $seed['attachment_id'] . '"]',
+			)
+		);
+
+		// ACT: Roll back A.
+		$this->rollback_service->rollback_item( $seed['item_id'] );
+
+		// ASSERT: A is gone but the late holder's attachment survives.
+		$this->assertNull( get_post( $seed['post_id'] ) );
+		$this->assertNotNull( get_post( $seed['attachment_id'] ) );
+		$this->assertGreaterThan( 500, $post_b - $seed['post_id'] );
+	}
+
+	/**
+	 * Verifies that an auto-draft holding the attachment does not keep it,
+	 * an abandoned editor session core garbage-collects on its own.
+	 */
+	public function test_rollback_deletes_media_held_only_by_an_auto_draft(): void {
+		// ARRANGE: X is parented to A and featured by an auto-draft.
+		$seed   = $this->create_shared_media_item();
+		$post_b = $this->factory()->post->create(
+			array(
+				'post_title'  => 'B',
+				'post_status' => 'auto-draft',
+			)
+		);
+		set_post_thumbnail( $post_b, $seed['attachment_id'] );
+		$this->assertSame(
+			'auto-draft',
+			get_post_field( 'post_status', $post_b )
+		);
+
+		// ACT: Roll back A.
+		$this->rollback_service->rollback_item( $seed['item_id'] );
+
+		// ASSERT: A and the attachment are both gone.
+		$this->assertNull( get_post( $seed['post_id'] ) );
+		$this->assertNull( get_post( $seed['attachment_id'] ) );
+	}
+
+	/**
+	 * Verifies that rolling back a post keeps an attachment another attachment
+	 * uses as its featured image, the poster frame core stores on video and
+	 * audio attachments.
+	 */
+	public function test_rollback_keeps_media_used_as_attachment_poster(): void {
+		// ARRANGE: X is parented to A but is a video attachment's poster.
+		$seed  = $this->create_shared_media_item();
+		$video = $this->factory()->attachment->create(
+			array(
+				'post_mime_type' => 'video/mp4',
+				'post_title'     => 'Clip',
+			)
+		);
+		set_post_thumbnail( $video, $seed['attachment_id'] );
+		$this->assertSame( 'inherit', get_post_field( 'post_status', $video ) );
+
+		// ACT: Roll back A.
+		$this->rollback_service->rollback_item( $seed['item_id'] );
+
+		// ASSERT: A is gone but the video keeps its poster.
+		$this->assertNull( get_post( $seed['post_id'] ) );
+		$this->assertSame( $seed['attachment_id'], get_post_thumbnail_id( $video ) );
+	}
+
+	/**
+	 * Provides an SQL fingerprint identifying each usage check's query.
+	 *
+	 * @return array<string, array{string}> Fingerprint per check.
+	 */
+	public function usage_check_query_provider(): array {
+		return array(
+			'featured image'  => array( "meta.meta_key = '_thumbnail_id'" ),
+			'post content'    => array( '2026/08/' ),
+			'media shortcode' => array( '[gallery' ),
+		);
+	}
+
+	/**
+	 * Verifies that a failed usage check retains the attachment and reports the
+	 * omission, rather than reading the failure as an unreferenced attachment.
+	 *
+	 * @dataProvider usage_check_query_provider
+	 *
+	 * @param string $fingerprint SQL fragment unique to the check's query.
+	 */
+	public function test_rollback_retains_media_when_a_usage_check_fails(
+		string $fingerprint
+	): void {
+		// ARRANGE: One usage check's query is made to fail.
+		$seed = $this->create_shared_media_item();
+		$this->fail_queries_matching( $fingerprint );
+
+		// ACT: Roll back A, then stop the injection before asserting.
+		$result = $this->rollback_service->rollback_item( $seed['item_id'] );
+		$this->restore_failing_queries();
+
+		// ASSERT: A is gone but the attachment is kept and reported.
+		$this->assertIsArray( $result );
+		$this->assertNull( get_post( $seed['post_id'] ) );
+		$this->assertNotNull( get_post( $seed['attachment_id'] ) );
+		$this->assertSame(
+			array(
+				array(
+					'field'         => 'media',
+					'reason'        => 'usage_check_failed',
+					'attachment_id' => $seed['attachment_id'],
+				),
+			),
+			$result['omissions']
+		);
 	}
 
 	/**
@@ -733,6 +1164,51 @@ class Session_Rollback_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Creates an imported post owning one attachment, plus its history item.
+	 *
+	 * @return array{item_id: int, post_id: int, attachment_id: int} Created IDs.
+	 */
+	private function create_shared_media_item(): array {
+		$session_id    = $this->repository->create_session(
+			'https://example.com',
+			'bulk'
+		);
+		$post_id       = $this->factory()->post->create(
+			array( 'post_title' => 'A' )
+		);
+		$attachment_id = $this->seed_imported_attachment( $post_id );
+		$item_id       = $this->repository->log_import_action(
+			$session_id,
+			1,
+			'A',
+			'success',
+			$post_id
+		);
+
+		return compact( 'item_id', 'post_id', 'attachment_id' );
+	}
+
+	/**
+	 * Writes a post status core would reject on the ordinary update path.
+	 *
+	 * @param int    $post_id Post to park.
+	 * @param string $status  Status to write.
+	 */
+	private function force_post_status( int $post_id, string $status ): void {
+		global $wpdb;
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
+		$wpdb->update(
+			$wpdb->posts,
+			array( 'post_status' => $status ),
+			array( 'ID' => $post_id )
+		);
+		clean_post_cache( $post_id );
+
+		$this->assertSame( $status, get_post_field( 'post_status', $post_id ) );
+	}
+
+	/**
 	 * Creates a plugin-imported attachment parented to a post.
 	 *
 	 * @param int $parent_id Owning post ID.
@@ -1207,66 +1683,52 @@ class Session_Rollback_Test extends Integration_Test_Case {
 	 * with the wpdb error captured.
 	 */
 	public function test_mark_item_rolled_back_emits_failed_when_update_errors(): void {
-		global $wpdb;
-
-		// ARRANGE: Create a session with one item, then force the next UPDATE
-		// on the items table to fail at the SQL layer by rewriting it via
-		// the 'query' filter. try/finally guarantees filter removal.
-		$session_id      = $this->repository->create_session( 'https://example.com', 'bulk' );
-		$post_id         = $this->factory()->post->create( array( 'post_title' => 'Imported Post' ) );
-		$item_id         = $this->repository->log_import_action(
+		// ARRANGE: A session with one item, and the items table's UPDATEs
+		// forced to fail.
+		$session_id = $this->repository->create_session( 'https://example.com', 'bulk' );
+		$post_id    = $this->factory()->post->create(
+			array( 'post_title' => 'Imported Post' )
+		);
+		$item_id    = $this->repository->log_import_action(
 			$session_id,
 			1,
 			'Imported Post',
 			'success',
 			$post_id
 		);
-		$items_table     = Import_Items_Table::table_name();
-		$filter_callback = function ( string $query ) use ( $items_table ): string {
-			if ( 0 === strpos( $query, "UPDATE `{$items_table}`" ) ) {
-				return 'UPDATE safe_publish_nonexistent_table_for_test SET x = 1';
-			}
-			return $query;
-		};
-		add_filter( 'query', $filter_callback );
-		$wpdb->suppress_errors( true );
+		$this->fail_table_queries( 'UPDATE', Import_Items_Table::table_name() );
 
-		try {
-			// ACT: Roll back the item.
-			$flagged = $this->repository->mark_item_rolled_back( $item_id );
+		// ACT: Roll back the item.
+		$flagged = $this->repository->mark_item_rolled_back( $item_id );
 
-			// ASSERT: The failed write is reported to the caller.
-			$this->assertFalse( $flagged );
+		// ASSERT: The failed write is reported to the caller.
+		$this->assertFalse( $flagged );
 
-			// ASSERT: An ITEM_ROLLBACK_FAILED error event was emitted with the
-			// item ID, the snapshotted session_id and post_id (SELECT runs
-			// before the filtered UPDATE, so these are real values), and a
-			// non-empty wpdb_error string.
-			$events = Audit_Log_Table::get_events(
-				array(
-					'channel'    => 'import',
-					'event_type' => 'ITEM_ROLLBACK_FAILED',
-				)
-			);
-			$this->assertCount( 1, $events );
-			$this->assertSame( 'error', $events[0]['level'] );
-			$this->assertSame( $item_id, $events[0]['data']['item_id'] );
-			$this->assertSame( $session_id, $events[0]['data']['session_id'] );
-			$this->assertSame( $post_id, $events[0]['data']['post_id'] );
-			$this->assertNotEmpty( $events[0]['data']['wpdb_error'] );
+		// ASSERT: An ITEM_ROLLBACK_FAILED error event was emitted with the
+		// item ID, the snapshotted session_id and post_id (SELECT runs
+		// before the filtered UPDATE, so these are real values), and a
+		// non-empty wpdb_error string.
+		$events = Audit_Log_Table::get_events(
+			array(
+				'channel'    => 'import',
+				'event_type' => 'ITEM_ROLLBACK_FAILED',
+			)
+		);
+		$this->assertCount( 1, $events );
+		$this->assertSame( 'error', $events[0]['level'] );
+		$this->assertSame( $item_id, $events[0]['data']['item_id'] );
+		$this->assertSame( $session_id, $events[0]['data']['session_id'] );
+		$this->assertSame( $post_id, $events[0]['data']['post_id'] );
+		$this->assertNotEmpty( $events[0]['data']['wpdb_error'] );
 
-			// ASSERT: No success event was recorded.
-			$success_events = Audit_Log_Table::get_events(
-				array(
-					'channel'    => 'import',
-					'event_type' => 'ITEM_ROLLED_BACK',
-				)
-			);
-			$this->assertCount( 0, $success_events );
-		} finally {
-			remove_filter( 'query', $filter_callback );
-			$wpdb->suppress_errors( false );
-		}
+		// ASSERT: No success event was recorded.
+		$success_events = Audit_Log_Table::get_events(
+			array(
+				'channel'    => 'import',
+				'event_type' => 'ITEM_ROLLED_BACK',
+			)
+		);
+		$this->assertCount( 0, $success_events );
 	}
 
 	/**
@@ -1274,19 +1736,16 @@ class Session_Rollback_Test extends Integration_Test_Case {
 	 * error even though the post was reverted.
 	 */
 	public function test_rollback_item_reports_a_rollback_it_could_not_record(): void {
-		global $wpdb;
-
-		// ARRANGE: An updated item, with the next UPDATE on the items table
-		// forced to fail at the SQL layer so only the flag write breaks.
-		// try/finally guarantees filter removal.
-		$session_id      = $this->repository->create_session( 'https://example.com', 'bulk' );
-		$post_id         = $this->factory()->post->create(
+		// ARRANGE: An updated item, with the items table's UPDATEs forced to
+		// fail at the SQL layer so only the flag write breaks.
+		$session_id = $this->repository->create_session( 'https://example.com', 'bulk' );
+		$post_id    = $this->factory()->post->create(
 			array(
 				'post_title'   => 'Updated',
 				'post_content' => 'Imported content.',
 			)
 		);
-		$item_id         = $this->repository->log_import_action(
+		$item_id    = $this->repository->log_import_action(
 			$session_id,
 			1,
 			'Updated',
@@ -1298,36 +1757,23 @@ class Session_Rollback_Test extends Integration_Test_Case {
 				'action'           => 'updated_existing',
 			)
 		);
-		$items_table     = Import_Items_Table::table_name();
-		$filter_callback = function ( string $query ) use ( $items_table ): string {
-			if ( 0 === strpos( $query, "UPDATE `{$items_table}`" ) ) {
-				return 'UPDATE safe_publish_nonexistent_table_for_test SET x = 1';
-			}
-			return $query;
-		};
-		add_filter( 'query', $filter_callback );
-		$wpdb->suppress_errors( true );
+		$this->fail_table_queries( 'UPDATE', Import_Items_Table::table_name() );
 
-		try {
-			// ACT: Roll the item back.
-			$result = $this->rollback_service->rollback_item( $item_id );
+		// ACT: Roll the item back.
+		$result = $this->rollback_service->rollback_item( $item_id );
 
-			// ASSERT: The caller is told the rollback went unrecorded.
-			$this->assertInstanceOf( WP_Error::class, $result );
-			$this->assertSame( 'rollback_not_recorded', $result->get_error_code() );
+		// ASSERT: The caller is told the rollback went unrecorded.
+		$this->assertInstanceOf( WP_Error::class, $result );
+		$this->assertSame( 'rollback_not_recorded', $result->get_error_code() );
 
-			// ASSERT: The revert itself still happened.
-			$post = get_post( $post_id );
-			$this->assertNotNull( $post );
-			$this->assertSame( 'Old content.', $post->post_content );
+		// ASSERT: The revert itself still happened.
+		$post = get_post( $post_id );
+		$this->assertNotNull( $post );
+		$this->assertSame( 'Old content.', $post->post_content );
 
-			// ASSERT: The row stayed unflagged, matching what was reported.
-			$item = $this->repository->get_item( $item_id );
-			$this->assertSame( 0, (int) $item['rolled_back'] );
-		} finally {
-			remove_filter( 'query', $filter_callback );
-			$wpdb->suppress_errors( false );
-		}
+		// ASSERT: The row stayed unflagged, matching what was reported.
+		$item = $this->repository->get_item( $item_id );
+		$this->assertSame( 0, (int) $item['rolled_back'] );
 	}
 
 	/**
@@ -1371,7 +1817,10 @@ class Session_Rollback_Test extends Integration_Test_Case {
 		$this->assertCount( 1, $events );
 		$this->assertSame( 'info', $events[0]['level'] );
 		$this->assertSame( $session_id, $events[0]['data']['session_id'] );
-		$this->assertSame( 'https://example.com', $events[0]['data']['source_site_url'] );
+		$this->assertSame(
+			'https://example.com',
+			$events[0]['data']['source_site_url']
+		);
 		$this->assertSame( 2, $events[0]['data']['items_deleted'] );
 	}
 
@@ -1405,14 +1854,12 @@ class Session_Rollback_Test extends Integration_Test_Case {
 	 * the imports-table DELETE, and leaves the session row intact.
 	 */
 	public function test_delete_session_emits_failed_when_items_delete_errors(): void {
-		global $wpdb;
-
-		// ARRANGE: Create a session with one item, then force the next DELETE
-		// on the items table to fail at the SQL layer by rewriting it to
-		// invalid SQL via the 'query' filter. try/finally guarantees filter
-		// removal.
+		// ARRANGE: A session with one item, and the items table's DELETEs
+		// forced to fail.
 		$session_id = $this->repository->create_session( 'https://example.com', 'bulk' );
-		$post_id    = $this->factory()->post->create( array( 'post_title' => 'Imported Post' ) );
+		$post_id    = $this->factory()->post->create(
+			array( 'post_title' => 'Imported Post' )
+		);
 		$this->repository->log_import_action(
 			$session_id,
 			1,
@@ -1420,55 +1867,45 @@ class Session_Rollback_Test extends Integration_Test_Case {
 			'success',
 			$post_id
 		);
-		$items_table     = Import_Items_Table::table_name();
-		$filter_callback = function ( $query ) use ( $items_table ) {
-			if ( 0 === strpos( $query, "DELETE FROM `{$items_table}`" ) ) {
-				return 'DELETE FROM safe_publish_nonexistent_table_for_test WHERE x = 1';
-			}
-			return $query;
-		};
-		add_filter( 'query', $filter_callback );
-		$wpdb->suppress_errors( true );
+		$this->fail_table_queries( 'DELETE', Import_Items_Table::table_name() );
 
-		try {
-			// ACT: Attempt to delete the session.
-			$deleted = $this->repository->delete_session( $session_id );
+		// ACT: Attempt to delete the session.
+		$deleted = $this->repository->delete_session( $session_id );
 
-			// ASSERT: The repository reports no deletion.
-			$this->assertFalse( $deleted );
+		// ASSERT: The repository reports no deletion.
+		$this->assertFalse( $deleted );
 
-			// ASSERT: A SESSION_DELETE_FAILED error event was emitted with the
-			// session ID, the snapshotted source_site_url, and a non-empty
-			// wpdb_error string.
-			$events = Audit_Log_Table::get_events(
-				array(
-					'channel'    => 'import',
-					'event_type' => 'SESSION_DELETE_FAILED',
-				)
-			);
-			$this->assertCount( 1, $events );
-			$this->assertSame( 'error', $events[0]['level'] );
-			$this->assertSame( $session_id, $events[0]['data']['session_id'] );
-			$this->assertSame( 'https://example.com', $events[0]['data']['source_site_url'] );
-			$this->assertNotEmpty( $events[0]['data']['wpdb_error'] );
+		// ASSERT: A SESSION_DELETE_FAILED error event was emitted with the
+		// session ID, the snapshotted source_site_url, and a non-empty
+		// wpdb_error string.
+		$events = Audit_Log_Table::get_events(
+			array(
+				'channel'    => 'import',
+				'event_type' => 'SESSION_DELETE_FAILED',
+			)
+		);
+		$this->assertCount( 1, $events );
+		$this->assertSame( 'error', $events[0]['level'] );
+		$this->assertSame( $session_id, $events[0]['data']['session_id'] );
+		$this->assertSame(
+			'https://example.com',
+			$events[0]['data']['source_site_url']
+		);
+		$this->assertNotEmpty( $events[0]['data']['wpdb_error'] );
 
-			// ASSERT: No success event was recorded.
-			$success_events = Audit_Log_Table::get_events(
-				array(
-					'channel'    => 'import',
-					'event_type' => 'SESSION_DELETED',
-				)
-			);
-			$this->assertCount( 0, $success_events );
+		// ASSERT: No success event was recorded.
+		$success_events = Audit_Log_Table::get_events(
+			array(
+				'channel'    => 'import',
+				'event_type' => 'SESSION_DELETED',
+			)
+		);
+		$this->assertCount( 0, $success_events );
 
-			// ASSERT: The session row was not deleted (the bail-out preserves
-			// it so the caller can retry).
-			$session = $this->repository->get_session( $session_id );
-			$this->assertNotNull( $session );
-		} finally {
-			remove_filter( 'query', $filter_callback );
-			$wpdb->suppress_errors( false );
-		}
+		// ASSERT: The session row was not deleted (the bail-out preserves
+		// it so the caller can retry).
+		$session = $this->repository->get_session( $session_id );
+		$this->assertNotNull( $session );
 	}
 
 	/**
@@ -1477,13 +1914,12 @@ class Session_Rollback_Test extends Integration_Test_Case {
 	 * SESSION_DELETE_FAILED audit event.
 	 */
 	public function test_delete_session_emits_failed_when_imports_delete_errors(): void {
-		global $wpdb;
-
-		// ARRANGE: Create a session with one item, then force the next DELETE
-		// on the imports table to fail at the SQL layer. The items-table
-		// DELETE runs first and succeeds.
+		// ARRANGE: A session with one item, and the imports table's DELETEs
+		// forced to fail.
 		$session_id = $this->repository->create_session( 'https://example.com', 'bulk' );
-		$post_id    = $this->factory()->post->create( array( 'post_title' => 'Imported Post' ) );
+		$post_id    = $this->factory()->post->create(
+			array( 'post_title' => 'Imported Post' )
+		);
 		$this->repository->log_import_action(
 			$session_id,
 			1,
@@ -1491,49 +1927,39 @@ class Session_Rollback_Test extends Integration_Test_Case {
 			'success',
 			$post_id
 		);
-		$imports_table   = Imports_Table::table_name();
-		$filter_callback = function ( $query ) use ( $imports_table ) {
-			if ( 0 === strpos( $query, "DELETE FROM `{$imports_table}`" ) ) {
-				return 'DELETE FROM safe_publish_nonexistent_table_for_test WHERE x = 1';
-			}
-			return $query;
-		};
-		add_filter( 'query', $filter_callback );
-		$wpdb->suppress_errors( true );
+		$this->fail_table_queries( 'DELETE', Imports_Table::table_name() );
 
-		try {
-			// ACT: Attempt to delete the session.
-			$deleted = $this->repository->delete_session( $session_id );
+		// ACT: Attempt to delete the session.
+		$deleted = $this->repository->delete_session( $session_id );
 
-			// ASSERT: The repository reports no deletion.
-			$this->assertFalse( $deleted );
+		// ASSERT: The repository reports no deletion.
+		$this->assertFalse( $deleted );
 
-			// ASSERT: A SESSION_DELETE_FAILED error event was emitted with the
-			// session ID, the snapshotted source_site_url, and a non-empty
-			// wpdb_error string.
-			$events = Audit_Log_Table::get_events(
-				array(
-					'channel'    => 'import',
-					'event_type' => 'SESSION_DELETE_FAILED',
-				)
-			);
-			$this->assertCount( 1, $events );
-			$this->assertSame( 'error', $events[0]['level'] );
-			$this->assertSame( $session_id, $events[0]['data']['session_id'] );
-			$this->assertSame( 'https://example.com', $events[0]['data']['source_site_url'] );
-			$this->assertNotEmpty( $events[0]['data']['wpdb_error'] );
+		// ASSERT: A SESSION_DELETE_FAILED error event was emitted with the
+		// session ID, the snapshotted source_site_url, and a non-empty
+		// wpdb_error string.
+		$events = Audit_Log_Table::get_events(
+			array(
+				'channel'    => 'import',
+				'event_type' => 'SESSION_DELETE_FAILED',
+			)
+		);
+		$this->assertCount( 1, $events );
+		$this->assertSame( 'error', $events[0]['level'] );
+		$this->assertSame( $session_id, $events[0]['data']['session_id'] );
+		$this->assertSame(
+			'https://example.com',
+			$events[0]['data']['source_site_url']
+		);
+		$this->assertNotEmpty( $events[0]['data']['wpdb_error'] );
 
-			// ASSERT: No success event was recorded.
-			$success_events = Audit_Log_Table::get_events(
-				array(
-					'channel'    => 'import',
-					'event_type' => 'SESSION_DELETED',
-				)
-			);
-			$this->assertCount( 0, $success_events );
-		} finally {
-			remove_filter( 'query', $filter_callback );
-			$wpdb->suppress_errors( false );
-		}
+		// ASSERT: No success event was recorded.
+		$success_events = Audit_Log_Table::get_events(
+			array(
+				'channel'    => 'import',
+				'event_type' => 'SESSION_DELETED',
+			)
+		);
+		$this->assertCount( 0, $success_events );
 	}
 }

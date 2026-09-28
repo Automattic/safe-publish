@@ -1,6 +1,6 @@
 <?php
 /**
- * Post Type Fetcher Test.
+ * Post Type Fetcher Test
  *
  * @package Safe_Publish
  */

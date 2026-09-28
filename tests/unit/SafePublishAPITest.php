@@ -1,6 +1,6 @@
 <?php
 /**
- * Safe Publish API Test.
+ * Safe Publish API Test
  *
  * @package Safe_Publish
  */

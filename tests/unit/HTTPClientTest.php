@@ -1,6 +1,6 @@
 <?php
 /**
- * HTTP Client Test.
+ * HTTP Client Test
  *
  * @package Safe_Publish
  */

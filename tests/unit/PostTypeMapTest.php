@@ -1,6 +1,6 @@
 <?php
 /**
- * Post Type Map Test.
+ * Post Type Map Test
  *
  * @package Safe_Publish
  */

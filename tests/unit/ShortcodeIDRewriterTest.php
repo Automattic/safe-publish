@@ -1,6 +1,6 @@
 <?php
 /**
- * Shortcode_ID_Rewriter unit tests.
+ * Shortcode_ID_Rewriter unit tests
  *
  * @package Safe_Publish
  */

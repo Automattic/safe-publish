@@ -1,6 +1,6 @@
 <?php
 /**
- * Seeder Content_Generator class.
+ * Seeder Content_Generator class
  *
  * @package Safe_Publish
  */

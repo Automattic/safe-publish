@@ -1,6 +1,6 @@
 <?php
 /**
- * Term reconcile degradation integration tests.
+ * Term reconcile degradation integration tests
  *
  * @package Safe_Publish
  */

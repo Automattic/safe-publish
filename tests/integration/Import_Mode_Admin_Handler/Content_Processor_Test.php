@@ -1019,8 +1019,7 @@ class Content_Processor_Test extends Integration_Test_Case {
 
 	/**
 	 * Verifies that an anchor href in the outer wrapper of a block-based
-	 * gallery (innerBlocks only, no attrs.images) is sideloaded via the
-	 * tail-call helper at the gallery level.
+	 * gallery is sideloaded via the tail-call helper at the gallery level.
 	 */
 	public function test_process_gallery_block_with_inner_blocks_sideloads_outer_anchor_href(): void {
 		// ARRANGE: A block-based gallery whose outer innerHTML contains a
@@ -2414,7 +2413,7 @@ class Content_Processor_Test extends Integration_Test_Case {
 	public function test_failed_media_message_names_the_gallery_block(): void {
 		// ARRANGE: A core/gallery block with a failing image.
 		$url     = 'https://source.example.com/broken-gallery.jpg';
-		$content = '<!-- wp:gallery {"images":[{"url":"' . $url . '"}]} -->'
+		$content = '<!-- wp:gallery -->'
 			. '<figure class="wp-block-gallery"><img src="' . $url . '"/></figure>'
 			. '<!-- /wp:gallery -->';
 
@@ -2556,7 +2555,7 @@ class Content_Processor_Test extends Integration_Test_Case {
 		$content     = '<!-- wp:image {"url":"' . $image_url . '"} -->'
 			. '<figure class="wp-block-image"><img src="' . $image_url . '"/></figure>'
 			. '<!-- /wp:image -->'
-			. '<!-- wp:gallery {"images":[{"url":"' . $gallery_url . '"}]} -->'
+			. '<!-- wp:gallery -->'
 			. '<figure class="wp-block-gallery"><img src="' . $gallery_url . '"/></figure>'
 			. '<!-- /wp:gallery -->';
 

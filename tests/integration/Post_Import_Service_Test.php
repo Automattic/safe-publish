@@ -1,6 +1,6 @@
 <?php
 /**
- * Post_Import_Service integration tests.
+ * Post_Import_Service integration tests
  *
  * @package Safe_Publish
  */
@@ -35,6 +35,8 @@ use WP_Post;
  * by the existing HTTP mock infrastructure.
  */
 class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
+
+	use Failing_Query_Trait;
 
 	/**
 	 * Post import service instance.
@@ -88,6 +90,8 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 	 */
 	#[\Override]
 	protected function tearDown(): void {
+		$this->restore_failing_queries();
+
 		remove_filter( 'pre_http_request', array( $this, 'mock_media_api_request' ), 5 );
 		parent::tearDown();
 	}
@@ -397,26 +401,16 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 	 * Verifies that import fails when a Gutenberg core/gallery block contains an
 	 * image that cannot be downloaded.
 	 *
-	 * The traditional gallery format stores image URLs in attrs['images'].
-	 * Content_Processor::process_gallery_block() must track the failure in
-	 * $failed_media so the import service aborts.
+	 * A legacy gallery stores its images only in the block markup. The shared
+	 * media pass scans it and records the download failure, which aborts the
+	 * import.
 	 */
 	public function test_import_fails_when_gutenberg_gallery_block_cannot_be_downloaded(): void {
-		// ARRANGE: A Gutenberg core/gallery block (traditional attrs format) with a broken image URL.
+		// ARRANGE: A legacy core/gallery block with a broken image URL.
 		$broken_url = 'https://source.example.com/nonexistent-gallery.jpg';
-		$attrs_json = wp_json_encode(
-			array(
-				'images' => array(
-					array(
-						'url' => $broken_url,
-						'id'  => 1,
-					),
-				),
-			)
-		);
 
 		$this->mock_post_overrides = array(
-			'content' => '<!-- wp:gallery ' . $attrs_json . ' -->'
+			'content' => '<!-- wp:gallery -->'
 				. "\n<figure class=\"wp-block-gallery\"><ul class=\"blocks-gallery-grid\">"
 				. "<li class=\"blocks-gallery-item\"><figure><img src=\"{$broken_url}\" alt=\"\" /></figure></li>"
 				. '</ul></figure>'
@@ -1052,8 +1046,6 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 	public function test_update_warns_when_history_write_fails(
 		string $session_type
 	): void {
-		global $wpdb;
-
 		// ARRANGE: An existing imported post and a session whose item INSERT
 		// will fail.
 		$post_id = self::factory()->post->create(
@@ -1078,32 +1070,20 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 			'content' => '<p>Updated content.</p>',
 		);
 
-		$items_table     = Import_Items_Table::table_name();
-		$filter_callback = static function ( string $query ) use ( $items_table ): string {
-			if ( 0 === strpos( $query, "INSERT INTO `{$items_table}`" ) ) {
-				return 'INSERT INTO safe_publish_nonexistent_table_for_test VALUES (1)';
-			}
+		$this->fail_table_queries( 'INSERT', Import_Items_Table::table_name() );
 
-			return $query;
-		};
-		add_filter( 'query', $filter_callback );
-		$wpdb->suppress_errors( true );
-
-		try {
-			// ACT: Update through the shared single/bulk import service path.
-			$result = $this->import_service->import_post(
-				array(
-					'id'        => 9402,
-					'title'     => 'Queued title',
-					'link'      => 'https://source.example.com/history-write-failure',
-					'post_type' => 'posts',
-				),
-				$session_id
-			);
-		} finally {
-			remove_filter( 'query', $filter_callback );
-			$wpdb->suppress_errors( false );
-		}
+		// ACT: Update through the shared single/bulk import service path, then
+		// stop the injection before asserting.
+		$result = $this->import_service->import_post(
+			array(
+				'id'        => 9402,
+				'title'     => 'Queued title',
+				'link'      => 'https://source.example.com/history-write-failure',
+				'post_type' => 'posts',
+			),
+			$session_id
+		);
+		$this->restore_failing_queries();
 
 		// ASSERT: The update succeeds but explicitly reports that rollback is
 		// unavailable.
@@ -2930,7 +2910,7 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 
 	/**
 	 * Verifies that an unresolvable parent aborts the import with the
-	 * "has not been imported" message when the parent is not part of the
+	 * "could not be resolved" message when the parent is not part of the
 	 * current batch.
 	 */
 	public function test_unresolvable_parent_not_in_batch_aborts(): void {
@@ -2957,7 +2937,7 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 		// ASSERT: Failure with the no-match message and no post created.
 		$this->assertFalse( $result['success'] );
 		$this->assertStringContainsString(
-			'has not been imported on this site',
+			'could not be resolved on this site',
 			$result['error']
 		);
 		$this->assertStringNotContainsString( '"', $result['error'] );
