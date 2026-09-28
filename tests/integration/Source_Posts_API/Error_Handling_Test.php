@@ -67,6 +67,57 @@ class Error_Handling_Test extends Source_Posts_API_Test_Base {
 	}
 
 	/**
+	 * Data provider for entity-encoded ampersands in media URLs.
+	 *
+	 * @return array<string, array{encoded: string}>
+	 */
+	public static function entity_encoded_ampersand_provider(): array {
+		return array(
+			'named'   => array( 'encoded' => '&amp;' ),
+			'numeric' => array( 'encoded' => '&#38;' ),
+		);
+	}
+
+	/**
+	 * Verifies that a failed media URL carrying an entity-encoded ampersand is
+	 * reported only as a download failure.
+	 *
+	 * The markup detection pass reads raw HTML while the tag processor decodes
+	 * entities, so without normalization the same URL lands in both failure
+	 * sets and the user is told to fix markup that is well-formed.
+	 *
+	 * @dataProvider entity_encoded_ampersand_provider
+	 *
+	 * @param string $encoded Entity form of the ampersand in the attribute.
+	 */
+	public function test_failed_media_with_encoded_ampersand_reported_once( string $encoded ): void {
+		// ARRANGE: Point an image at a 404 URL whose query carries an entity.
+		$source_site_url = 'https://example.com';
+		$decoded_url     = 'https://example.com/nonexistent-404.jpg?w=500&quality=70';
+		$content         = sprintf(
+			'<p><img src="https://example.com/nonexistent-404.jpg?w=500%squality=70" alt="Broken"></p>',
+			$encoded
+		);
+
+		// ACT: Process content whose media download fails.
+		$this->content_media_processor->process_content( $content, $source_site_url );
+
+		// ASSERT: The failure is keyed by the decoded URL.
+		$this->assertSame(
+			array( $decoded_url ),
+			array_keys( $this->content_media_processor->get_failed_media() ),
+			'Failed URL should be recorded once, keyed by the decoded value'
+		);
+
+		// ASSERT: The same URL is not also reported as malformed markup.
+		$this->assertSame(
+			array(),
+			$this->content_media_processor->get_unprocessable_media(),
+			'Entity-encoded failed URL must not also be recorded as unprocessable'
+		);
+	}
+
+	/**
 	 * Verifies that import_source_media() handles failures gracefully.
 	 *
 	 * Tests that calling import_source_media() with a non-existent URL

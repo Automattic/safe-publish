@@ -1,6 +1,6 @@
 <?php
 /**
- * Bulk import fetch-failure surfacing integration tests.
+ * Bulk import fetch-failure surfacing integration tests
  *
  * @package Safe_Publish
  */

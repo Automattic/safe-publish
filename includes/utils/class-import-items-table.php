@@ -1,6 +1,6 @@
 <?php
 /**
- * Import Items Table class.
+ * Import Items Table class
  *
  * @package Safe_Publish
  */

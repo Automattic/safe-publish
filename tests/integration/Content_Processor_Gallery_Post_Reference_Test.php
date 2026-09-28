@@ -1,7 +1,7 @@
 <?php
 /**
  * Integration tests for gallery/playlist singular id post-reference rewriting
- * through Content_Processor::process_content().
+ * through Content_Processor::process_content()
  *
  * @package Safe_Publish
  */

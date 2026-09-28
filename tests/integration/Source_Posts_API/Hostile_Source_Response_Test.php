@@ -1,7 +1,7 @@
 <?php
 /**
  * Tests that the destination's catalog-response normalizer defends
- * against hostile content from a compromised source.
+ * against hostile content from a compromised source
  *
  * @package Safe_Publish
  */

@@ -1,6 +1,6 @@
 <?php
 /**
- * Tests the embedded-terms fallback when safe_publish_terms is absent.
+ * Tests the embedded-terms fallback when safe_publish_terms is absent
  *
  * @package Safe_Publish
  */

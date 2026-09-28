@@ -1,6 +1,6 @@
 <?php
 /**
- * Forensic audit-log integration tests for per-item import failures.
+ * Forensic audit-log integration tests for per-item import failures
  *
  * @package Safe_Publish
  */

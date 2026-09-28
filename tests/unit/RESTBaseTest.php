@@ -1,6 +1,6 @@
 <?php
 /**
- * REST Base Test.
+ * REST Base Test
  *
  * @package Safe_Publish
  */

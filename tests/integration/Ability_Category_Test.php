@@ -1,6 +1,6 @@
 <?php
 /**
- * Integration tests for the Safe Publish ability category.
+ * Integration tests for the Safe Publish ability category
  *
  * @package Safe_Publish
  */

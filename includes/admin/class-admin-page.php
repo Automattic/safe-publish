@@ -59,7 +59,7 @@ final class Admin_Page {
 								printf(
 									/* translators: %s: Settings page URL */
 									esc_html__( 'Please configure the connected site URL in the %s to see posts.', 'safe-publish' ),
-									'<a href="' . esc_url( admin_url( 'admin.php?page=safe-publish-settings' ) ) . '">' . esc_html__( 'settings page', 'safe-publish' ) . '</a>'
+									'<a href="' . esc_url( Settings_Page::url() ) . '">' . esc_html__( 'settings page', 'safe-publish' ) . '</a>'
 								);
 								?>
 							</p>
@@ -99,7 +99,7 @@ final class Admin_Page {
 			'safe-publish-admin-posts-style',
 			array(
 				'ajaxurl'             => admin_url( 'admin-ajax.php' ),
-				'settingsUrl'         => admin_url( 'admin.php?page=safe-publish-settings' ),
+				'settingsUrl'         => Settings_Page::url(),
 				'nonce'               => wp_create_nonce( 'safe_publish_ajax_nonce' ),
 				'sourceSiteUrl'       => $source_site_url,
 				'homeUrl'             => home_url(),

@@ -16,6 +16,7 @@ use Safe_Publish\Media\Media_Importer;
 use Safe_Publish\Utils\Auth_Credential_Provider;
 use Safe_Publish\Utils\Options;
 use Safe_Publish\Utils\Reconcile_Outcome;
+use Safe_Publish\Utils\Source_Identity_Lookup;
 use Safe_Publish\Validators\URL_Validator;
 use WP_Error;
 use WP_HTML_Tag_Processor;
@@ -306,6 +307,11 @@ class Content_Processor {
 			$this->unprocessable_media,
 			$this->content_media_processor->get_unprocessable_media()
 		);
+
+		// Re-key on the normalized URL so messages name what a browser fetches,
+		// and the dedup below matches the markup pass's already-trimmed keys.
+		$this->failed_media        = self::normalize_media_map_keys( $this->failed_media );
+		$this->unprocessable_media = self::normalize_media_map_keys( $this->unprocessable_media );
 
 		// The per-block markup pass can't see block-level download failures.
 		$this->unprocessable_media = array_diff_key(
@@ -929,6 +935,26 @@ class Content_Processor {
 	}
 
 	/**
+	 * Re-keys a media map on the normalized form of each URL.
+	 *
+	 * @param array<string, string> $map Media map, URL => block name.
+	 * @return array<string, string> Map keyed by normalized URL.
+	 */
+	private static function normalize_media_map_keys( array $map ): array {
+		$normalized = array();
+
+		foreach ( $map as $url => $block_name ) {
+			$key        = URL_Validator::normalize_url_whitespace( (string) $url );
+			$normalized = self::merge_media_map(
+				$normalized,
+				array( $key => $block_name )
+			);
+		}
+
+		return $normalized;
+	}
+
+	/**
 	 * Formats a media map as a comma-separated list. Each URL is followed by its
 	 * originating block name in parentheses, or left bare when the name is empty.
 	 *
@@ -1178,69 +1204,16 @@ class Content_Processor {
 	}
 
 	/**
-	 * Processes gallery block to import media from all contained images.
+	 * Imports a gallery block's media.
+	 *
+	 * Nested blocks are routed to their own parsers; images in the gallery's
+	 * own markup are repointed by the shared inline media pass.
 	 *
 	 * @param array  $block           Gallery block data.
 	 * @param string $source_site_url Source site URL.
 	 * @return array Processed block.
 	 */
 	private function process_gallery_block( array $block, string $source_site_url ): array {
-		// Handle traditional gallery format with images in attributes.
-		if ( ! empty( $block['attrs']['images'] ) && is_array( $block['attrs']['images'] ) ) {
-			foreach ( $block['attrs']['images'] as $index => $image ) {
-				if ( empty( $image['url'] ) ) {
-					continue;
-				}
-
-				$original_url  = $image['url'];
-				$attachment_id = $this->media_importer->import_source_media_as_attachment(
-					$original_url,
-					$source_site_url
-				);
-
-				if ( null === $attachment_id ) {
-					continue; // Third-party src — skip this image's attrs.
-				}
-
-				if ( false === $attachment_id ) {
-					$this->failed_media[ $original_url ] = $block['blockName'];
-					continue;
-				}
-
-				$new_url = wp_get_attachment_url( $attachment_id );
-
-				if ( false === $new_url ) {
-					$this->failed_media[ $original_url ] = $block['blockName'];
-					continue;
-				}
-
-				// Update block attributes.
-				$block['attrs']['images'][ $index ]['url'] = $new_url;
-				$block['attrs']['images'][ $index ]['id']  = $attachment_id;
-
-				$url_with_parameters = Media_Importer::reapply_query_parameters( $original_url, $new_url );
-
-				// Update innerHTML with the appropriate URL for correct rendering.
-				if ( ! empty( $block['innerHTML'] ) ) {
-					$updated_html       = $this->update_img_src_in_html( $block['innerHTML'], $original_url, $url_with_parameters );
-					$updated_html       = $this->update_wp_image_class( $updated_html, $attachment_id );
-					$block['innerHTML'] = $updated_html;
-				}
-
-				// Update innerContent array if it exists (used by serialize_blocks).
-				if ( ! empty( $block['innerContent'] ) && is_array( $block['innerContent'] ) ) {
-					foreach ( $block['innerContent'] as $content_index => $content ) {
-						if ( is_string( $content ) ) {
-							$updated_content                         = $this->update_img_src_in_html( $content, $original_url, $url_with_parameters );
-							$updated_content                         = $this->update_wp_image_class( $updated_content, $attachment_id );
-							$block['innerContent'][ $content_index ] = $updated_content;
-						}
-					}
-				}
-			}
-		}
-
-		// Handle block-based gallery format with innerBlocks containing image blocks.
 		if ( ! empty( $block['innerBlocks'] ) && is_array( $block['innerBlocks'] ) ) {
 			foreach ( $block['innerBlocks'] as $index => $inner_block ) {
 				if ( ! empty( $inner_block['blockName'] ) && 'core/image' === $inner_block['blockName'] ) {
@@ -1459,6 +1432,9 @@ class Content_Processor {
 	/**
 	 * Extracts image src attribute from HTML content.
 	 *
+	 * Returns the attribute verbatim so it still matches the markup when used
+	 * as a replacement needle; callers normalize it for any other use.
+	 *
 	 * @param string $html HTML content.
 	 * @return string Extracted src URL or empty string if not found.
 	 */
@@ -1483,14 +1459,14 @@ class Content_Processor {
 				$src = $img->getAttribute( 'src' );
 
 				if ( ! empty( $src ) ) {
-					return trim( $src );
+					return $src;
 				}
 			}
 		}
 
 		// Fallback to regex if DOMDocument fails.
 		if ( preg_match( '/<img[^>]+src=["\']([^"\']+)["\'][^>]*>/i', $html, $matches ) ) {
-			return trim( $matches[1] );
+			return $matches[1];
 		}
 
 		return '';
@@ -1524,14 +1500,14 @@ class Content_Processor {
 	}
 
 	/**
-	 * Updates wp-image class with new attachment ID.
+	 * Updates wp-image class with new attachment ID, adding one when absent.
 	 *
 	 * @param string $html              HTML content.
 	 * @param int    $new_attachment_id New attachment ID.
 	 * @return string Updated HTML content.
 	 */
 	private function update_wp_image_class( string $html, int $new_attachment_id ): string {
-		if ( empty( $html ) || empty( $new_attachment_id ) ) {
+		if ( '' === $html || 0 === $new_attachment_id ) {
 			return $html;
 		}
 
@@ -1539,24 +1515,25 @@ class Content_Processor {
 		$pattern     = '/wp-image-\d+/';
 		$replacement = 'wp-image-' . $new_attachment_id;
 
-		$updated_html = preg_replace( $pattern, $replacement, $html );
+		$updated_html = preg_replace( $pattern, $replacement, $html, -1, $count );
 
-		// If no existing wp-image class found, add it to the img tag.
-		if ( $updated_html === $html && strpos( $html, '<img' ) !== false ) {
+		// A rewrite onto the same ID is a no-op, so test the match count.
+		if ( 0 === $count && strpos( $html, '<img' ) !== false ) {
 			// Add wp-image class to img tag that doesn't have one.
 			$pattern      = '/(<img[^>]+class=["\'])([^"\']*?)(["\'][^>]*>)/i';
 			$replacement  = '${1}${2} wp-image-' . $new_attachment_id . '${3}';
 			$updated_html = preg_replace( $pattern, $replacement, $html );
 
-			// If img tag has no class attribute at all, add one.
+			// If img tag has no class attribute at all, add one. The lazy
+			// quantifier keeps a self-closing solidus in the closing group.
 			if ( $updated_html === $html ) {
-				$pattern      = '/(<img[^>]+)(\s*\/?>)/i';
+				$pattern      = '/(<img[^>]+?)(\s*\/?>)/i';
 				$replacement  = '${1} class="wp-image-' . $new_attachment_id . '"${2}';
 				$updated_html = preg_replace( $pattern, $replacement, $html );
 			}
 		}
 
-		return $updated_html ? $updated_html : $html;
+		return is_string( $updated_html ) ? $updated_html : $html;
 	}
 
 	/**
@@ -1587,7 +1564,7 @@ class Content_Processor {
 				);
 			} elseif (
 				is_string( $value ) &&
-				filter_var( $value, FILTER_VALIDATE_URL ) &&
+				URL_Validator::is_absolute_http_url( $value ) &&
 				$this->content_media_processor
 					->has_uploadable_file_extension( $value )
 			) {
@@ -1716,13 +1693,17 @@ class Content_Processor {
 			$source_site_url
 		);
 
-		$post_map = $this->lookup_destination_post_ids(
+		// Session entries win: They name the copy this batch just wrote.
+		// Session map values are caller-supplied, so cast over type-hinting.
+		$post_map = array_map(
+			static fn( mixed $id ): array => array( (int) $id ),
+			$session_id_map
+		) + $this->lookup_destination_post_candidates(
 			$collected['post'],
 			$lookup_site_url
 		);
-		$post_map = $session_id_map + $post_map;
 
-		$term_map = $this->lookup_destination_term_ids(
+		$term_map = $this->lookup_destination_term_candidates(
 			$collected['term'],
 			$lookup_site_url
 		);
@@ -1743,8 +1724,9 @@ class Content_Processor {
 	 * @param int    $target_ref       Source id to repoint.
 	 * @param string $target_kind      'post' or 'term'.
 	 * @param string $source_site_url  Source identity scoping the lookup.
-	 * @return Reconcile_Outcome Resolved when repointed; target_absent,
-	 *                           write_failed, or unresolved otherwise.
+	 * @return Reconcile_Outcome Resolved when every match repointed;
+	 *                           target_absent, write_failed, or unresolved
+	 *                           otherwise.
 	 */
 	public function repoint_block_reference(
 		int $affected_post_id,
@@ -1756,13 +1738,13 @@ class Content_Processor {
 			return Reconcile_Outcome::unresolved( 'Invalid target reference.' );
 		}
 
-		$dest_id = $this->resolve_target_ref(
+		$candidates = $this->resolve_target_candidates(
 			$target_ref,
 			$target_kind,
 			$source_site_url
 		);
 
-		if ( 0 === $dest_id ) {
+		if ( array() === $candidates ) {
 			return Reconcile_Outcome::target_absent(
 				sprintf(
 					'Target %1$s %2$d is not imported on the destination.',
@@ -1784,35 +1766,51 @@ class Content_Processor {
 			? self::TERM_ID_BLOCK_ATTRS
 			: self::POST_ID_BLOCK_ATTRS;
 
-		$changed = false;
-		$blocks  = $this->repoint_refs(
+		$changed    = false;
+		$mismatched = false;
+		$blocks     = $this->repoint_refs(
 			parse_blocks( $post->post_content ),
 			$registry,
 			$target_kind,
 			$target_ref,
-			$dest_id,
-			$changed
+			$candidates,
+			$changed,
+			$mismatched
 		);
+
+		if ( $changed ) {
+			$persisted = $this->persist_repointed_content(
+				$affected_post_id,
+				serialize_blocks( $blocks )
+			);
+
+			if ( ! $persisted ) {
+				return Reconcile_Outcome::write_failed(
+					'Failed to persist the repointed content.'
+				);
+			}
+
+			clean_post_cache( $affected_post_id );
+			update_post_meta(
+				$affected_post_id,
+				self::META_REF_REPOINTED_AT,
+				time()
+			);
+		}
+
+		// A mismatch leaves a stale ref behind, so keep the issue open even
+		// when a sibling reference repointed.
+		if ( $mismatched ) {
+			return Reconcile_Outcome::unresolved(
+				'Target term is not imported into the declared taxonomy.'
+			);
+		}
 
 		if ( ! $changed ) {
 			return Reconcile_Outcome::unresolved(
 				'No matching reference found in the post content.'
 			);
 		}
-
-		$persisted = $this->persist_repointed_content(
-			$affected_post_id,
-			serialize_blocks( $blocks )
-		);
-
-		if ( ! $persisted ) {
-			return Reconcile_Outcome::write_failed(
-				'Failed to persist the repointed content.'
-			);
-		}
-
-		clean_post_cache( $affected_post_id );
-		update_post_meta( $affected_post_id, self::META_REF_REPOINTED_AT, time() );
 
 		return Reconcile_Outcome::resolved();
 	}
@@ -1957,8 +1955,39 @@ class Content_Processor {
 	}
 
 	/**
-	 * Resolves a source ref to its destination ID via the same source-scoped
-	 * lookups the import uses.
+	 * Resolves a source ref to every destination claiming it, via the same
+	 * source-scoped lookups the import uses.
+	 *
+	 * @param int    $target_ref      Source id.
+	 * @param string $target_kind     'post' or 'term'.
+	 * @param string $source_site_url Source identity to scope by.
+	 * @return list<int> Destination IDs, newest first; empty when unresolved.
+	 */
+	private function resolve_target_candidates(
+		int $target_ref,
+		string $target_kind,
+		string $source_site_url
+	): array {
+		$lookup_site_url = URL_Validator::normalize_site_url_with_path(
+			$source_site_url
+		);
+		$source_ids      = array( $target_ref => true );
+
+		$map = 'term' === $target_kind
+			? $this->lookup_destination_term_candidates(
+				$source_ids,
+				$lookup_site_url
+			)
+			: $this->lookup_destination_post_candidates(
+				$source_ids,
+				$lookup_site_url
+			);
+
+		return $map[ $target_ref ] ?? array();
+	}
+
+	/**
+	 * Resolves a source ref to its destination ID, keeping the newest claim.
 	 *
 	 * @param int    $target_ref      Source id.
 	 * @param string $target_kind     'post' or 'term'.
@@ -1970,21 +1999,20 @@ class Content_Processor {
 		string $target_kind,
 		string $source_site_url
 	): int {
-		$lookup_site_url = URL_Validator::normalize_site_url_with_path(
+		$candidates = $this->resolve_target_candidates(
+			$target_ref,
+			$target_kind,
 			$source_site_url
 		);
-		$source_ids      = array( $target_ref => true );
 
-		$map = 'term' === $target_kind
-			? $this->lookup_destination_term_ids( $source_ids, $lookup_site_url )
-			: $this->lookup_destination_post_ids( $source_ids, $lookup_site_url );
-
-		return isset( $map[ $target_ref ] ) ? (int) $map[ $target_ref ] : 0;
+		return $candidates[0] ?? 0;
 	}
 
 	/**
 	 * Resolves source refs to destination ids, one batch per kind, via the same
 	 * lookups repoint_block_reference uses so a resolvability check matches Retry.
+	 *
+	 * Term refs stay optimistic: A claim is not the taxonomy match Retry needs.
 	 *
 	 * @param array<int, true> $post_refs       Set of source post ids (keys).
 	 * @param array<int, true> $term_refs       Set of source term ids (keys).
@@ -2016,15 +2044,18 @@ class Content_Processor {
 
 	/**
 	 * Recursively repoints registered id-bearing attrs whose value equals
-	 * $target_ref to $dest_id, honoring each attr's kind gating. When a rule
-	 * names a url_attr, the link url is re-derived from $dest_id too.
+	 * $target_ref to the candidate the block declares, honoring each attr's
+	 * kind gating. When a rule names a url_attr, the link url is re-derived
+	 * from that candidate too, and a post link's declared type is realigned
+	 * with the post it lands on.
 	 *
 	 * @param array<array<string, mixed>>                                                                 $blocks     Block tree.
 	 * @param array<string, list<array{attr:string, gated_by?: array<string,string>, url_attr?: string}>> $registry   Attr rules for the target kind.
 	 * @param string                                                                                      $kind       'post' or 'term'.
 	 * @param int                                                                                         $target_ref Source id to match.
-	 * @param int                                                                                         $dest_id    Destination id to write.
+	 * @param int[]                                                                                       $candidates Destination ids, newest first.
 	 * @param bool                                                                                        $changed    Set true, by reference, on any repoint.
+	 * @param bool                                                                                        $mismatched Set true, by reference, on a taxonomy mismatch.
 	 * @return array<array<string, mixed>> Mutated tree.
 	 */
 	private function repoint_refs(
@@ -2032,8 +2063,9 @@ class Content_Processor {
 		array $registry,
 		string $kind,
 		int $target_ref,
-		int $dest_id,
-		bool &$changed
+		array $candidates,
+		bool &$changed,
+		bool &$mismatched
 	): array {
 		foreach ( $blocks as $i => $block ) {
 			$name  = isset( $block['blockName'] ) ? (string) $block['blockName'] : '';
@@ -2047,21 +2079,33 @@ class Content_Processor {
 				}
 
 				$value = $attrs[ $rule['attr'] ] ?? null;
-				if ( is_numeric( $value ) && (int) $value === $target_ref ) {
-					$attrs[ $rule['attr'] ] = $dest_id;
-
-					if ( isset( $rule['url_attr'] ) ) {
-						$attrs = $this->rederive_link_url(
-							$attrs,
-							$rule['url_attr'],
-							$dest_id,
-							$kind
-						);
-					}
-
-					$blocks[ $i ]['attrs'] = $attrs;
-					$changed               = true;
+				if ( ! is_numeric( $value ) || (int) $value !== $target_ref ) {
+					continue;
 				}
+
+				$dest_id = self::select_candidate( $candidates, $kind, $attrs );
+				if ( 0 === $dest_id ) {
+					$mismatched = true;
+					continue;
+				}
+
+				$attrs[ $rule['attr'] ] = $dest_id;
+
+				if ( 'term' !== $kind ) {
+					$attrs = self::realign_declared_type( $attrs, $dest_id );
+				}
+
+				if ( isset( $rule['url_attr'] ) ) {
+					$attrs = $this->rederive_link_url(
+						$attrs,
+						$rule['url_attr'],
+						$dest_id,
+						$kind
+					);
+				}
+
+				$blocks[ $i ]['attrs'] = $attrs;
+				$changed               = true;
 			}
 
 			if (
@@ -2074,8 +2118,9 @@ class Content_Processor {
 					$registry,
 					$kind,
 					$target_ref,
-					$dest_id,
-					$changed
+					$candidates,
+					$changed,
+					$mismatched
 				);
 			}
 		}
@@ -2208,15 +2253,22 @@ class Content_Processor {
 	}
 
 	/**
-	 * Looks up destination post IDs for a set of source post IDs scoped to the
-	 * caller's source site via paired META_SOURCE_POST_ID/META_SOURCE_SITE_URL
-	 * postmeta. Returns a source-ID => destination-ID map.
+	 * Looks up every destination post claiming each source post ID, scoped to
+	 * the caller's source site via paired META_SOURCE_POST_ID and
+	 * META_SOURCE_SITE_URL postmeta.
+	 *
+	 * Shares find_imported_post's newest-by-ID tie-break so a reference always
+	 * points at the copy the import writes to.
+	 *
+	 * Claims are normally unique — the import's lookup spans every post type
+	 * and status, so a re-import updates the one copy — but a duplicate can
+	 * survive from an earlier plugin version or an externally copied post.
 	 *
 	 * @param array<int, true> $source_ids      Set of source post IDs (keys).
 	 * @param string           $source_site_url Path-bearing source site identity.
-	 * @return array<int, int> Source-ID => destination-ID.
+	 * @return array<int, list<int>> Source-ID => destination IDs, newest first.
 	 */
-	private function lookup_destination_post_ids(
+	private function lookup_destination_post_candidates(
 		array $source_ids,
 		string $source_site_url
 	): array {
@@ -2225,26 +2277,13 @@ class Content_Processor {
 		}
 
 		$ids   = array_keys( $source_ids );
-		$posts = get_posts(
+		$posts = Source_Identity_Lookup::find(
+			$ids,
+			$source_site_url,
 			array(
-				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
-				'meta_query'             => array(
-					'relation' => 'AND',
-					array(
-						'key'     => Options::META_SOURCE_POST_ID,
-						'value'   => $ids,
-						'compare' => 'IN',
-					),
-					array(
-						'key'   => Options::META_SOURCE_SITE_URL,
-						'value' => $source_site_url,
-					),
-				),
-				// Not 'any': It omits exclude_from_search post types.
-				'post_type'              => array_keys( get_post_types() ),
-				'post_status'            => 'any',
-				'posts_per_page'         => count( $ids ),
-				'suppress_filters'       => false,
+				// Uncapped: A duplicate claim must not evict another source ID.
+				// phpcs:ignore WordPressVIPMinimum.Performance.NoPaging
+				'posts_per_page'         => -1,
 				'update_post_term_cache' => false,
 			)
 		);
@@ -2254,8 +2293,8 @@ class Content_Processor {
 			$source_id = absint(
 				get_post_meta( $post->ID, Options::META_SOURCE_POST_ID, true )
 			);
-			if ( $source_id > 0 && ! isset( $map[ $source_id ] ) ) {
-				$map[ $source_id ] = (int) $post->ID;
+			if ( $source_id > 0 ) {
+				$map[ $source_id ][] = (int) $post->ID;
 			}
 		}
 
@@ -2263,19 +2302,44 @@ class Content_Processor {
 	}
 
 	/**
-	 * Looks up destination term IDs for a set of source term IDs scoped to the
-	 * caller's source site URL via paired META_SOURCE_TERM_ID/URL term meta.
+	 * Looks up destination post IDs, keeping the newest claim per source ID.
+	 *
+	 * @param array<int, true> $source_ids      Set of source post IDs (keys).
+	 * @param string           $source_site_url Path-bearing source site identity.
+	 * @return array<int, int> Source-ID => destination-ID.
+	 */
+	private function lookup_destination_post_ids(
+		array $source_ids,
+		string $source_site_url
+	): array {
+		return array_map(
+			static fn( array $candidates ): int => $candidates[0],
+			$this->lookup_destination_post_candidates(
+				$source_ids,
+				$source_site_url
+			)
+		);
+	}
+
+	/**
+	 * Looks up every destination term claiming each source term ID, scoped to
+	 * the caller's source site URL via paired META_SOURCE_TERM_ID/URL term
+	 * meta.
 	 *
 	 * Queries termmeta directly to avoid get_terms()'s taxonomy IN clause —
 	 * pointless at our selectivity (paired-meta narrows to a tiny result set)
 	 * and degrades on sites with thousands of registered taxonomies.
 	 *
+	 * Claims are not unique: The import scopes its identity lookup by taxonomy,
+	 * so a source term that changed taxonomy is imported again while the older
+	 * copy keeps its claim.
+	 *
 	 * @param array<int, true> $source_ids      Set of source term IDs (keys).
 	 * @param string           $source_site_url Exact source site URL stored as
 	 *                                          paired meta.
-	 * @return array<int, int> Source-ID => destination-ID.
+	 * @return array<int, list<int>> Source-ID => destination IDs, newest first.
 	 */
-	private function lookup_destination_term_ids(
+	private function lookup_destination_term_candidates(
 		array $source_ids,
 		string $source_site_url
 	): array {
@@ -2305,7 +2369,8 @@ class Content_Processor {
 				 WHERE tm_id.meta_key = %s
 					 AND tm_id.meta_value IN ($placeholders)
 					 AND tm_url.meta_key = %s
-					 AND tm_url.meta_value = %s",
+					 AND tm_url.meta_value = %s
+				 ORDER BY tm_id.term_id DESC",
 				...$prepare_args
 			)
 		);
@@ -2325,12 +2390,214 @@ class Content_Processor {
 		$map = array();
 		foreach ( $rows as $row ) {
 			$source_id = absint( $row->source_id );
-			if ( $source_id > 0 && ! isset( $map[ $source_id ] ) ) {
-				$map[ $source_id ] = (int) $row->term_id;
+			if ( $source_id > 0 ) {
+				$map[ $source_id ][] = (int) $row->term_id;
 			}
 		}
 
 		return $map;
+	}
+
+	/**
+	 * Looks up destination term IDs, keeping the newest claim per source ID.
+	 *
+	 * @param array<int, true> $source_ids      Set of source term IDs (keys).
+	 * @param string           $source_site_url Exact source site URL stored as
+	 *                                          paired meta.
+	 * @return array<int, int> Source-ID => destination-ID.
+	 */
+	private function lookup_destination_term_ids(
+		array $source_ids,
+		string $source_site_url
+	): array {
+		return array_map(
+			static fn( array $candidates ): int => $candidates[0],
+			$this->lookup_destination_term_candidates(
+				$source_ids,
+				$source_site_url
+			)
+		);
+	}
+
+	/**
+	 * Picks the destination a block points at, preferring the claim whose type
+	 * matches what the block declares. A category link is never repointed at a
+	 * tag claiming the same source ID. With no type declared — core omits the
+	 * attr on some links — the newest claim wins.
+	 *
+	 * The axes differ on a miss. Terms yield nothing, leaving the ref for Needs
+	 * attention, because the right claim may not exist yet. Posts fall back to
+	 * the newest claim — the sole import of that source post — and the caller
+	 * realigns the declared type to match it.
+	 *
+	 * @param int[]                $candidates Destination IDs, newest first.
+	 * @param string               $kind       'post' or 'term'.
+	 * @param array<string, mixed> $attrs      Block attrs.
+	 * @return int Destination ID, or 0 when none is usable.
+	 */
+	private static function select_candidate(
+		array $candidates,
+		string $kind,
+		array $attrs
+	): int {
+		$declared = $attrs['type'] ?? null;
+
+		if ( ! is_string( $declared ) || '' === $declared ) {
+			return $candidates[0] ?? 0;
+		}
+
+		if ( 'term' === $kind ) {
+			return self::select_term_candidate( $candidates, $declared );
+		}
+
+		// Only the kind-gated nav rules declare a post type; core/block and
+		// core/navigation carry a ref with nothing to check.
+		if ( ! self::declares_post_type( $attrs ) ) {
+			return $candidates[0] ?? 0;
+		}
+
+		return self::select_post_candidate( $candidates, $declared );
+	}
+
+	/**
+	 * Picks the first claim sitting in the declared taxonomy.
+	 *
+	 * @param int[]  $candidates Destination term IDs, newest first.
+	 * @param string $declared   Type attr the block declares.
+	 * @return int Term ID, or 0 when none matches.
+	 */
+	private static function select_term_candidate(
+		array $candidates,
+		string $declared
+	): int {
+		foreach ( $candidates as $candidate ) {
+			$term = get_term( $candidate );
+
+			// Dangling claim: no taxonomy to mismatch against.
+			if ( ! $term instanceof WP_Term ) {
+				return $candidate;
+			}
+
+			if ( self::taxonomy_declared_as( $term->taxonomy, $declared ) ) {
+				return $candidate;
+			}
+		}
+
+		return 0;
+	}
+
+	/**
+	 * Picks the first claim of the declared post type, else the newest.
+	 *
+	 * @param int[]  $candidates Destination post IDs, newest first.
+	 * @param string $declared   Type attr the block declares.
+	 * @return int Post ID, or 0 when there are no claims.
+	 */
+	private static function select_post_candidate(
+		array $candidates,
+		string $declared
+	): int {
+		foreach ( $candidates as $candidate ) {
+			$post_type = get_post_type( $candidate );
+
+			// Dangling claim: no post type to mismatch against.
+			if ( ! is_string( $post_type ) ) {
+				return $candidate;
+			}
+
+			if ( self::slug_declared_as( $post_type, $declared ) ) {
+				return $candidate;
+			}
+		}
+
+		return $candidates[0] ?? 0;
+	}
+
+	/**
+	 * Reports whether a block's attrs declare a post type to match against.
+	 *
+	 * @param array<string, mixed> $attrs Block attrs.
+	 * @return bool True when the attrs carry a post-type kind and a type.
+	 */
+	private static function declares_post_type( array $attrs ): bool {
+		$declared = $attrs['type'] ?? null;
+
+		return 'post-type' === ( $attrs['kind'] ?? null )
+			&& is_string( $declared )
+			&& '' !== $declared;
+	}
+
+	/**
+	 * Realigns a post-type nav link's declared type with the post it now points
+	 * at, storing the registered slug.
+	 *
+	 * The editor resolves a link through its declared type, and keys post types
+	 * by registered slug, so only that slug resolves. Anything else — a type
+	 * the source post has since changed, or the editor's own underscored form
+	 * of a hyphenated slug — renders the item as invalid.
+	 *
+	 * @param array<string, mixed> $attrs   Block attrs.
+	 * @param int                  $dest_id Resolved destination post ID.
+	 * @return array<string, mixed> Attrs with the type realigned when needed.
+	 */
+	private static function realign_declared_type(
+		array $attrs,
+		int $dest_id
+	): array {
+		if ( ! self::declares_post_type( $attrs ) ) {
+			return $attrs;
+		}
+
+		$post_type = get_post_type( $dest_id );
+
+		if ( is_string( $post_type ) && $post_type !== $attrs['type'] ) {
+			$attrs['type'] = $post_type;
+		}
+
+		return $attrs;
+	}
+
+	/**
+	 * Reports whether a type attr names the given post type or taxonomy slug.
+	 * The editor swaps a slug's first hyphen for an underscore, so my-cpt is
+	 * stored as my_cpt; the classic-menu converter writes the slug as is.
+	 * Accept both forms.
+	 *
+	 * @param string $slug     Registered slug of a candidate.
+	 * @param string $declared Type attr the block declares.
+	 * @return bool True when the declared type names this slug.
+	 */
+	private static function slug_declared_as(
+		string $slug,
+		string $declared
+	): bool {
+		if ( $slug === $declared ) {
+			return true;
+		}
+
+		$hyphen = strpos( $slug, '-' );
+
+		return false !== $hyphen
+			&& substr_replace( $slug, '_', $hyphen, 1 ) === $declared;
+	}
+
+	/**
+	 * Reports whether a type attr names the given taxonomy. The editor writes
+	 * post_tag as tag; post types have no such alias.
+	 *
+	 * @param string $taxonomy Taxonomy slug of a candidate term.
+	 * @param string $declared Type attr the block declares.
+	 * @return bool True when the declared type names this taxonomy.
+	 */
+	private static function taxonomy_declared_as(
+		string $taxonomy,
+		string $declared
+	): bool {
+		if ( 'post_tag' === $taxonomy && 'tag' === $declared ) {
+			return true;
+		}
+
+		return self::slug_declared_as( $taxonomy, $declared );
 	}
 
 	/**
@@ -2339,8 +2606,8 @@ class Content_Processor {
 	 * admin can fix them up after publishing dependencies.
 	 *
 	 * @param array<array<string, mixed>> $blocks   Block tree.
-	 * @param array<int,int>              $post_map Source-ID => destination-ID.
-	 * @param array<int,int>              $term_map Source-ID => destination-ID.
+	 * @param array<int, list<int>>       $post_map Source-ID => destination IDs.
+	 * @param array<int, list<int>>       $term_map Source-ID => destination IDs.
 	 * @return array<array<string, mixed>> Mutated tree.
 	 */
 	private function apply_id_references(
@@ -2392,13 +2659,14 @@ class Content_Processor {
 	/**
 	 * Rewrites the registered attrs on a single block using the given map.
 	 * When a rule names a url_attr, the link url is re-derived from the
-	 * resolved destination id. Logs a warning for each matched attr whose
+	 * resolved destination id, and a post link's declared type is realigned
+	 * with the post it lands on. Logs a warning for each matched attr whose
 	 * source ID was not resolvable so the admin can surface and fix it.
 	 *
 	 * @param array<string, mixed>                                                                        $attrs    Block attrs.
 	 * @param string                                                                                      $name     Block name.
 	 * @param array<string, list<array{attr:string, gated_by?: array<string,string>, url_attr?: string}>> $registry Block-name => list of attr rules.
-	 * @param array<int,int>                                                                              $id_map   Source-ID => destination-ID.
+	 * @param array<int, list<int>>                                                                       $id_map   Source-ID => destination IDs.
 	 * @param string                                                                                      $kind     'post' or 'term'.
 	 * @return array<string, mixed> Mutated attrs.
 	 */
@@ -2428,9 +2696,18 @@ class Content_Processor {
 				continue;
 			}
 
-			if ( isset( $id_map[ $source_id ] ) ) {
-				$dest_id                = (int) $id_map[ $source_id ];
+			$dest_id = self::select_candidate(
+				$id_map[ $source_id ] ?? array(),
+				$kind,
+				$attrs
+			);
+
+			if ( $dest_id > 0 ) {
 				$attrs[ $rule['attr'] ] = $dest_id;
+
+				if ( 'term' !== $kind ) {
+					$attrs = self::realign_declared_type( $attrs, $dest_id );
+				}
 
 				if ( isset( $rule['url_attr'] ) ) {
 					$attrs = $this->rederive_link_url(
@@ -2441,12 +2718,23 @@ class Content_Processor {
 					);
 				}
 			} else {
-				$this->warnings[] = array(
+				$warning = array(
 					'type'      => 'unmapped_block_reference',
 					'kind'      => $kind,
 					'block'     => $name,
 					'source_id' => $source_id,
 				);
+
+				// Claimed, just not in the declared taxonomy: "import it" would
+				// be wrong advice.
+				if (
+					'term' === $kind
+					&& array() !== ( $id_map[ $source_id ] ?? array() )
+				) {
+					$warning['reason'] = 'declared_taxonomy_mismatch';
+				}
+
+				$this->warnings[] = $warning;
 			}
 		}
 

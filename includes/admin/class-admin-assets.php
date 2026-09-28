@@ -1,6 +1,6 @@
 <?php
 /**
- * Shared admin asset enqueueing helper.
+ * Shared admin asset enqueueing helper
  *
  * @package Safe_Publish
  */

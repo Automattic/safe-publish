@@ -1,6 +1,6 @@
 <?php
 /**
- * Integration tests for the attention-issue retry AJAX endpoint.
+ * Integration tests for the attention-issue retry AJAX endpoint
  *
  * @package Safe_Publish
  */

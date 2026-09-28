@@ -1,6 +1,6 @@
 <?php
 /**
- * Term Reconcile Report collector.
+ * Term Reconcile Report collector
  *
  * @package Safe_Publish
  */

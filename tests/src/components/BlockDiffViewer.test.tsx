@@ -99,4 +99,55 @@ describe( 'BlockDiffViewer', () => {
 			highlightedParagraph?.querySelector( '.safe-publish-inline-added' )
 		).toHaveTextContent( '!' );
 	} );
+
+	it( 'renders added and removed blocks from the side that carries them', () => {
+		// ARRANGE: One block dropped by the incoming content and one added.
+		const blocks: BlockDiff[] = [
+			buildBlock( {
+				index: 0,
+				status: 'removed',
+				current: { name: 'core/paragraph', rendered: '<p>Dropped.</p>' },
+				incoming: null,
+			} ),
+			buildBlock( {
+				index: 1,
+				status: 'added',
+				current: null,
+				incoming: { name: 'core/paragraph', rendered: '<p>Fresh.</p>' },
+			} ),
+		];
+
+		// ACT: Render with the default (showUnchanged off).
+		const { container } = render( <BlockDiffViewer blocks={ blocks } /> );
+
+		// ASSERT: Each card reads from the side that holds the block.
+		expect(
+			container.querySelector( '.safe-publish-block-diff__removed' )
+		).toHaveTextContent( 'Dropped.' );
+		expect(
+			container.querySelector( '.safe-publish-block-diff__added' )
+		).toHaveTextContent( 'Fresh.' );
+	} );
+
+	it( 'notes that a modified block with identical previews cannot be previewed', () => {
+		// ARRANGE: A modified block whose previews match because the change
+		// lives in markup the server filtered out of both.
+		const blocks: BlockDiff[] = [
+			buildBlock( {
+				status: 'modified',
+				current: { name: 'core/html', rendered: '' },
+				incoming: { name: 'core/html', rendered: '' },
+			} ),
+		];
+
+		// ACT: Render with the default (showUnchanged off).
+		render( <BlockDiffViewer blocks={ blocks } /> );
+
+		// ASSERT: The card stays visible and explains why it shows nothing,
+		// rather than being dropped as unchanged.
+		expect( screen.getByText( 'modified' ) ).toBeInTheDocument();
+		expect(
+			screen.getByText( /not visible in the preview/i )
+		).toBeInTheDocument();
+	} );
 } );

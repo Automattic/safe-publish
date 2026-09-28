@@ -1,6 +1,6 @@
 <?php
 /**
- * Telemetry Service Test.
+ * Telemetry Service Test
  *
  * @package Safe_Publish
  */

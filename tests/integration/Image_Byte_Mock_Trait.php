@@ -1,6 +1,6 @@
 <?php
 /**
- * HTTP image-byte mocking for integration tests.
+ * HTTP image-byte mocking for integration tests
  *
  * @package Safe_Publish
  */
@@ -91,6 +91,10 @@ trait Image_Byte_Mock_Trait {
 	 * Serves fixture bytes for any URL whose path has an image extension this
 	 * trait knows about. URLs without a recognized image extension fall
 	 * through so other pre_http_request filters can handle them.
+	 *
+	 * Matching is by extension alone, so a wrong URL that still ends in a known
+	 * image extension is served too. A test that must prove which URL was
+	 * requested needs its own stricter filter ahead of this one.
 	 *
 	 * @param false|array|WP_Error $preempt Preemptive return value.
 	 * @param array                $args    HTTP arguments.

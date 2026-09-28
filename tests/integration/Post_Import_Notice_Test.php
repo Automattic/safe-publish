@@ -1,6 +1,6 @@
 <?php
 /**
- * Integration tests for the post-import admin notice.
+ * Integration tests for the post-import admin notice
  *
  * @package Safe_Publish
  */

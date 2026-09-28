@@ -1,6 +1,6 @@
 <?php
 /**
- * Integration test for featured-image library metadata propagation.
+ * Integration test for featured-image library metadata propagation
  *
  * @package Safe_Publish
  */

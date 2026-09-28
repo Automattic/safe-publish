@@ -1,6 +1,6 @@
 <?php
 /**
- * Integration tests for the HMAC authenticator.
+ * Integration tests for the HMAC authenticator
  *
  * @package Safe_Publish
  */
