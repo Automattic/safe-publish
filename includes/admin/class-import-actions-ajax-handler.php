@@ -108,9 +108,14 @@ final class Import_Actions_Ajax_Handler {
 			)
 		);
 
-		$omissions = $result['omissions'] ?? array();
+		$omissions = $result['omissions'];
 		$messages  = array(
-			'deleted'  => __( 'Post permanently deleted.', 'safe-publish' ),
+			'deleted'  => array() === $omissions
+				? __( 'Post permanently deleted.', 'safe-publish' )
+				: __(
+					'Post permanently deleted, with some media retained. Review the Audit Log for details.',
+					'safe-publish'
+				),
 			'restored' => array() === $omissions
 				? __( 'Post restored to its previous version.', 'safe-publish' )
 				: __(

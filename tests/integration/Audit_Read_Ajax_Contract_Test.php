@@ -1,6 +1,6 @@
 <?php
 /**
- * Audit read adapter contract tests.
+ * Audit read adapter contract tests
  *
  * @package Safe_Publish
  */

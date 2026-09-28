@@ -1,6 +1,6 @@
 <?php
 /**
- * Integration tests for the Safe Publish permission contract.
+ * Integration tests for the Safe Publish permission contract
  *
  * @package Safe_Publish
  */

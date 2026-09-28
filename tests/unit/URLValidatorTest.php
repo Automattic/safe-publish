@@ -1,6 +1,6 @@
 <?php
 /**
- * URL Validator Test file.
+ * URL Validator Test file
  *
  * @package Safe_Publish
  */
@@ -360,5 +360,298 @@ class URLValidatorTest extends TestCase {
 
 		// ASSERT: Empty string out.
 		$this->assertSame( '', $identity );
+	}
+
+	/**
+	 * Verifies that absolute http and https URLs are recognized regardless of
+	 * non-ASCII characters in the path, which FILTER_VALIDATE_URL rejects.
+	 *
+	 * @dataProvider absolute_http_url_provider
+	 *
+	 * @param string $url      URL under test.
+	 * @param bool   $expected Expected result.
+	 */
+	public function test_is_absolute_http_url( string $url, bool $expected ): void {
+		// ACT & ASSERT: The URL is classified as expected.
+		$this->assertSame( $expected, URL_Validator::is_absolute_http_url( $url ) );
+	}
+
+	/**
+	 * Data provider for is_absolute_http_url().
+	 *
+	 * @return array<string, array{url: string, expected: bool}>
+	 */
+	public static function absolute_http_url_provider(): array {
+		return array(
+			'ascii https'        => array(
+				'url'      => 'https://example.com/image.png',
+				'expected' => true,
+			),
+			'non-ASCII path'     => array(
+				'url'      => 'https://example.com/uploads/Capture-décran-à-12.56.40.png',
+				'expected' => true,
+			),
+			'http scheme'        => array(
+				'url'      => 'http://example.com/image.png',
+				'expected' => true,
+			),
+			'uppercase scheme'   => array(
+				'url'      => 'HTTPS://example.com/image.png',
+				'expected' => true,
+			),
+			'data URI'           => array(
+				'url'      => 'data:image/gif;base64,R0lGODlhAQABAAAAACw=',
+				'expected' => false,
+			),
+			'protocol-relative'  => array(
+				'url'      => '//cdn.example.com/image.png',
+				'expected' => false,
+			),
+			'root-relative path' => array(
+				'url'      => '/wp-content/uploads/image.png',
+				'expected' => false,
+			),
+			'bare relative path' => array(
+				'url'      => 'uploads/image.png',
+				'expected' => false,
+			),
+			'empty string'       => array(
+				'url'      => '',
+				'expected' => false,
+			),
+			'leading space'      => array(
+				'url'      => ' https://example.com/image.png',
+				'expected' => true,
+			),
+			'trailing space'     => array(
+				'url'      => 'https://example.com/image.png ',
+				'expected' => true,
+			),
+			'leading tab'        => array(
+				'url'      => "\thttps://example.com/image.png",
+				'expected' => true,
+			),
+			'leading newline'    => array(
+				'url'      => "\nhttps://example.com/image.png",
+				'expected' => true,
+			),
+			'leading form feed'  => array(
+				'url'      => "\x0Chttps://example.com/image.png",
+				'expected' => true,
+			),
+			'leading NUL'        => array(
+				'url'      => "\x00https://example.com/image.png",
+				'expected' => true,
+			),
+			'internal newline'   => array(
+				'url'      => "https://example.com/ima\nge.png",
+				'expected' => true,
+			),
+			'leading NBSP'       => array(
+				'url'      => "\u{00A0}https://example.com/image.png",
+				'expected' => false,
+			),
+			'whitespace only'    => array(
+				'url'      => " \t\n",
+				'expected' => false,
+			),
+		);
+	}
+
+	/**
+	 * Verifies that only genuinely relative URLs are resolved, and that the
+	 * base URL's own path is kept so subsite sources resolve correctly.
+	 *
+	 * @dataProvider resolve_relative_url_provider
+	 *
+	 * @param string $url      URL under test.
+	 * @param string $base     Base site URL.
+	 * @param string $expected Expected resolved URL.
+	 */
+	public function test_resolve_relative_url(
+		string $url,
+		string $base,
+		string $expected
+	): void {
+		// ACT & ASSERT: The URL resolves as expected.
+		$this->assertSame(
+			$expected,
+			URL_Validator::resolve_relative_url( $url, $base )
+		);
+	}
+
+	/**
+	 * Data provider for resolve_relative_url().
+	 *
+	 * @return array<string, array{url: string, base: string, expected: string}>
+	 */
+	public static function resolve_relative_url_provider(): array {
+		return array(
+			'non-ASCII absolute left alone' => array(
+				'url'      => 'https://example.com/uploads/Capture-décran.png',
+				'base'     => 'https://example.com',
+				'expected' => 'https://example.com/uploads/Capture-décran.png',
+			),
+			'data URI left alone'           => array(
+				'url'      => 'data:image/gif;base64,R0lGODlhAQABAAAAACw=',
+				'base'     => 'https://example.com',
+				'expected' => 'data:image/gif;base64,R0lGODlhAQABAAAAACw=',
+			),
+			'protocol-relative adopts base' => array(
+				'url'      => '//cdn.example.com/image.png',
+				'base'     => 'https://example.com',
+				'expected' => 'https://cdn.example.com/image.png',
+			),
+			'root-relative path'            => array(
+				'url'      => '/wp-content/image.png',
+				'base'     => 'https://example.com',
+				'expected' => 'https://example.com/wp-content/image.png',
+			),
+			'bare relative path'            => array(
+				'url'      => 'wp-content/image.png',
+				'base'     => 'https://example.com',
+				'expected' => 'https://example.com/wp-content/image.png',
+			),
+			'base trailing slash'           => array(
+				'url'      => '/wp-content/image.png',
+				'base'     => 'https://example.com/',
+				'expected' => 'https://example.com/wp-content/image.png',
+			),
+			'base path preserved'           => array(
+				'url'      => '/wp-content/image.png',
+				'base'     => 'https://example.com/blog',
+				'expected' => 'https://example.com/blog/wp-content/image.png',
+			),
+			'leading space stays absolute'  => array(
+				'url'      => ' https://example.com/image.png',
+				'base'     => 'https://example.com',
+				'expected' => 'https://example.com/image.png',
+			),
+			'trailing space stays absolute' => array(
+				'url'      => 'https://example.com/image.png ',
+				'base'     => 'https://example.com',
+				'expected' => 'https://example.com/image.png',
+			),
+			'internal newline removed'      => array(
+				'url'      => "https://example.com/ima\n\tge.png",
+				'base'     => 'https://example.com',
+				'expected' => 'https://example.com/image.png',
+			),
+			'leading space root-relative'   => array(
+				'url'      => ' /wp-content/image.png',
+				'base'     => 'https://example.com',
+				'expected' => 'https://example.com/wp-content/image.png',
+			),
+			'leading space protocol-rel'    => array(
+				'url'      => ' //cdn.example.com/image.png',
+				'base'     => 'https://example.com',
+				'expected' => 'https://cdn.example.com/image.png',
+			),
+			'NBSP stays relative'           => array(
+				'url'      => "\u{00A0}https://example.com/image.png",
+				'base'     => 'https://example.com',
+				'expected' => "https://example.com/\u{00A0}https://example.com/image.png",
+			),
+		);
+	}
+
+	/**
+	 * Verifies that only the whitespace a URL parser discards is removed, so a
+	 * normalized value names the target the source site serves.
+	 *
+	 * @dataProvider url_whitespace_provider
+	 *
+	 * @param string $url      URL under test.
+	 * @param string $expected Expected normalized URL.
+	 */
+	public function test_normalize_url_whitespace(
+		string $url,
+		string $expected
+	): void {
+		// ACT & ASSERT: Only parser-discarded whitespace is removed.
+		$this->assertSame(
+			$expected,
+			URL_Validator::normalize_url_whitespace( $url )
+		);
+	}
+
+	/**
+	 * Data provider for normalize_url_whitespace().
+	 *
+	 * @return array<string, array{url: string, expected: string}>
+	 */
+	public static function url_whitespace_provider(): array {
+		$url = 'https://example.com/a.png';
+
+		return array(
+			'clean URL untouched'      => array(
+				'url'      => $url,
+				'expected' => $url,
+			),
+			'leading space'            => array(
+				'url'      => ' ' . $url,
+				'expected' => $url,
+			),
+			'trailing space'           => array(
+				'url'      => $url . ' ',
+				'expected' => $url,
+			),
+			'leading tab'              => array(
+				'url'      => "\t" . $url,
+				'expected' => $url,
+			),
+			'trailing newline'         => array(
+				'url'      => $url . "\n",
+				'expected' => $url,
+			),
+			'leading carriage return'  => array(
+				'url'      => "\r" . $url,
+				'expected' => $url,
+			),
+			'leading form feed'        => array(
+				'url'      => "\x0C" . $url,
+				'expected' => $url,
+			),
+			'leading vertical tab'     => array(
+				'url'      => "\x0B" . $url,
+				'expected' => $url,
+			),
+			'leading NUL'              => array(
+				'url'      => "\x00" . $url,
+				'expected' => $url,
+			),
+			'internal tab removed'     => array(
+				'url'      => "https://example.com/a\t.png",
+				'expected' => $url,
+			),
+			'internal newline removed' => array(
+				'url'      => "https://example.com/a\n.png",
+				'expected' => $url,
+			),
+			'internal CR removed'      => array(
+				'url'      => "https://example.com/a\r.png",
+				'expected' => $url,
+			),
+			'internal form feed kept'  => array(
+				'url'      => "https://example.com/a\x0C.png",
+				'expected' => "https://example.com/a\x0C.png",
+			),
+			'internal space kept'      => array(
+				'url'      => 'https://example.com/a .png',
+				'expected' => 'https://example.com/a .png',
+			),
+			'NBSP kept'                => array(
+				'url'      => "\u{00A0}" . $url,
+				'expected' => "\u{00A0}" . $url,
+			),
+			'percent-encoded tab kept' => array(
+				'url'      => 'https://example.com/a%09.png',
+				'expected' => 'https://example.com/a%09.png',
+			),
+			'whitespace only'          => array(
+				'url'      => " \t\n\r ",
+				'expected' => '',
+			),
+		);
 	}
 }

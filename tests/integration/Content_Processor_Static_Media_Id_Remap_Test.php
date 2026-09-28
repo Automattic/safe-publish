@@ -1,6 +1,6 @@
 <?php
 /**
- * Integration tests for static media-block attachment-ID remapping.
+ * Integration tests for static media-block attachment-ID remapping
  *
  * @package Safe_Publish
  */

@@ -1,6 +1,6 @@
 <?php
 /**
- * Reconcile Logger class.
+ * Reconcile Logger class
  *
  * @package Safe_Publish
  */

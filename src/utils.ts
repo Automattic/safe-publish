@@ -12,6 +12,7 @@ import { __, _n, sprintf } from '@wordpress/i18n';
 
 import type {
 	AttentionIssue,
+	DisplayError,
 	JsonValue,
 	LocalState,
 	SourceError,
@@ -93,6 +94,23 @@ export function getSourceError( data: unknown ): SourceError | undefined {
 }
 
 /**
+ * Flattens a display error to the sentence it renders as, so two errors can
+ * be compared by text regardless of shape.
+ *
+ * @param {DisplayError} error Error to flatten.
+ *
+ * @return {string} Rendered text.
+ */
+export function displayErrorText( error: DisplayError ): string {
+	if ( typeof error === 'string' ) {
+		return error;
+	}
+
+	// Function replacement: A `$` pattern in the source text stays literal.
+	return error.template.replace( '<reason />', () => error.message );
+}
+
+/**
  * Checks whether a value can be safely inspected by property name.
  *
  * @param {unknown} value Value to inspect.
@@ -152,7 +170,7 @@ export function formatBadgeTimestamp( dateString: string ): string {
 }
 
 /**
- * Display labels for built-in publish statuses; access via statusLabel().
+ * Display labels for built-in statuses; access via statusLabel().
  */
 const PUBLISH_STATUS_LABELS: Record< string, string > = {
 	publish: __( 'Published', 'safe-publish' ),
@@ -160,6 +178,7 @@ const PUBLISH_STATUS_LABELS: Record< string, string > = {
 	pending: __( 'Pending Review', 'safe-publish' ),
 	private: __( 'Private', 'safe-publish' ),
 	future:  __( 'Scheduled', 'safe-publish' ),
+	trash:   __( 'Trashed', 'safe-publish' ),
 };
 
 /**
@@ -488,6 +507,16 @@ export function renderIssueMessage( issue: AttentionIssue ): string {
 					/* translators: %d: source reusable block (wp_block) ID */
 					__(
 						"Reusable block %d isn't on this site yet. Import it under Patterns, then Retry.",
+						'safe-publish'
+					),
+					issue.target_ref
+				);
+			}
+			if ( issue.target_reason === 'declared_taxonomy_mismatch' ) {
+				return sprintf(
+					/* translators: %d: source term ID */
+					__(
+						'Source term %d is in another taxonomy. Import it into the declared one, then Retry.',
 						'safe-publish'
 					),
 					issue.target_ref

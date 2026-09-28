@@ -1,6 +1,6 @@
 <?php
 /**
- * Integration tests for the unified Posts listing repository methods.
+ * Integration tests for the unified Posts listing repository methods
  *
  * @package Safe_Publish
  */

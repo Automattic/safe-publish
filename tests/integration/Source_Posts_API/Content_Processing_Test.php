@@ -300,6 +300,13 @@ class Content_Processing_Test extends Source_Posts_API_Test_Base {
 
 		// ASSERT: Verify no attachment was created.
 		$this->assert_no_new_attachments( $attachments_before );
+
+		// ASSERT: Verify the data URI wasn't resolved against the source site
+		// and recorded as a download failure.
+		$this->assertSame(
+			array(),
+			$this->content_media_processor->get_failed_media()
+		);
 	}
 
 	/**
@@ -323,8 +330,9 @@ class Content_Processing_Test extends Source_Posts_API_Test_Base {
 			'protocol_relative'  => array(
 				'content'          => '<img src="//cdn.example.com/image.jpg" alt="CDN Image">',
 				'expected_strings' => array(
-					// Protocol-relative URLs are imported since domain filtering is disabled.
-					'wp-content/uploads',
+					// Resolves against the source scheme, then the third-party
+					// host guard leaves it untouched.
+					'src="//cdn.example.com/image.jpg"',
 					'CDN Image',
 				),
 				'description'      => 'Protocol-relative URLs',

@@ -1,6 +1,6 @@
 <?php
 /**
- * Integration tests for Navigation_Ref_Rewriter.
+ * Integration tests for Navigation_Ref_Rewriter
  *
  * @package Safe_Publish
  */

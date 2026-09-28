@@ -1,6 +1,6 @@
 <?php
 /**
- * Auth Manager class.
+ * Auth Manager class
  *
  * @package Safe_Publish
  */

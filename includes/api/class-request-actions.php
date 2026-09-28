@@ -1,6 +1,6 @@
 <?php
 /**
- * Request Actions constants class.
+ * Request Actions constants class
  *
  * @package Safe_Publish
  */

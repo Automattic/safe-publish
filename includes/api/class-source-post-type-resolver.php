@@ -434,13 +434,16 @@ final class Source_Post_Type_Resolver {
 	/**
 	 * Returns the error for a type the source catalog does not list.
 	 *
+	 * The source also omits a type whose REST controller throws, so the
+	 * message points at its Audit Log as well as at registration.
+	 *
 	 * @return WP_Error Unresolved-type error.
 	 */
 	private static function post_type_unresolved_error(): WP_Error {
 		return new WP_Error(
 			'fresh_content_post_type_unresolved',
 			__(
-				'The source site does not list this post type in its catalog. Confirm it is registered on the source with show_in_rest enabled.',
+				"The source site does not list this post type in its catalog. Confirm it is registered on the source with show_in_rest enabled, then check the source's Audit Log.",
 				'safe-publish'
 			),
 			array( 'status' => 502 )
