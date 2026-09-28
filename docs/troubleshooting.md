@@ -199,6 +199,10 @@ add_filter(
    - The destination's own host and the connected source site's host are exempt, so a same-host or private-network migration is unaffected. A host name is resolved first, so a name pointing into one of those ranges is refused too.
    - To allow one other such host — an internal CDN serving the source's media, for example — opt it back in with WordPress' `http_request_host_is_external` filter.
 
+7. **Check for a redirect on the media URL**:
+   - Media downloads follow a redirect only while it stays on the host and port the media URL names, and at most three times. An `http` URL upgraded to `https` still imports.
+   - A redirect to another host, to another port, or back down to `http` fails the download with `download_redirected`. Point the source's media records at the host that serves the file, or import that media as an attachment on the source first.
+
 #### "Raw content fields missing" error
 
 **Symptoms**: Import reports that the source response is missing required raw values

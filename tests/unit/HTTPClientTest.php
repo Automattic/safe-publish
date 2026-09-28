@@ -22,6 +22,16 @@ use WP_Error;
 class HTTPClientTest extends TestCase {
 
 	/**
+	 * Media URL the download tests fetch.
+	 */
+	private const MEDIA_URL = 'https://src.example.com/uploads/a.jpg';
+
+	/**
+	 * Temporary file path the download stub reports on success.
+	 */
+	private const TEMP_FILE = '/tmp/safe-publish-download.tmp';
+
+	/**
 	 * @var HTTP_Client HTTP client instance for testing.
 	 */
 	private HTTP_Client $http_client;
@@ -43,11 +53,12 @@ class HTTPClientTest extends TestCase {
 	}
 
 	/**
-	 * Resets the HTTP response stub between tests.
+	 * Resets the HTTP response and download stubs between tests.
 	 */
 	#[\Override]
 	protected function tearDown(): void {
 		reset_test_http_response();
+		reset_test_downloads();
 		parent::tearDown();
 	}
 
@@ -380,5 +391,417 @@ class HTTPClientTest extends TestCase {
 				'body'     => $body,
 			)
 		);
+	}
+
+	/**
+	 * Verifies that download_file tells the transport not to follow
+	 * redirects, and leaves another request in flight untouched.
+	 */
+	public function test_download_file_pins_the_redirect_policy(): void {
+		// ARRANGE: Stub a source that serves the file directly.
+		set_test_download_responses( array( $this->ok_response() ) );
+
+		// ACT: Download a media URL through the shared client.
+		$result = $this->http_client->download_file( self::MEDIA_URL );
+
+		// ASSERT: The file arrives, the transport was told not to redirect,
+		// and an unrelated request still sees core's default.
+		$calls = get_test_download_url_calls();
+		$this->assertSame( self::TEMP_FILE, $result );
+		$this->assertCount( 1, $calls );
+		$this->assertSame( 0, $calls[0]['args']['redirection'] );
+		$this->assertSame( 5, $calls[0]['unrelated_args']['redirection'] );
+	}
+
+	/**
+	 * Verifies that download_file removes both of its filters, so no later
+	 * request inherits them.
+	 */
+	public function test_download_file_removes_its_request_filters(): void {
+		// ARRANGE: Record the registry, and stub a source that serves the
+		// file directly.
+		$before_request  = count( get_test_filters( 'http_request_args' ) );
+		$before_response = count( get_test_filters( 'http_response' ) );
+		set_test_download_responses( array( $this->ok_response() ) );
+
+		// ACT: Download a media URL through the shared client.
+		$result = $this->http_client->download_file( self::MEDIA_URL );
+
+		// ASSERT: Both filters ran for the download, and the registry is back
+		// to what it held before.
+		$calls = get_test_download_url_calls();
+		$this->assertSame( self::TEMP_FILE, $result );
+		$this->assertSame( $before_request + 1, $calls[0]['request_filters'] );
+		$this->assertSame(
+			$before_response + 1,
+			$calls[0]['response_filters']
+		);
+		$this->assertCount(
+			$before_request,
+			get_test_filters( 'http_request_args' )
+		);
+		$this->assertCount(
+			$before_response,
+			get_test_filters( 'http_response' )
+		);
+	}
+
+	/**
+	 * Verifies that download_file follows a redirect that upgrades the
+	 * scheme on the host the media URL names.
+	 */
+	public function test_download_file_follows_same_host_redirect(): void {
+		// ARRANGE: Stub a source that upgrades the scheme, then serves it.
+		$http_url  = 'http://src.example.com/uploads/a.jpg';
+		$https_url = 'https://src.example.com/uploads/a.jpg';
+		set_test_download_responses(
+			array(
+				$this->response_with_location( 301, $https_url ),
+				$this->ok_response(),
+			)
+		);
+
+		// ACT: Download the http URL.
+		$result = $this->http_client->download_file( $http_url );
+
+		// ASSERT: The retry went to the https URL and returned the file.
+		$this->assertSame(
+			array( $http_url, $https_url ),
+			$this->requested_urls()
+		);
+		$this->assertSame( self::TEMP_FILE, $result );
+	}
+
+	/**
+	 * Verifies that download_file resolves a root-relative redirect against
+	 * the media URL's own scheme and host, not against its path.
+	 */
+	public function test_download_file_follows_root_relative_redirect(): void {
+		// ARRANGE: Stub a redirect carrying a path-only Location.
+		set_test_download_responses(
+			array(
+				$this->response_with_location( 301, '/uploads/2024/a.jpg' ),
+				$this->ok_response(),
+			)
+		);
+
+		// ACT: Download the media URL.
+		$result = $this->http_client->download_file( self::MEDIA_URL );
+
+		// ASSERT: The retry went to the resolved same-host URL.
+		$this->assertSame(
+			array(
+				self::MEDIA_URL,
+				'https://src.example.com/uploads/2024/a.jpg',
+			),
+			$this->requested_urls()
+		);
+		$this->assertSame( self::TEMP_FILE, $result );
+	}
+
+	/**
+	 * Verifies that download_file gives a scheme-relative redirect the media
+	 * URL's own scheme, which keeps it on the same host.
+	 */
+	public function test_download_file_follows_scheme_relative_hop(): void {
+		// ARRANGE: Stub a redirect carrying a scheme-relative Location.
+		set_test_download_responses(
+			array(
+				$this->response_with_location(
+					301,
+					'//src.example.com/uploads/b.jpg'
+				),
+				$this->ok_response(),
+			)
+		);
+
+		// ACT: Download the media URL.
+		$result = $this->http_client->download_file( self::MEDIA_URL );
+
+		// ASSERT: The retry went to the same host over https.
+		$this->assertSame(
+			array(
+				self::MEDIA_URL,
+				'https://src.example.com/uploads/b.jpg',
+			),
+			$this->requested_urls()
+		);
+		$this->assertSame( self::TEMP_FILE, $result );
+	}
+
+	/**
+	 * Verifies that download_file compares the redirect host without regard
+	 * to case, as host names are case insensitive.
+	 */
+	public function test_download_file_follows_uppercase_host_redirect(): void {
+		// ARRANGE: Stub a redirect naming the same host in upper case.
+		$shouting = 'https://SRC.EXAMPLE.COM/uploads/b.jpg';
+		set_test_download_responses(
+			array(
+				$this->response_with_location( 301, $shouting ),
+				$this->ok_response(),
+			)
+		);
+
+		// ACT: Download the media URL.
+		$result = $this->http_client->download_file( self::MEDIA_URL );
+
+		// ASSERT: The redirect counted as the same host and was followed.
+		$this->assertSame(
+			array( self::MEDIA_URL, $shouting ),
+			$this->requested_urls()
+		);
+		$this->assertSame( self::TEMP_FILE, $result );
+	}
+
+	/**
+	 * Verifies that download_file fails a redirect that leaves the host the
+	 * media URL names, without requesting the other host.
+	 */
+	public function test_download_file_refuses_off_host_redirect(): void {
+		// ARRANGE: Stub a redirect pointing at a different host.
+		set_test_download_responses(
+			array(
+				$this->response_with_location(
+					301,
+					'https://other.example.net/a.jpg'
+				),
+			)
+		);
+
+		// ACT: Download the media URL.
+		$result = $this->http_client->download_file( self::MEDIA_URL );
+
+		// ASSERT: The download reports the redirect, and only the media URL
+		// itself was requested.
+		$this->assertDownloadStopped(
+			$result,
+			HTTP_Client::ERROR_DOWNLOAD_REDIRECTED
+		);
+	}
+
+	/**
+	 * Verifies that download_file fails a scheme-relative redirect that
+	 * names another host, rather than folding it into its own path.
+	 */
+	public function test_download_file_refuses_scheme_relative_host(): void {
+		// ARRANGE: Stub a scheme-relative Location naming another host.
+		set_test_download_responses(
+			array(
+				$this->response_with_location(
+					301,
+					'//other.example.net/a.jpg'
+				),
+			)
+		);
+
+		// ACT: Download the media URL.
+		$result = $this->http_client->download_file( self::MEDIA_URL );
+
+		// ASSERT: The download reports the redirect, and only the media URL
+		// itself was requested.
+		$this->assertDownloadStopped(
+			$result,
+			HTTP_Client::ERROR_DOWNLOAD_REDIRECTED
+		);
+	}
+
+	/**
+	 * Verifies that download_file fails a same-host redirect that downgrades
+	 * an https media URL to plain http.
+	 */
+	public function test_download_file_refuses_scheme_downgrade(): void {
+		// ARRANGE: Stub a redirect to the same host over http.
+		set_test_download_responses(
+			array(
+				$this->response_with_location(
+					301,
+					'http://src.example.com/uploads/a.jpg'
+				),
+			)
+		);
+
+		// ACT: Download the https media URL.
+		$result = $this->http_client->download_file( self::MEDIA_URL );
+
+		// ASSERT: The download reports the redirect and stops at one request.
+		$this->assertDownloadStopped(
+			$result,
+			HTTP_Client::ERROR_DOWNLOAD_REDIRECTED
+		);
+	}
+
+	/**
+	 * Verifies that download_file fails a redirect to another port on the
+	 * host the media URL names.
+	 */
+	public function test_download_file_refuses_another_port(): void {
+		// ARRANGE: Stub a redirect to the same host on another port.
+		set_test_download_responses(
+			array(
+				$this->response_with_location(
+					301,
+					'https://src.example.com:8443/uploads/a.jpg'
+				),
+			)
+		);
+
+		// ACT: Download the media URL.
+		$result = $this->http_client->download_file( self::MEDIA_URL );
+
+		// ASSERT: The download reports the redirect and stops at one request.
+		$this->assertDownloadStopped(
+			$result,
+			HTTP_Client::ERROR_DOWNLOAD_REDIRECTED
+		);
+	}
+
+	/**
+	 * Verifies that download_file stops once the same-host redirect budget
+	 * is spent.
+	 */
+	public function test_download_file_stops_after_redirect_budget(): void {
+		// ARRANGE: Stub a source that redirects on its own host forever.
+		$responses = array();
+		for ( $hop = 0; $hop < 6; $hop++ ) {
+			$responses[] = $this->response_with_location(
+				301,
+				self::MEDIA_URL . '?hop=' . $hop
+			);
+		}
+		set_test_download_responses( $responses );
+
+		// ACT: Download the media URL.
+		$result = $this->http_client->download_file( self::MEDIA_URL );
+
+		// ASSERT: Four requests were made - the first plus three redirects -
+		// and the download reports the redirect.
+		$this->assertCount( 4, $this->requested_urls() );
+		$this->assertInstanceOf( WP_Error::class, $result );
+		$this->assertSame(
+			HTTP_Client::ERROR_DOWNLOAD_REDIRECTED,
+			$result->get_error_code()
+		);
+	}
+
+	/**
+	 * Verifies that download_file ignores a redirect answered to a request
+	 * other than its own.
+	 */
+	public function test_download_file_ignores_other_request_redirect(): void {
+		// ARRANGE: Stub a missing media file, and an unrelated request that
+		// is answered with a redirect while the download runs.
+		set_test_unrelated_response(
+			$this->response_with_location(
+				301,
+				'https://other.example.net/a.jpg'
+			)
+		);
+		set_test_download_responses(
+			array( array( 'response' => array( 'code' => 404 ) ) )
+		);
+
+		// ACT: Download the media URL.
+		$result = $this->http_client->download_file( self::MEDIA_URL );
+
+		// ASSERT: The policy ran for the media URL, the caller sees the
+		// error core reported for it, and no retry was made.
+		$this->assertDownloadStopped( $result, 'http_404' );
+	}
+
+	/**
+	 * Verifies that download_file reports the error core raised when a
+	 * redirect carries no Location to follow.
+	 */
+	public function test_download_file_needs_a_location_to_follow(): void {
+		// ARRANGE: Stub a redirect with no Location header.
+		set_test_download_responses(
+			array( array( 'response' => array( 'code' => 301 ) ) )
+		);
+
+		// ACT: Download the media URL.
+		$result = $this->http_client->download_file( self::MEDIA_URL );
+
+		// ASSERT: The policy ran, the caller sees the error core reported
+		// rather than a redirect error, and no retry was made.
+		$this->assertDownloadStopped( $result, 'http_404' );
+	}
+
+	/**
+	 * Verifies that download_file ignores a Location header on a response
+	 * that is not a redirect.
+	 */
+	public function test_download_file_ignores_non_redirect_location(): void {
+		// ARRANGE: Stub a missing file whose response still carries Location.
+		set_test_download_responses(
+			array(
+				array(
+					'response' => array( 'code' => 404 ),
+					'headers'  => array(
+						'location' => 'https://other.example.net/a.jpg',
+					),
+				),
+			)
+		);
+
+		// ACT: Download the media URL.
+		$result = $this->http_client->download_file( self::MEDIA_URL );
+
+		// ASSERT: The policy ran, the caller sees the error core reported
+		// rather than a redirect error, and no retry was made.
+		$this->assertDownloadStopped( $result, 'http_404' );
+	}
+
+	/**
+	 * Builds a stubbed 200 response.
+	 *
+	 * @return array Stubbed HTTP response.
+	 */
+	private function ok_response(): array {
+		return array( 'response' => array( 'code' => 200 ) );
+	}
+
+	/**
+	 * Builds a stubbed response carrying a Location header.
+	 *
+	 * @param int    $code     HTTP status code.
+	 * @param string $location Location header value.
+	 * @return array Stubbed HTTP response.
+	 */
+	private function response_with_location(
+		int $code,
+		string $location
+	): array {
+		return array(
+			'response' => array( 'code' => $code ),
+			'headers'  => array( 'location' => $location ),
+		);
+	}
+
+	/**
+	 * Returns the URLs the download stub was asked to fetch, in order.
+	 *
+	 * @return array List of requested URLs.
+	 */
+	private function requested_urls(): array {
+		return array_column( get_test_download_url_calls(), 'url' );
+	}
+
+	/**
+	 * Asserts that a download stopped at the media URL with the given error,
+	 * having applied the redirect policy to that one request.
+	 *
+	 * @param string|WP_Error $result     download_file() result.
+	 * @param string          $error_code Expected WP_Error code.
+	 */
+	private function assertDownloadStopped(
+		string|WP_Error $result,
+		string $error_code
+	): void {
+		$calls = get_test_download_url_calls();
+		$this->assertInstanceOf( WP_Error::class, $result );
+		$this->assertSame( $error_code, $result->get_error_code() );
+		$this->assertSame( array( self::MEDIA_URL ), $this->requested_urls() );
+		$this->assertSame( 0, $calls[0]['args']['redirection'] );
 	}
 }
