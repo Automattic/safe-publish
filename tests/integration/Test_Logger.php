@@ -1,6 +1,6 @@
 <?php
 /**
- * Test-only logger subclass that exposes the base log methods.
+ * Test-only logger subclass that exposes the base log methods
  *
  * @package Safe_Publish
  */

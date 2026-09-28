@@ -1,6 +1,6 @@
 <?php
 /**
- * Attention Issues Table class.
+ * Attention Issues Table class
  *
  * @package Safe_Publish
  */

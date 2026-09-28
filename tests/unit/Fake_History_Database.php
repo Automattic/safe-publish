@@ -1,6 +1,6 @@
 <?php
 /**
- * Database prefix for history read unit doubles.
+ * Database prefix for history read unit doubles
  *
  * @package Safe_Publish
  */

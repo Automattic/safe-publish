@@ -1,6 +1,6 @@
 <?php
 /**
- * Tests for the title field's contract in the listing payload.
+ * Tests for the title field's contract in the listing payload
  *
  * @package Safe_Publish
  */

@@ -1,6 +1,6 @@
 <?php
 /**
- * Authentication Logger class.
+ * Authentication Logger class
  *
  * @package Safe_Publish
  */

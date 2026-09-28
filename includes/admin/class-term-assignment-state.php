@@ -1,6 +1,6 @@
 <?php
 /**
- * Term assignment state used when reverting post updates.
+ * Term assignment state used when reverting post updates
  *
  * @package Safe_Publish
  */

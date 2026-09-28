@@ -1,6 +1,6 @@
 <?php
 /**
- * Integration tests for settings page asset enqueueing.
+ * Integration tests for settings page asset enqueueing
  *
  * @package Safe_Publish
  */

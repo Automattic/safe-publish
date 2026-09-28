@@ -1,6 +1,6 @@
 <?php
 /**
- * Safe Publish permission contract.
+ * Safe Publish permission contract
  *
  * @package Safe_Publish
  */

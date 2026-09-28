@@ -1,6 +1,6 @@
 <?php
 /**
- * Tests for the modified field's GMT contract in the listing payload.
+ * Tests for the modified field's GMT contract in the listing payload
  *
  * @package Safe_Publish
  */
