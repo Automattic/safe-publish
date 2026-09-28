@@ -755,13 +755,13 @@ class Content_Processor {
 		string $source_site_url,
 		array $session_id_map = array()
 	): string {
-		if ( empty( $content ) ) {
+		if ( '' === $content ) {
 			return $content;
 		}
 
 		$blocks = parse_blocks( $content );
 
-		if ( empty( $blocks ) ) {
+		if ( array() === $blocks ) {
 			return $content;
 		}
 
