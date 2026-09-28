@@ -21,7 +21,7 @@ final class Import_Items_Table {
 	/**
 	 * Table schema version.
 	 */
-	private const VERSION = '1.2';
+	private const VERSION = '1.3';
 
 	/**
 	 * Option key used to track the installed table schema version.
@@ -101,6 +101,20 @@ final class Import_Items_Table {
 		$wpdb->query(
 			"UPDATE `{$table}` SET source_modified_gmt = import_date_gmt"
 				. ' WHERE source_modified_gmt IS NULL'
+		);
+		// Realign rows written while has_previous_content required a non-empty
+		// snapshot, which mispredicts delete versus restore.
+		$wpdb->query(
+			"UPDATE `{$table}` SET has_previous_content = 1"
+				. " WHERE has_previous_content = 0 AND status = 'updated'"
+				. ' AND content_changes LIKE \'%"previous_content":%\''
+		);
+		// The old rule only flagged a non-empty previous_content, so a flagged
+		// row either stored the key or stored nothing — no payload to scan.
+		$wpdb->query(
+			"UPDATE `{$table}` SET has_previous_content = 0"
+				. " WHERE has_previous_content = 1 AND ( status <> 'updated'"
+				. ' OR content_changes IS NULL )'
 		);
 		// phpcs:enable WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.DirectDatabaseQuery.SchemaChange
 
