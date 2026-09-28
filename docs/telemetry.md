@@ -23,7 +23,7 @@ All events carry the global properties set in `Plugin::init()` — `plugin_versi
 | `single_import_completed` | End of single-import AJAX (`ajax_create_draft`) | `outcome` (`new`\|`updated`), `warning_count` | Live (registered in Pendo) |
 | `bulk_import_completed` | End of bulk-import AJAX (`ajax_bulk_import`) | `batch_size`, `successful`, `failed`, `has_failures` | Live in code, awaiting first receipt |
 | `import_item_failed` | Per-item error in `Post_Import_Service` | `error_code` (bounded enum), `session_type` (`single`\|`bulk`), `media_failure_count` (only for media errors) | Live in code, awaiting first receipt |
-| `rollback_performed` | Item rollback handler, success and failure | `scope` (`item`), `deleted_count`, `restored_count`, `failed_count`, `outcome` (`success`\|`failed`) | Live in code, awaiting first receipt |
+| `rollback_performed` | Item rollback handler, success and failure | `scope` (`item`), `deleted_count`, `restored_count`, `failed_count`, `outcome` (`success`\|`failed`\|`refused`) | Live in code, awaiting first receipt |
 | `connection_test_completed` | End of test-connection AJAX (`ajax_test_connection`) | `outcome` (`authorized`\|`unauthorized`\|`blocked`\|`unreachable`) | **New — this change** |
 | `sync_mode_configured` | Sync-mode option first set or changed | `previous_mode`, `new_mode` (bounded enums), `is_first_configuration` (bool) | **New — this change** |
 
@@ -98,7 +98,7 @@ The Pendo MCP is read-only, so it can't create any of the above — but it can *
 - Import volume and single-vs-bulk mix (`*_import_completed`).
 - Per-batch success rate and `has_failures` share.
 - Ranked `error_code` distribution (`import_item_failed`).
-- Rollback / regret rate (`rollback_performed` by `outcome`).
+- Rollback / regret rate (`rollback_performed` by `outcome`; `refused` means the server declined and changed nothing, so it is not regret).
 - Connection-test outcome breakdown and onboarding funnel (`sync_mode_configured` → first import).
 
 This can run as a recurring Claude Code job (`/loop` or a scheduled routine) posting to Slack or a P2. It depends only on the events above having registered in Pendo.

@@ -78,15 +78,19 @@ final class Import_Actions_Ajax_Handler {
 
 		if ( is_wp_error( $result ) ) {
 			// A per-item WP_Error is a failed rollback, not a silently-dropped
-			// request.
+			// request. A refusal changed nothing, so it is neither.
+			$refused = Session_Rollback_Service::is_refusal( $result );
+
 			$this->telemetry->record_event(
 				Telemetry_Events::ROLLBACK_PERFORMED,
 				array(
 					'scope'          => Telemetry_Events::ROLLBACK_SCOPE_ITEM,
 					'deleted_count'  => 0,
 					'restored_count' => 0,
-					'failed_count'   => 1,
-					'outcome'        => Telemetry_Events::ROLLBACK_OUTCOME_FAILED,
+					'failed_count'   => $refused ? 0 : 1,
+					'outcome'        => $refused
+						? Telemetry_Events::ROLLBACK_OUTCOME_REFUSED
+						: Telemetry_Events::ROLLBACK_OUTCOME_FAILED,
 				)
 			);
 
