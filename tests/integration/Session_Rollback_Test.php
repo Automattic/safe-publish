@@ -23,6 +23,8 @@ use WP_Error;
  */
 class Session_Rollback_Test extends Integration_Test_Case {
 
+	use Failing_Query_Trait;
+
 	/**
 	 * Probe post type registered exclude_from_search.
 	 */
@@ -81,6 +83,8 @@ class Session_Rollback_Test extends Integration_Test_Case {
 	 */
 	#[\Override]
 	protected function tearDown(): void {
+		$this->restore_failing_queries();
+
 		unregister_post_type( self::HIDDEN_TYPE );
 		// Core registers statuses into a global with no unregister counterpart.
 		unset( $GLOBALS['wp_post_statuses'][ self::HIDDEN_STATUS ] );
@@ -641,23 +645,13 @@ class Session_Rollback_Test extends Integration_Test_Case {
 	public function test_rollback_retains_media_when_a_usage_check_fails(
 		string $fingerprint
 	): void {
-		global $wpdb;
-
 		// ARRANGE: One usage check's query is made to fail.
-		$seed     = $this->create_shared_media_item();
-		$suppress = $wpdb->suppress_errors( true );
-		$break    = static fn ( $query ) => str_contains( (string) $query, $fingerprint )
-			? 'SELECT 1 FROM sp_no_such_table'
-			: $query;
-		add_filter( 'query', $break );
+		$seed = $this->create_shared_media_item();
+		$this->fail_queries_matching( $fingerprint );
 
-		try {
-			// ACT: Roll back A.
-			$result = $this->rollback_service->rollback_item( $seed['item_id'] );
-		} finally {
-			remove_filter( 'query', $break );
-			$wpdb->suppress_errors( $suppress );
-		}
+		// ACT: Roll back A, then stop the injection before asserting.
+		$result = $this->rollback_service->rollback_item( $seed['item_id'] );
+		$this->restore_failing_queries();
 
 		// ASSERT: A is gone but the attachment is kept and reported.
 		$this->assertIsArray( $result );
@@ -1689,66 +1683,52 @@ class Session_Rollback_Test extends Integration_Test_Case {
 	 * with the wpdb error captured.
 	 */
 	public function test_mark_item_rolled_back_emits_failed_when_update_errors(): void {
-		global $wpdb;
-
-		// ARRANGE: Create a session with one item, then force the next UPDATE
-		// on the items table to fail at the SQL layer by rewriting it via
-		// the 'query' filter. try/finally guarantees filter removal.
-		$session_id      = $this->repository->create_session( 'https://example.com', 'bulk' );
-		$post_id         = $this->factory()->post->create( array( 'post_title' => 'Imported Post' ) );
-		$item_id         = $this->repository->log_import_action(
+		// ARRANGE: A session with one item, and the items table's UPDATEs
+		// forced to fail.
+		$session_id = $this->repository->create_session( 'https://example.com', 'bulk' );
+		$post_id    = $this->factory()->post->create(
+			array( 'post_title' => 'Imported Post' )
+		);
+		$item_id    = $this->repository->log_import_action(
 			$session_id,
 			1,
 			'Imported Post',
 			'success',
 			$post_id
 		);
-		$items_table     = Import_Items_Table::table_name();
-		$filter_callback = function ( string $query ) use ( $items_table ): string {
-			if ( 0 === strpos( $query, "UPDATE `{$items_table}`" ) ) {
-				return 'UPDATE safe_publish_nonexistent_table_for_test SET x = 1';
-			}
-			return $query;
-		};
-		add_filter( 'query', $filter_callback );
-		$wpdb->suppress_errors( true );
+		$this->fail_table_queries( 'UPDATE', Import_Items_Table::table_name() );
 
-		try {
-			// ACT: Roll back the item.
-			$flagged = $this->repository->mark_item_rolled_back( $item_id );
+		// ACT: Roll back the item.
+		$flagged = $this->repository->mark_item_rolled_back( $item_id );
 
-			// ASSERT: The failed write is reported to the caller.
-			$this->assertFalse( $flagged );
+		// ASSERT: The failed write is reported to the caller.
+		$this->assertFalse( $flagged );
 
-			// ASSERT: An ITEM_ROLLBACK_FAILED error event was emitted with the
-			// item ID, the snapshotted session_id and post_id (SELECT runs
-			// before the filtered UPDATE, so these are real values), and a
-			// non-empty wpdb_error string.
-			$events = Audit_Log_Table::get_events(
-				array(
-					'channel'    => 'import',
-					'event_type' => 'ITEM_ROLLBACK_FAILED',
-				)
-			);
-			$this->assertCount( 1, $events );
-			$this->assertSame( 'error', $events[0]['level'] );
-			$this->assertSame( $item_id, $events[0]['data']['item_id'] );
-			$this->assertSame( $session_id, $events[0]['data']['session_id'] );
-			$this->assertSame( $post_id, $events[0]['data']['post_id'] );
-			$this->assertNotEmpty( $events[0]['data']['wpdb_error'] );
+		// ASSERT: An ITEM_ROLLBACK_FAILED error event was emitted with the
+		// item ID, the snapshotted session_id and post_id (SELECT runs
+		// before the filtered UPDATE, so these are real values), and a
+		// non-empty wpdb_error string.
+		$events = Audit_Log_Table::get_events(
+			array(
+				'channel'    => 'import',
+				'event_type' => 'ITEM_ROLLBACK_FAILED',
+			)
+		);
+		$this->assertCount( 1, $events );
+		$this->assertSame( 'error', $events[0]['level'] );
+		$this->assertSame( $item_id, $events[0]['data']['item_id'] );
+		$this->assertSame( $session_id, $events[0]['data']['session_id'] );
+		$this->assertSame( $post_id, $events[0]['data']['post_id'] );
+		$this->assertNotEmpty( $events[0]['data']['wpdb_error'] );
 
-			// ASSERT: No success event was recorded.
-			$success_events = Audit_Log_Table::get_events(
-				array(
-					'channel'    => 'import',
-					'event_type' => 'ITEM_ROLLED_BACK',
-				)
-			);
-			$this->assertCount( 0, $success_events );
-		} finally {
-			remove_filter( 'query', $filter_callback );
-			$wpdb->suppress_errors( false );
-		}
+		// ASSERT: No success event was recorded.
+		$success_events = Audit_Log_Table::get_events(
+			array(
+				'channel'    => 'import',
+				'event_type' => 'ITEM_ROLLED_BACK',
+			)
+		);
+		$this->assertCount( 0, $success_events );
 	}
 
 	/**
@@ -1756,19 +1736,16 @@ class Session_Rollback_Test extends Integration_Test_Case {
 	 * error even though the post was reverted.
 	 */
 	public function test_rollback_item_reports_a_rollback_it_could_not_record(): void {
-		global $wpdb;
-
-		// ARRANGE: An updated item, with the next UPDATE on the items table
-		// forced to fail at the SQL layer so only the flag write breaks.
-		// try/finally guarantees filter removal.
-		$session_id      = $this->repository->create_session( 'https://example.com', 'bulk' );
-		$post_id         = $this->factory()->post->create(
+		// ARRANGE: An updated item, with the items table's UPDATEs forced to
+		// fail at the SQL layer so only the flag write breaks.
+		$session_id = $this->repository->create_session( 'https://example.com', 'bulk' );
+		$post_id    = $this->factory()->post->create(
 			array(
 				'post_title'   => 'Updated',
 				'post_content' => 'Imported content.',
 			)
 		);
-		$item_id         = $this->repository->log_import_action(
+		$item_id    = $this->repository->log_import_action(
 			$session_id,
 			1,
 			'Updated',
@@ -1780,36 +1757,23 @@ class Session_Rollback_Test extends Integration_Test_Case {
 				'action'           => 'updated_existing',
 			)
 		);
-		$items_table     = Import_Items_Table::table_name();
-		$filter_callback = function ( string $query ) use ( $items_table ): string {
-			if ( 0 === strpos( $query, "UPDATE `{$items_table}`" ) ) {
-				return 'UPDATE safe_publish_nonexistent_table_for_test SET x = 1';
-			}
-			return $query;
-		};
-		add_filter( 'query', $filter_callback );
-		$wpdb->suppress_errors( true );
+		$this->fail_table_queries( 'UPDATE', Import_Items_Table::table_name() );
 
-		try {
-			// ACT: Roll the item back.
-			$result = $this->rollback_service->rollback_item( $item_id );
+		// ACT: Roll the item back.
+		$result = $this->rollback_service->rollback_item( $item_id );
 
-			// ASSERT: The caller is told the rollback went unrecorded.
-			$this->assertInstanceOf( WP_Error::class, $result );
-			$this->assertSame( 'rollback_not_recorded', $result->get_error_code() );
+		// ASSERT: The caller is told the rollback went unrecorded.
+		$this->assertInstanceOf( WP_Error::class, $result );
+		$this->assertSame( 'rollback_not_recorded', $result->get_error_code() );
 
-			// ASSERT: The revert itself still happened.
-			$post = get_post( $post_id );
-			$this->assertNotNull( $post );
-			$this->assertSame( 'Old content.', $post->post_content );
+		// ASSERT: The revert itself still happened.
+		$post = get_post( $post_id );
+		$this->assertNotNull( $post );
+		$this->assertSame( 'Old content.', $post->post_content );
 
-			// ASSERT: The row stayed unflagged, matching what was reported.
-			$item = $this->repository->get_item( $item_id );
-			$this->assertSame( 0, (int) $item['rolled_back'] );
-		} finally {
-			remove_filter( 'query', $filter_callback );
-			$wpdb->suppress_errors( false );
-		}
+		// ASSERT: The row stayed unflagged, matching what was reported.
+		$item = $this->repository->get_item( $item_id );
+		$this->assertSame( 0, (int) $item['rolled_back'] );
 	}
 
 	/**
@@ -1853,7 +1817,10 @@ class Session_Rollback_Test extends Integration_Test_Case {
 		$this->assertCount( 1, $events );
 		$this->assertSame( 'info', $events[0]['level'] );
 		$this->assertSame( $session_id, $events[0]['data']['session_id'] );
-		$this->assertSame( 'https://example.com', $events[0]['data']['source_site_url'] );
+		$this->assertSame(
+			'https://example.com',
+			$events[0]['data']['source_site_url']
+		);
 		$this->assertSame( 2, $events[0]['data']['items_deleted'] );
 	}
 
@@ -1887,14 +1854,12 @@ class Session_Rollback_Test extends Integration_Test_Case {
 	 * the imports-table DELETE, and leaves the session row intact.
 	 */
 	public function test_delete_session_emits_failed_when_items_delete_errors(): void {
-		global $wpdb;
-
-		// ARRANGE: Create a session with one item, then force the next DELETE
-		// on the items table to fail at the SQL layer by rewriting it to
-		// invalid SQL via the 'query' filter. try/finally guarantees filter
-		// removal.
+		// ARRANGE: A session with one item, and the items table's DELETEs
+		// forced to fail.
 		$session_id = $this->repository->create_session( 'https://example.com', 'bulk' );
-		$post_id    = $this->factory()->post->create( array( 'post_title' => 'Imported Post' ) );
+		$post_id    = $this->factory()->post->create(
+			array( 'post_title' => 'Imported Post' )
+		);
 		$this->repository->log_import_action(
 			$session_id,
 			1,
@@ -1902,55 +1867,45 @@ class Session_Rollback_Test extends Integration_Test_Case {
 			'success',
 			$post_id
 		);
-		$items_table     = Import_Items_Table::table_name();
-		$filter_callback = function ( $query ) use ( $items_table ) {
-			if ( 0 === strpos( $query, "DELETE FROM `{$items_table}`" ) ) {
-				return 'DELETE FROM safe_publish_nonexistent_table_for_test WHERE x = 1';
-			}
-			return $query;
-		};
-		add_filter( 'query', $filter_callback );
-		$wpdb->suppress_errors( true );
+		$this->fail_table_queries( 'DELETE', Import_Items_Table::table_name() );
 
-		try {
-			// ACT: Attempt to delete the session.
-			$deleted = $this->repository->delete_session( $session_id );
+		// ACT: Attempt to delete the session.
+		$deleted = $this->repository->delete_session( $session_id );
 
-			// ASSERT: The repository reports no deletion.
-			$this->assertFalse( $deleted );
+		// ASSERT: The repository reports no deletion.
+		$this->assertFalse( $deleted );
 
-			// ASSERT: A SESSION_DELETE_FAILED error event was emitted with the
-			// session ID, the snapshotted source_site_url, and a non-empty
-			// wpdb_error string.
-			$events = Audit_Log_Table::get_events(
-				array(
-					'channel'    => 'import',
-					'event_type' => 'SESSION_DELETE_FAILED',
-				)
-			);
-			$this->assertCount( 1, $events );
-			$this->assertSame( 'error', $events[0]['level'] );
-			$this->assertSame( $session_id, $events[0]['data']['session_id'] );
-			$this->assertSame( 'https://example.com', $events[0]['data']['source_site_url'] );
-			$this->assertNotEmpty( $events[0]['data']['wpdb_error'] );
+		// ASSERT: A SESSION_DELETE_FAILED error event was emitted with the
+		// session ID, the snapshotted source_site_url, and a non-empty
+		// wpdb_error string.
+		$events = Audit_Log_Table::get_events(
+			array(
+				'channel'    => 'import',
+				'event_type' => 'SESSION_DELETE_FAILED',
+			)
+		);
+		$this->assertCount( 1, $events );
+		$this->assertSame( 'error', $events[0]['level'] );
+		$this->assertSame( $session_id, $events[0]['data']['session_id'] );
+		$this->assertSame(
+			'https://example.com',
+			$events[0]['data']['source_site_url']
+		);
+		$this->assertNotEmpty( $events[0]['data']['wpdb_error'] );
 
-			// ASSERT: No success event was recorded.
-			$success_events = Audit_Log_Table::get_events(
-				array(
-					'channel'    => 'import',
-					'event_type' => 'SESSION_DELETED',
-				)
-			);
-			$this->assertCount( 0, $success_events );
+		// ASSERT: No success event was recorded.
+		$success_events = Audit_Log_Table::get_events(
+			array(
+				'channel'    => 'import',
+				'event_type' => 'SESSION_DELETED',
+			)
+		);
+		$this->assertCount( 0, $success_events );
 
-			// ASSERT: The session row was not deleted (the bail-out preserves
-			// it so the caller can retry).
-			$session = $this->repository->get_session( $session_id );
-			$this->assertNotNull( $session );
-		} finally {
-			remove_filter( 'query', $filter_callback );
-			$wpdb->suppress_errors( false );
-		}
+		// ASSERT: The session row was not deleted (the bail-out preserves
+		// it so the caller can retry).
+		$session = $this->repository->get_session( $session_id );
+		$this->assertNotNull( $session );
 	}
 
 	/**
@@ -1959,13 +1914,12 @@ class Session_Rollback_Test extends Integration_Test_Case {
 	 * SESSION_DELETE_FAILED audit event.
 	 */
 	public function test_delete_session_emits_failed_when_imports_delete_errors(): void {
-		global $wpdb;
-
-		// ARRANGE: Create a session with one item, then force the next DELETE
-		// on the imports table to fail at the SQL layer. The items-table
-		// DELETE runs first and succeeds.
+		// ARRANGE: A session with one item, and the imports table's DELETEs
+		// forced to fail.
 		$session_id = $this->repository->create_session( 'https://example.com', 'bulk' );
-		$post_id    = $this->factory()->post->create( array( 'post_title' => 'Imported Post' ) );
+		$post_id    = $this->factory()->post->create(
+			array( 'post_title' => 'Imported Post' )
+		);
 		$this->repository->log_import_action(
 			$session_id,
 			1,
@@ -1973,49 +1927,39 @@ class Session_Rollback_Test extends Integration_Test_Case {
 			'success',
 			$post_id
 		);
-		$imports_table   = Imports_Table::table_name();
-		$filter_callback = function ( $query ) use ( $imports_table ) {
-			if ( 0 === strpos( $query, "DELETE FROM `{$imports_table}`" ) ) {
-				return 'DELETE FROM safe_publish_nonexistent_table_for_test WHERE x = 1';
-			}
-			return $query;
-		};
-		add_filter( 'query', $filter_callback );
-		$wpdb->suppress_errors( true );
+		$this->fail_table_queries( 'DELETE', Imports_Table::table_name() );
 
-		try {
-			// ACT: Attempt to delete the session.
-			$deleted = $this->repository->delete_session( $session_id );
+		// ACT: Attempt to delete the session.
+		$deleted = $this->repository->delete_session( $session_id );
 
-			// ASSERT: The repository reports no deletion.
-			$this->assertFalse( $deleted );
+		// ASSERT: The repository reports no deletion.
+		$this->assertFalse( $deleted );
 
-			// ASSERT: A SESSION_DELETE_FAILED error event was emitted with the
-			// session ID, the snapshotted source_site_url, and a non-empty
-			// wpdb_error string.
-			$events = Audit_Log_Table::get_events(
-				array(
-					'channel'    => 'import',
-					'event_type' => 'SESSION_DELETE_FAILED',
-				)
-			);
-			$this->assertCount( 1, $events );
-			$this->assertSame( 'error', $events[0]['level'] );
-			$this->assertSame( $session_id, $events[0]['data']['session_id'] );
-			$this->assertSame( 'https://example.com', $events[0]['data']['source_site_url'] );
-			$this->assertNotEmpty( $events[0]['data']['wpdb_error'] );
+		// ASSERT: A SESSION_DELETE_FAILED error event was emitted with the
+		// session ID, the snapshotted source_site_url, and a non-empty
+		// wpdb_error string.
+		$events = Audit_Log_Table::get_events(
+			array(
+				'channel'    => 'import',
+				'event_type' => 'SESSION_DELETE_FAILED',
+			)
+		);
+		$this->assertCount( 1, $events );
+		$this->assertSame( 'error', $events[0]['level'] );
+		$this->assertSame( $session_id, $events[0]['data']['session_id'] );
+		$this->assertSame(
+			'https://example.com',
+			$events[0]['data']['source_site_url']
+		);
+		$this->assertNotEmpty( $events[0]['data']['wpdb_error'] );
 
-			// ASSERT: No success event was recorded.
-			$success_events = Audit_Log_Table::get_events(
-				array(
-					'channel'    => 'import',
-					'event_type' => 'SESSION_DELETED',
-				)
-			);
-			$this->assertCount( 0, $success_events );
-		} finally {
-			remove_filter( 'query', $filter_callback );
-			$wpdb->suppress_errors( false );
-		}
+		// ASSERT: No success event was recorded.
+		$success_events = Audit_Log_Table::get_events(
+			array(
+				'channel'    => 'import',
+				'event_type' => 'SESSION_DELETED',
+			)
+		);
+		$this->assertCount( 0, $success_events );
 	}
 }
