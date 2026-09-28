@@ -512,6 +512,16 @@ export function renderIssueMessage( issue: AttentionIssue ): string {
 					issue.target_ref
 				);
 			}
+			if ( issue.target_reason === 'declared_taxonomy_mismatch' ) {
+				return sprintf(
+					/* translators: %d: source term ID */
+					__(
+						'Source term %d is in another taxonomy. Import it into the declared one, then Retry.',
+						'safe-publish'
+					),
+					issue.target_ref
+				);
+			}
 			return issue.target_kind === 'term'
 				? sprintf(
 					/* translators: %d: source term ID */
