@@ -50,15 +50,13 @@ export interface BlockDiff {
 /**
  * Result from a diff preview request.
  *
- * @property {string}      [contentDiffHtml]      Raw content HTML diff.
- * @property {Object}      [nonContentDiffs]      Non-content field diffs.
- * @property {BlockDiff[]} [blockDiffs]           Block-level diffs.
- * @property {string}      [error]                Error message if failed.
- * @property {Object}      [sourceError]          Source failure detail.
- * @property {Object}      [current]              Current post data.
- * @property {string}      [html]                 Legacy HTML diff output.
- * @property {string}      [incomingRenderedHtml] Incoming rendered HTML.
- * @property {string}      [currentRenderedHtml]  Current rendered HTML.
+ * @property {string}      [contentDiffHtml] Raw content HTML diff.
+ * @property {Object}      [nonContentDiffs] Non-content field diffs.
+ * @property {BlockDiff[]} [blockDiffs]      Block-level diffs.
+ * @property {string}      [error]           Error message if failed.
+ * @property {Object}      [sourceError]     Source failure detail.
+ * @property {Object}      [current]         Current post data.
+ * @property {string}      [html]            Legacy HTML diff output.
  */
 export interface DiffPreviewResult {
 	contentDiffHtml?: string;
@@ -79,8 +77,6 @@ export interface DiffPreviewResult {
 		terms?: Record< string, string[] >;
 	};
 	html?: string;
-	incomingRenderedHtml?: string;
-	currentRenderedHtml?: string;
 }
 
 /**
