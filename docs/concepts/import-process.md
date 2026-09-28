@@ -86,7 +86,7 @@ If an `<a>` tag's `href` ends in a file extension allowed by WordPress, it is pr
 
 ### Inline Image ID References
 
-An inline `<img>` carries two attachment-ID references alongside its URL — the `wp-image-{id}` class and the `data-id` attribute. Once the `src` is repointed at the destination file, both are rewritten from the source ID to the destination attachment ID (an existing reference only; neither is fabricated). This keeps WordPress' runtime responsive-image (`srcset`) output and editor media linkage working for migrated classic-editor and legacy-gallery images. Gutenberg `core/image` blocks are already repointed by their dedicated parser.
+An inline `<img>` carries two attachment-ID references alongside its URL — the `wp-image-{id}` class and the `data-id` attribute. Once the `src` is repointed at the destination file, both are rewritten from the source ID to the destination attachment ID (an existing reference only; neither is fabricated). This keeps WordPress' runtime responsive-image (`srcset`) output and editor media linkage working for migrated classic-editor and legacy-gallery images. Gutenberg `core/image` blocks are already repointed by their dedicated parser, which also adds the class when the source markup carries none.
 
 ### Featured Image
 
@@ -315,6 +315,14 @@ Navigation links and submenus are re-derived only when their target was already 
 ### Navigation links to a term in another taxonomy are left unrepointed
 
 A navigation link or submenu that points at a taxonomy term also names the taxonomy that term belongs to, and is repointed only to a destination term in that same taxonomy. If no imported term sits in that taxonomy — for example when the source term changed taxonomy and only its older copy was imported — the link keeps its source reference and is reported under Needs attention instead of being sent to an unrelated term. Import the term into the taxonomy the link names, then use the Retry action.
+
+### Navigation links may have their declared post type realigned
+
+A navigation link or submenu that points at a post also names that post's type. When several imported posts claim the same source post, the one whose type the link names wins, so a link declaring a page is never sent to a post claiming the same source ID.
+
+When the only imported post is of another type — which happens when the source post changed type after the link was authored, since WordPress leaves the stored type behind — the link is still repointed to that post, and its declared type is realigned to match. The link text, and the post it points at, are unchanged.
+
+The realigned value is the post type's registered slug, because that is the only form the block editor resolves. This also settles links to a post type whose slug contains a hyphen: the editor stores its own underscored form (`my-cpt` as `my_cpt`), which the editor itself then fails to resolve, marking the link invalid even though it works on the front end. Imported links carry the registered slug instead.
 
 ### Some sideloaded files carry no source library metadata
 
