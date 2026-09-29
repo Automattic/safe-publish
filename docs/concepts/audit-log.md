@@ -38,6 +38,8 @@ Every event belongs to one channel — the producer subsystem that logged it —
 
 The exact event codes for each channel are defined in `Log_Events` (the contract the per-channel loggers enforce); the Event column renders each code as a human-readable label, and the Event filter matches any substring.
 
+On the `auth` channel, failures raised before a request authenticates are recorded once per failure type per five-minute window, since their volume is set by the caller rather than by operator activity. A repeated failure shows up as a row in each window it occurs in, not as a row per request.
+
 ## Privacy
 
 Audit log rows may contain destination URLs and post IDs. They do not contain post content. Rows are append-only — there is no UI for deleting them — so this surface is suitable as the system of record.
