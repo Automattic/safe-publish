@@ -14,7 +14,7 @@ Safe Publish provides WordPress actions and filters at key extension points.
 
 Fires after any event is recorded to the audit log (e.g. import, export, auth, content, media, or dispatch channels).
 
-Authentication failures raised before a request authenticates are recorded once per failure type per five-minute window, bounding audit log growth on a surface whose volume is set by the caller. Repeated identical failures within a window therefore fire this action once, not once per request. Their payload strings are stored capped at 256 bytes.
+Authentication failures raised before a request authenticates are recorded once per failure type per five-minute window, bounding audit log growth on a surface whose volume is set by the caller. Only the first occurrence of a type in a window fires this action; later ones are dropped whatever their payload, so a subscriber sees a sample of pre-authentication failures rather than all of them. Their payload strings are stored capped at 256 bytes.
 
 **Parameters:**
 
