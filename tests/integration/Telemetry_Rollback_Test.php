@@ -29,6 +29,7 @@ class Telemetry_Rollback_Test extends WP_Ajax_UnitTestCase {
 
 	use Ajax_Die_Continue_Trait;
 	use Failing_Query_Trait;
+	use Unfiltered_Html_Trait;
 
 	/**
 	 * Queue that captures every telemetry event emitted by the handler.
@@ -59,6 +60,7 @@ class Telemetry_Rollback_Test extends WP_Ajax_UnitTestCase {
 			array( 'role' => 'administrator' )
 		);
 		wp_set_current_user( $admin_user_id );
+		$this->grant_unfiltered_html( $admin_user_id );
 
 		$this->queue      = new Telemetry_Event_Queue();
 		$this->repository = new History_Repository();
@@ -186,8 +188,10 @@ class Telemetry_Rollback_Test extends WP_Ajax_UnitTestCase {
 	 */
 	public function test_item_rollback_with_omissions_returns_warning_message(): void {
 		// ARRANGE: An updated item whose previous author is no longer available.
-		$author_id = $this->factory()->user->create();
-		wp_delete_user( $author_id );
+		// A non-existent ID stands in for a deleted author: multisite's
+		// wp_delete_user() only unlinks the user from the site, leaving the
+		// reference resolvable.
+		$author_id  = 999999;
 		$session_id = $this->repository->create_session(
 			'https://source.example.com',
 			'single'
