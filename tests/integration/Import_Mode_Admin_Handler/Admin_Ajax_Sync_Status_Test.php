@@ -90,7 +90,7 @@ class Admin_Ajax_Sync_Status_Test extends WP_Ajax_UnitTestCase {
 	protected function tearDown(): void {
 		remove_filter( 'pre_http_request', array( $this, 'mock_catalog_request' ), 10 );
 		delete_option( Options::OPTION_CONNECTED_SITE_URL );
-		delete_site_transient( Admin_Ajax_Controller::AUTH_STATUS_TRANSIENT );
+		delete_transient( Admin_Ajax_Controller::AUTH_STATUS_TRANSIENT );
 		parent::tearDown();
 	}
 
