@@ -883,9 +883,8 @@ class Session_Rollback_Test extends Integration_Test_Case {
 		register_taxonomy( 'sp_atomic_taxonomy', 'post' );
 
 		try {
-			// A non-existent ID stands in for a deleted author: multisite's
-			// wp_delete_user() only unlinks the user from the site, leaving the
-			// reference resolvable.
+			// Non-existent ID, not a deleted one: on multisite
+			// wp_delete_user() only unlinks the user from the site.
 			$missing_author = 999999;
 			$deleted_parent = $this->factory()->post->create();
 			$previous_image = $this->factory()->attachment->create(

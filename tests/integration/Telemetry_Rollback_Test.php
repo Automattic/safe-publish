@@ -188,9 +188,8 @@ class Telemetry_Rollback_Test extends WP_Ajax_UnitTestCase {
 	 */
 	public function test_item_rollback_with_omissions_returns_warning_message(): void {
 		// ARRANGE: An updated item whose previous author is no longer available.
-		// A non-existent ID stands in for a deleted author: multisite's
-		// wp_delete_user() only unlinks the user from the site, leaving the
-		// reference resolvable.
+		// Non-existent ID, not a deleted one: on multisite wp_delete_user()
+		// only unlinks the user from the site.
 		$author_id  = 999999;
 		$session_id = $this->repository->create_session(
 			'https://source.example.com',

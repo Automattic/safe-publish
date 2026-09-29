@@ -32,10 +32,12 @@ trait Unfiltered_Html_Trait {
 			( new WP_User( $user_id ) )->add_cap( 'unfiltered_html' );
 		}
 
-		// kses_init() latches the filter set when the current user is set, so
-		// granting afterwards leaves the kses filters attached.
+		// Core latches its capability-dependent filters on set_current_user —
+		// kses for content and a separate one rebuilding footnotes meta — so
+		// granting afterwards leaves them attached until the action re-fires.
 		if ( get_current_user_id() === $user_id ) {
-			kses_init();
+			// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- Re-fires a core action rather than introducing a hook.
+			do_action( 'set_current_user' );
 		}
 	}
 
