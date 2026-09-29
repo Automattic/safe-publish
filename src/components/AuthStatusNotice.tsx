@@ -12,16 +12,16 @@ import { Notice } from '@wordpress/components';
 import { createInterpolateElement } from '@wordpress/element';
 import { __ } from '@wordpress/i18n';
 
-import { AuthStatus } from '../types';
+import { AuthStatusView } from '../types';
 
 /**
  * Props for the AuthStatusNotice component.
  *
- * @property {AuthStatus|null} status        Current probe status, or null while loading.
- * @property {string}          [settingsUrl] URL of the plugin settings page.
+ * @property {AuthStatusView|null} status        Current probe status, or null while loading.
+ * @property {string}              [settingsUrl] URL of the plugin settings page.
  */
 interface AuthStatusNoticeProps {
-	status: AuthStatus | null;
+	status: AuthStatusView | null;
 	settingsUrl?: string;
 }
 
@@ -66,6 +66,17 @@ function AuthStatusNotice( {
 			<Notice status="warning" isDismissible={ false }>
 				{ __(
 					'Source site could not be reached. Verify the connected site URL and that the source site is online.',
+					'safe-publish'
+				) }
+			</Notice>
+		);
+	}
+
+	if ( 'probe_failed' === status ) {
+		return (
+			<Notice status="warning" isDismissible={ false }>
+				{ __(
+					'Could not check the connection status. Reload the page to try again.',
 					'safe-publish'
 				) }
 			</Notice>
