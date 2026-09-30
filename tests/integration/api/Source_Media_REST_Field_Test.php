@@ -221,6 +221,188 @@ class Source_Media_REST_Field_Test extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Verifies that line breaks and tabs inside image URLs preserve library
+	 * metadata and source parents under the URLs the importer will request.
+	 */
+	public function test_field_maps_line_broken_image_url(): void {
+		// ARRANGE: Image URLs with a line break and tab inside src values.
+		$parent = self::factory()->post->create();
+		$this->assertIsInt( $parent );
+		$image  = $this->seed_attachment( '2025/01/line-broken.jpg' );
+		$tabbed = $this->seed_attachment( '2025/01/tab-broken.jpg', 'Tabbed' );
+		wp_update_post(
+			array(
+				'ID'          => $image['id'],
+				'post_parent' => $parent,
+			)
+		);
+		$broken_url = str_replace( 'line-broken', "line-\nbroken", $image['url'] );
+		$tabbed_url = str_replace( 'tab-broken', "tab-\tbroken", $tabbed['url'] );
+		$post_id    = self::factory()->post->create(
+			array(
+				'post_content' => '<img src="' . $broken_url . '">'
+					. '<img src="' . $tabbed_url . '">',
+			)
+		);
+		$this->force_hmac_authenticated( true );
+
+		// ACT: Export the post's media metadata.
+		$response = $this->server->dispatch(
+			new WP_REST_Request( 'GET', '/wp/v2/posts/' . $post_id )
+		);
+
+		// ASSERT: The normalized URL carries all library fields and the parent.
+		$this->assertSame( 200, $response->get_status() );
+		$this->assertSame(
+			array(
+				$image['url']  => array(
+					'alt'         => 'Library alt',
+					'title'       => 'Library title',
+					'caption'     => 'Library caption',
+					'description' => 'Library description',
+					'parent'      => (string) $parent,
+				),
+				$tabbed['url'] => array(
+					'alt'         => 'Tabbed alt',
+					'title'       => 'Tabbed title',
+					'caption'     => 'Tabbed caption',
+					'description' => 'Tabbed description',
+					'parent'      => '0',
+				),
+			),
+			$response->get_data()['safe_publish_media']
+		);
+	}
+
+	/**
+	 * Verifies that a URL found only in a serialized block attribute retains
+	 * its library metadata after the attribute's escaped line break is parsed.
+	 */
+	public function test_field_maps_line_broken_block_attribute_url(): void {
+		// ARRANGE: A cover URL exists only in the block comment's JSON attrs.
+		$image      = $this->seed_attachment( '2025/01/cover-image.jpg' );
+		$broken_url = str_replace( 'cover-image', "cover-\nimage", $image['url'] );
+		$content    = serialize_block(
+			array(
+				'blockName'    => 'core/cover',
+				'attrs'        => array( 'url' => $broken_url ),
+				'innerBlocks'  => array(),
+				'innerHTML'    => '',
+				'innerContent' => array(),
+			)
+		);
+		$post_id    = self::factory()->post->create(
+			array( 'post_content' => wp_slash( $content ) )
+		);
+		$this->assertSame(
+			$broken_url,
+			parse_blocks( (string) get_post_field( 'post_content', $post_id ) )[0]['attrs']['url']
+		);
+		$this->force_hmac_authenticated( true );
+
+		// ACT: Export the post's media metadata.
+		$response = $this->server->dispatch(
+			new WP_REST_Request( 'GET', '/wp/v2/posts/' . $post_id )
+		);
+
+		// ASSERT: The parsed URL keys the complete source library record.
+		$this->assertSame( 200, $response->get_status() );
+		$this->assertSame(
+			array(
+				$image['url'] => array(
+					'alt'         => 'Library alt',
+					'title'       => 'Library title',
+					'caption'     => 'Library caption',
+					'description' => 'Library description',
+					'parent'      => '0',
+				),
+			),
+			$response->get_data()['safe_publish_media']
+		);
+	}
+
+	/**
+	 * Verifies that nested attributes in a child block retain a line-broken
+	 * media URL's library metadata.
+	 */
+	public function test_field_maps_nested_line_broken_block_url(): void {
+		// ARRANGE: A custom child block stores its URL in a nested attribute.
+		$image      = $this->seed_attachment( '2025/01/nested-image.jpg' );
+		$broken_url = str_replace( 'nested-image', "nested-\nimage", $image['url'] );
+		$content    = serialize_block(
+			array(
+				'blockName'    => 'core/group',
+				'attrs'        => array(),
+				'innerBlocks'  => array(
+					array(
+						'blockName'    => 'example/media',
+						'attrs'        => array(
+							'image' => array( 'url' => $broken_url ),
+						),
+						'innerBlocks'  => array(),
+						'innerHTML'    => '',
+						'innerContent' => array(),
+					),
+				),
+				'innerHTML'    => '',
+				'innerContent' => array( null ),
+			)
+		);
+		$post_id    = self::factory()->post->create(
+			array( 'post_content' => wp_slash( $content ) )
+		);
+		$this->force_hmac_authenticated( true );
+
+		// ACT: Export the post's media metadata.
+		$response = $this->server->dispatch(
+			new WP_REST_Request( 'GET', '/wp/v2/posts/' . $post_id )
+		);
+
+		// ASSERT: The nested URL resolves to the complete library record.
+		$this->assertSame( 200, $response->get_status() );
+		$this->assertSame(
+			array(
+				$image['url'] => array(
+					'alt'         => 'Library alt',
+					'title'       => 'Library title',
+					'caption'     => 'Library caption',
+					'description' => 'Library description',
+					'parent'      => '0',
+				),
+			),
+			$response->get_data()['safe_publish_media']
+		);
+	}
+
+	/**
+	 * Verifies that a plain URL ending before a line break is not joined to the
+	 * next word when the export collects library metadata.
+	 */
+	public function test_field_keeps_plain_url_before_next_line(): void {
+		// ARRANGE: An ordinary image URL followed by prose on the next line.
+		$image   = $this->seed_attachment( '2025/01/ordinary.jpg' );
+		$post_id = self::factory()->post->create(
+			array(
+				'post_content' => '<img src="' . $image['url']
+					. '">' . "\n" . 'Next word',
+			)
+		);
+		$this->force_hmac_authenticated( true );
+
+		// ACT: Export the post's media metadata.
+		$response = $this->server->dispatch(
+			new WP_REST_Request( 'GET', '/wp/v2/posts/' . $post_id )
+		);
+
+		// ASSERT: Only the complete image URL is keyed in the map.
+		$this->assertSame( 200, $response->get_status() );
+		$this->assertSame(
+			array( $image['url'] ),
+			array_keys( $response->get_data()['safe_publish_media'] )
+		);
+	}
+
+	/**
 	 * Verifies that the map reports each attachment's source parent post, the
 	 * value the destination re-parents its imported copy to.
 	 */

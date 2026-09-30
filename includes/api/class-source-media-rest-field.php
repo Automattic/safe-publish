@@ -10,6 +10,8 @@ declare(strict_types=1);
 namespace Safe_Publish\API;
 
 use Safe_Publish\Auth\HMAC_Authenticator;
+use Safe_Publish\Validators\URL_Validator;
+use WP_HTML_Tag_Processor;
 use WP_Post;
 use WP_REST_Request;
 
@@ -466,15 +468,21 @@ class Source_Media_REST_Field {
 
 		$pattern = '#https?://' . preg_quote( $host, '#' ) . '/[^\s"\'<>()]+#i';
 		$count   = preg_match_all( $pattern, $content, $matches );
+		$urls    = is_int( $count ) && 0 < $count ? $matches[0] : array();
+		$urls    = array_merge(
+			$urls,
+			$this->line_broken_attribute_urls( $content, $host ),
+			$this->line_broken_block_urls( $content, $host )
+		);
 
-		if ( ! is_int( $count ) || 0 === $count ) {
+		if ( array() === $urls ) {
 			return array();
 		}
 
 		$uploads_prefix = $this->uploads_path_prefix();
 		$map            = array();
 
-		foreach ( array_unique( $matches[0] ) as $raw_url ) {
+		foreach ( array_unique( $urls ) as $raw_url ) {
 			$url = strtok( $raw_url, '?' );
 
 			if ( false === $url || isset( $map[ $url ] ) ) {
@@ -523,6 +531,151 @@ class Source_Media_REST_Field {
 		}
 
 		return $map;
+	}
+
+	/**
+	 * Reads URL attributes with internal line breaks as complete values. The
+	 * content scan cannot cross whitespace without joining unrelated text.
+	 *
+	 * @param string $content Raw post content.
+	 * @param string $host    Source site host.
+	 * @return list<string> Normalized same-host attribute URLs.
+	 */
+	private function line_broken_attribute_urls(
+		string $content,
+		string $host
+	): array {
+		$processor = new WP_HTML_Tag_Processor( $content );
+		$pattern   = '#^https?://' . preg_quote( $host, '#' )
+			. '/[^\s"\'<>()]+$#i';
+		$urls      = array();
+
+		while ( $processor->next_tag() ) {
+			foreach ( array( 'src', 'poster', 'data', 'href' ) as $attribute ) {
+				$url = $this->normalized_line_broken_url(
+					$processor->get_attribute( $attribute ),
+					$pattern
+				);
+
+				if ( null !== $url ) {
+					$urls[] = $url;
+				}
+			}
+		}
+
+		return $urls;
+	}
+
+	/**
+	 * Reads line-broken URLs from parsed Gutenberg attributes, including nested
+	 * attributes and child blocks. Escaped JSON newlines become real characters
+	 * only after parsing the block comment.
+	 *
+	 * @param string $content Raw post content.
+	 * @param string $host    Source site host.
+	 * @return list<string> Normalized same-host block attribute URLs.
+	 */
+	private function line_broken_block_urls( string $content, string $host ): array {
+		if ( false === strpos( $content, '<!-- wp:' ) ) {
+			return array();
+		}
+
+		$pattern = '#^https?://' . preg_quote( $host, '#' )
+			. '/[^\s"\'<>()]+$#i';
+		$urls    = array();
+
+		foreach ( parse_blocks( $content ) as $block ) {
+			$urls = array_merge(
+				$urls,
+				$this->line_broken_urls_in_block( $block, $pattern )
+			);
+		}
+
+		return $urls;
+	}
+
+	/**
+	 * Collects line-broken URL attributes from a block and its child blocks.
+	 *
+	 * @param array  $block   Parsed block.
+	 * @param string $pattern Same-host URL pattern.
+	 * @return list<string> Normalized URLs.
+	 */
+	private function line_broken_urls_in_block(
+		array $block,
+		string $pattern
+	): array {
+		$attrs = $block['attrs'] ?? array();
+		$urls  = is_array( $attrs )
+			? $this->line_broken_urls_in_values( $attrs, $pattern )
+			: array();
+
+		foreach ( $block['innerBlocks'] ?? array() as $child ) {
+			if ( is_array( $child ) ) {
+				$urls = array_merge(
+					$urls,
+					$this->line_broken_urls_in_block( $child, $pattern )
+				);
+			}
+		}
+
+		return $urls;
+	}
+
+	/**
+	 * Collects line-broken URL strings from nested block attribute values.
+	 *
+	 * @param array  $values  Attribute values.
+	 * @param string $pattern Same-host URL pattern.
+	 * @return list<string> Normalized URLs.
+	 */
+	private function line_broken_urls_in_values(
+		array $values,
+		string $pattern
+	): array {
+		$urls = array();
+
+		foreach ( $values as $value ) {
+			if ( is_array( $value ) ) {
+				$urls = array_merge(
+					$urls,
+					$this->line_broken_urls_in_values( $value, $pattern )
+				);
+				continue;
+			}
+
+			$url = $this->normalized_line_broken_url( $value, $pattern );
+
+			if ( null !== $url ) {
+				$urls[] = $url;
+			}
+		}
+
+		return $urls;
+	}
+
+	/**
+	 * Normalizes a complete URL value only when it carries an internal tab or
+	 * line break, leaving ordinary URL extraction to the existing content scan.
+	 *
+	 * @param mixed  $value   Attribute value.
+	 * @param string $pattern Same-host URL pattern.
+	 * @return string|null Normalized URL, or null when not eligible.
+	 */
+	private function normalized_line_broken_url(
+		mixed $value,
+		string $pattern
+	): ?string {
+		if (
+			! is_string( $value )
+			|| false === strpbrk( $value, "\t\n\r" )
+		) {
+			return null;
+		}
+
+		$url = URL_Validator::normalize_url_whitespace( $value );
+
+		return 1 === preg_match( $pattern, $url ) ? $url : null;
 	}
 
 	/**
