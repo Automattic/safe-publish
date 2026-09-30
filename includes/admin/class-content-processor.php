@@ -44,6 +44,13 @@ class Content_Processor {
 	public const META_REF_REPOINTED_AT = '_safe_publish_block_ref_repointed_at';
 
 	/**
+	 * Detail returned when a mapped navigation URL still needs a final path.
+	 *
+	 * @var string
+	 */
+	public const DEFERRED_URL_DETAIL = 'Navigation URL awaits a final target path.';
+
+	/**
 	 * Post meta recording the unix timestamp at which a stale gallery/playlist
 	 * post reference was repointed in place by a retry.
 	 *
@@ -1768,6 +1775,7 @@ class Content_Processor {
 
 		$changed    = false;
 		$mismatched = false;
+		$deferred   = false;
 		$blocks     = $this->repoint_refs(
 			parse_blocks( $post->post_content ),
 			$registry,
@@ -1775,7 +1783,8 @@ class Content_Processor {
 			$target_ref,
 			$candidates,
 			$changed,
-			$mismatched
+			$mismatched,
+			$deferred
 		);
 
 		if ( $changed ) {
@@ -1805,6 +1814,9 @@ class Content_Processor {
 				'Target term is not imported into the declared taxonomy.'
 			);
 		}
+		if ( $deferred ) {
+			return Reconcile_Outcome::unresolved( self::DEFERRED_URL_DETAIL );
+		}
 
 		if ( ! $changed ) {
 			return Reconcile_Outcome::unresolved(
@@ -1813,6 +1825,132 @@ class Content_Processor {
 		}
 
 		return Reconcile_Outcome::resolved();
+	}
+
+	/**
+	 * Re-derives a deferred URL after the destination target path is final.
+	 *
+	 * @param int    $affected_post_id Post holding the link.
+	 * @param int    $target_ref       Source post id of its mapped target.
+	 * @param string $source_site_url  Source identity scoping the lookup.
+	 * @return Reconcile_Outcome Result of the URL-only repair.
+	 */
+	public function repair_deferred_link_url(
+		int $affected_post_id,
+		int $target_ref,
+		string $source_site_url
+	): Reconcile_Outcome {
+		$candidates = $this->resolve_target_candidates(
+			$target_ref,
+			'post',
+			$source_site_url
+		);
+		if ( array() === $candidates ) {
+			return Reconcile_Outcome::target_absent(
+				'Target post is not imported on the destination.'
+			);
+		}
+		$post = get_post( $affected_post_id );
+		if ( ! $post instanceof WP_Post || '' === $post->post_content ) {
+			return Reconcile_Outcome::unresolved(
+				'Affected post is missing or has no content.'
+			);
+		}
+
+		$found   = false;
+		$changed = false;
+		$pending = false;
+		$blocks  = $this->repair_link_urls(
+			parse_blocks( $post->post_content ),
+			$candidates,
+			$found,
+			$changed,
+			$pending
+		);
+		if ( $pending ) {
+			return Reconcile_Outcome::unresolved( self::DEFERRED_URL_DETAIL );
+		}
+		if ( ! $found ) {
+			return Reconcile_Outcome::unresolved(
+				'No matching navigation URL found in the post content.'
+			);
+		}
+		if ( $changed ) {
+			if ( ! $this->persist_repointed_content(
+				$affected_post_id,
+				serialize_blocks( $blocks )
+			) ) {
+				return Reconcile_Outcome::write_failed(
+					'Failed to persist the repaired navigation URL.'
+				);
+			}
+			clean_post_cache( $affected_post_id );
+		}
+
+		return Reconcile_Outcome::resolved();
+	}
+
+	/**
+	 * Repairs URL attrs whose ID already names the mapped destination post.
+	 *
+	 * @param array<array<string, mixed>> $blocks     Parsed block tree.
+	 * @param int[]                       $candidates Mapped destination IDs.
+	 * @param bool                        $found      Whether a link matched.
+	 * @param bool                        $changed    Whether its URL changed.
+	 * @param bool                        $pending    Whether a path is not final.
+	 * @return array<array<string, mixed>> Mutated block tree.
+	 */
+	private function repair_link_urls(
+		array $blocks,
+		array $candidates,
+		bool &$found,
+		bool &$changed,
+		bool &$pending
+	): array {
+		foreach ( $blocks as $i => $block ) {
+			$name  = (string) ( $block['blockName'] ?? '' );
+			$attrs = is_array( $block['attrs'] ?? null )
+				? $block['attrs']
+				: array();
+			foreach ( self::POST_ID_BLOCK_ATTRS[ $name ] ?? array() as $rule ) {
+				if ( ! isset( $rule['url_attr'] )
+					|| ! self::gate_passes( $rule, $attrs ) ) {
+					continue;
+				}
+				$dest_id = self::select_candidate( $candidates, 'post', $attrs );
+				if ( $dest_id <= 0
+					|| (int) ( $attrs[ $rule['attr'] ] ?? 0 ) !== $dest_id
+					|| ! is_string( $attrs[ $rule['url_attr'] ] ?? null )
+					|| '' === $attrs[ $rule['url_attr'] ] ) {
+					continue;
+				}
+				$found = true;
+				if ( ! $this->is_post_path_final( $dest_id ) ) {
+					$pending = true;
+					continue;
+				}
+				$repaired = $this->rederive_link_url(
+					$attrs,
+					$rule['url_attr'],
+					$dest_id,
+					'post'
+				);
+				if ( $repaired !== $attrs ) {
+					$blocks[ $i ]['attrs'] = $repaired;
+					$changed               = true;
+				}
+			}
+			if ( is_array( $block['innerBlocks'] ?? null ) ) {
+				$blocks[ $i ]['innerBlocks'] = $this->repair_link_urls(
+					$block['innerBlocks'],
+					$candidates,
+					$found,
+					$changed,
+					$pending
+				);
+			}
+		}
+		return $blocks;
 	}
 
 	/**
@@ -2056,6 +2194,7 @@ class Content_Processor {
 	 * @param int[]                                                                                       $candidates Destination ids, newest first.
 	 * @param bool                                                                                        $changed    Set true, by reference, on any repoint.
 	 * @param bool                                                                                        $mismatched Set true, by reference, on a taxonomy mismatch.
+	 * @param bool                                                                                        $deferred   Set true when a URL cannot be derived yet.
 	 * @return array<array<string, mixed>> Mutated tree.
 	 */
 	private function repoint_refs(
@@ -2065,7 +2204,8 @@ class Content_Processor {
 		int $target_ref,
 		array $candidates,
 		bool &$changed,
-		bool &$mismatched
+		bool &$mismatched,
+		bool &$deferred
 	): array {
 		foreach ( $blocks as $i => $block ) {
 			$name  = isset( $block['blockName'] ) ? (string) $block['blockName'] : '';
@@ -2096,7 +2236,13 @@ class Content_Processor {
 				}
 
 				if ( isset( $rule['url_attr'] ) ) {
-					$attrs = $this->rederive_link_url(
+					$deferred = $deferred || (
+						'post' === $kind
+						&& is_string( $attrs[ $rule['url_attr'] ] ?? null )
+						&& '' !== $attrs[ $rule['url_attr'] ]
+						&& ! $this->is_post_path_final( $dest_id )
+					);
+					$attrs    = $this->rederive_link_url(
 						$attrs,
 						$rule['url_attr'],
 						$dest_id,
@@ -2120,7 +2266,8 @@ class Content_Processor {
 					$target_ref,
 					$candidates,
 					$changed,
-					$mismatched
+					$mismatched,
+					$deferred
 				);
 			}
 		}
@@ -2710,12 +2857,22 @@ class Content_Processor {
 				}
 
 				if ( isset( $rule['url_attr'] ) ) {
-					$attrs = $this->rederive_link_url(
+					$deferred = 'post' === $kind
+						&& is_string( $attrs[ $rule['url_attr'] ] ?? null )
+						&& '' !== $attrs[ $rule['url_attr'] ]
+						&& ! $this->is_post_path_final( $dest_id );
+					$attrs    = $this->rederive_link_url(
 						$attrs,
 						$rule['url_attr'],
 						$dest_id,
 						$kind
 					);
+					if ( $deferred ) {
+						$this->warnings[] = array(
+							'type'      => 'deferred_navigation_url',
+							'source_id' => $source_id,
+						);
+					}
 				}
 			} else {
 				$warning = array(
@@ -2769,13 +2926,13 @@ class Content_Processor {
 			return $attrs;
 		}
 
-		if ( 'term' !== $kind && $this->is_unpublished_post( $dest_id ) ) {
+		if ( 'term' !== $kind && ! $this->is_post_path_final( $dest_id ) ) {
 			return $attrs;
 		}
 
 		$permalink = 'term' === $kind
 			? get_term_link( $dest_id )
-			: get_permalink( $dest_id );
+			: get_permalink( $this->published_post_copy( $dest_id ) );
 
 		if ( ! is_string( $permalink ) ) {
 			return $attrs;
@@ -2800,17 +2957,50 @@ class Content_Processor {
 	}
 
 	/**
-	 * Whether a post target is unpublished, so its permalink is not yet final.
+	 * Whether every slug in a destination post's path is final.
 	 *
 	 * @param int $post_id Destination post id.
-	 * @return bool True for draft, pending, or auto-draft posts.
+	 * @return bool True when the target and all ancestors have final slugs.
 	 */
-	private function is_unpublished_post( int $post_id ): bool {
-		return in_array(
-			get_post_status( $post_id ),
-			array( 'draft', 'pending', 'auto-draft' ),
-			true
-		);
+	public function is_post_path_final( int $post_id ): bool {
+		$seen = array();
+		while ( $post_id > 0 ) {
+			if ( isset( $seen[ $post_id ] ) ) {
+				return false;
+			}
+			$seen[ $post_id ] = true;
+			$post             = get_post( $post_id );
+			if (
+				! $post instanceof WP_Post
+				|| in_array(
+					$post->post_status,
+					array( 'draft', 'pending', 'auto-draft' ),
+					true
+				)
+			) {
+				return false;
+			}
+			$post_id = (int) $post->post_parent;
+		}
+
+		return true;
+	}
+
+	/**
+	 * Returns a post copy with its final permalink behavior enabled.
+	 *
+	 * @param int $post_id Destination post id.
+	 * @return WP_Post|int Published copy, or the original id when absent.
+	 */
+	private function published_post_copy( int $post_id ): WP_Post|int {
+		$post = get_post( $post_id );
+		if ( ! $post instanceof WP_Post ) {
+			return $post_id;
+		}
+
+		$copy              = clone $post;
+		$copy->post_status = 'publish';
+		return $copy;
 	}
 
 	/**

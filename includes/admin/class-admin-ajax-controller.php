@@ -585,6 +585,12 @@ final class Admin_Ajax_Controller {
 					$target_kind,
 					$source_site_url
 				);
+			case 'deferred_navigation_url':
+				return $this->post_import_service->retry_deferred_navigation_url(
+					$affected_post_id,
+					$target_ref,
+					$source_site_url
+				);
 			case 'unmapped_gallery_reference':
 				return $this->post_import_service->retry_gallery_ref_remap(
 					$affected_post_id,

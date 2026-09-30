@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace Safe_Publish\Tests\Integration;
 
+use Safe_Publish\Admin\Attention_Issues_Repository;
 use Safe_Publish\Utils\Options;
 use WP_Ajax_UnitTestCase;
 
@@ -93,6 +94,70 @@ class Bulk_Import_Topological_Sort_Test extends WP_Ajax_UnitTestCase {
 		);
 
 		return count( $posts ) > 0 ? (int) $posts[0]->ID : 0;
+	}
+
+	/**
+	 * Verifies that bulk results expose a deferred URL warning and issue.
+	 */
+	public function test_bulk_import_reports_deferred_navigation_url(): void {
+		// ARRANGE: A source link points to a mapped draft destination page.
+		$target = self::factory()->post->create(
+			array(
+				'post_type'   => 'page',
+				'post_status' => 'draft',
+			)
+		);
+		$this->assertIsInt( $target );
+		update_post_meta( $target, Options::META_SOURCE_POST_ID, 99010 );
+		update_post_meta(
+			$target,
+			Options::META_SOURCE_SITE_URL,
+			'https://source.example.com'
+		);
+		$link                        = wp_json_encode(
+			array(
+				'id'   => 99010,
+				'kind' => 'post-type',
+				'type' => 'page',
+				'url'  => 'https://source.example.com/about',
+			)
+		);
+		$this->source_payloads[5000] = array(
+			'content' => '<!-- wp:navigation -->'
+				. '<!-- wp:navigation-link ' . $link . ' /-->'
+				. '<!-- /wp:navigation -->',
+		);
+
+		// ACT: Import the referring page through the bulk AJAX action.
+		$data = $this->dispatch_bulk_import(
+			array( $this->payload_entry( 5000 ) )
+		);
+
+		// ASSERT: The result warns and Needs attention tracks the mapped link.
+		$this->assertSame( 1, $data['successful'] );
+		$result = $data['results'][0];
+		$this->assertSame(
+			array(
+				array(
+					'type'      => 'deferred_navigation_url',
+					'source_id' => 99010,
+				),
+			),
+			$result['warnings']
+		);
+		$post_id = (int) $result['post_id'];
+		$this->assertNotNull(
+			( new Attention_Issues_Repository() )->get_issue(
+				$post_id,
+				'deferred_navigation_url',
+				99010,
+				'post'
+			)
+		);
+		$this->assertStringContainsString(
+			'"id":' . $target,
+			(string) get_post_field( 'post_content', $post_id )
+		);
 	}
 
 	/**
