@@ -21,6 +21,8 @@ use WP_REST_Request;
  */
 class Diff_Renderer_Filtered_Markup_Test extends Integration_Test_Case {
 
+	use Unfiltered_Html_Trait;
+
 	// Distinct from the example.com URLs the fixtures embed, so the import
 	// rewrite leaves them alone and each case turns on its markup.
 	private const SOURCE         = 'https://source.example.com';
@@ -39,6 +41,8 @@ class Diff_Renderer_Filtered_Markup_Test extends Integration_Test_Case {
 	#[\Override]
 	protected function setUp(): void {
 		parent::setUp();
+
+		$this->grant_current_user_unfiltered_html();
 
 		Source_Post_Type_Resolver::reset_cache();
 
