@@ -619,6 +619,56 @@ class HMAC_Authenticator_Test extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Verifies that a rejected batch sub-request is served as a response.
+	 *
+	 * Batch dispatch hands a rest_pre_dispatch result straight to
+	 * rest_post_dispatch, so a rejection has to arrive in response form. It
+	 * also builds sub-requests without a body, which is where an unset body
+	 * reaches the authenticator.
+	 */
+	public function test_rejected_batch_request_returns_error_response(): void {
+		// ARRANGE: Batch one junk-signed sub-request. The hash of an empty
+		// body matches its unset body, so validation reaches the signature.
+		add_filter(
+			'rest_pre_dispatch',
+			array( $this->authenticator, 'authenticate_request' ),
+			10,
+			3
+		);
+
+		$request = new WP_REST_Request( 'POST', '/batch/v1' );
+		$request->set_body_params(
+			array(
+				'requests' => array(
+					array(
+						'method'  => 'POST',
+						'path'    => '/safe-publish/v1/diff-preview',
+						'headers' => array(
+							'X-Safe-Publish-Timestamp'    => (string) time(),
+							'X-Safe-Publish-Content-Hash' => hash( 'sha256', '' ),
+							'X-Safe-Publish-Site-URL'     => home_url(),
+							'X-Safe-Publish-Signature'    => 'invalid-signature',
+						),
+					),
+				),
+			)
+		);
+
+		// ACT: Dispatch the batch.
+		$response = rest_do_request( $request );
+
+		// ASSERT: The envelope carries the sub-request's rejection.
+		$this->assertSame( 207, $response->get_status() );
+		$sub_response = $response->get_data()['responses'][0];
+		$this->assertSame( 401, $sub_response['status'] );
+		$this->assertSame(
+			'safe_publish_auth_invalid',
+			$sub_response['body']['code']
+		);
+		$this->assertFalse( $this->authenticator->is_authenticated() );
+	}
+
+	/**
 	 * Asserts that a request was rejected with the expected code and status.
 	 *
 	 * @param mixed  $result Value returned by the authenticator.
