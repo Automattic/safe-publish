@@ -550,6 +550,30 @@ class Media_Processor_Matching_Test extends Source_Posts_API_Test_Base {
 	}
 
 	/**
+	 * Verifies that a missed media URL on a source served on a port is recorded
+	 * too, so a ported source still reports what it could not process.
+	 */
+	public function test_ported_source_records_missed_url_as_failure(): void {
+		// ARRANGE: img with an unclosed quote on a source served on a port.
+		$source_site_url = 'https://example.com:8889';
+		$url             = 'https://example.com:8889/photo.jpg';
+		$content         = '<img src="' . $url;
+
+		// ACT: Process content.
+		$this->content_media_processor->process_content(
+			$content,
+			$source_site_url
+		);
+
+		// ASSERT: The ported URL is recorded as unprocessable.
+		$this->assertArrayHasKey(
+			$url,
+			$this->content_media_processor->get_unprocessable_media(),
+			'Missed ported URL should be in unprocessable_media'
+		);
+	}
+
+	/**
 	 * Verifies that a media URL inside a script tag is not imported and the
 	 * script content is preserved exactly.
 	 */

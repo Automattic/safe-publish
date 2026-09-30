@@ -443,6 +443,12 @@ class Content_Media_Processor {
 			return;
 		}
 
+		// A source served on a port writes that port into its media URLs, so
+		// the detection pass has to carry it to see them at all.
+		$source_port = wp_parse_url( $source_site_url, PHP_URL_PORT );
+		$authority   = preg_quote( $source_host, '~' )
+			. ( is_int( $source_port ) ? ':' . $source_port : '' );
+
 		// Strip comments and script/style blocks so URLs inside them don't
 		// trigger false positives. The HTML API natively skips these during
 		// processing, but this detection pass uses a plain regex.
@@ -460,7 +466,7 @@ class Content_Media_Processor {
 		$pattern = '~<(?:img|video|audio|source|embed|object)\b'
 			. '[^<>]*?\s(?:src|poster|srcset|data)\s*=\s*'
 			. '["\']?\s*(https?://'
-			. preg_quote( $source_host, '~' )
+			. $authority
 			. '/[^\s"\'<>]*)~i';
 
 		if ( ! preg_match_all( $pattern, $check_content, $matches ) ) {
