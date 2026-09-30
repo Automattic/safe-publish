@@ -193,7 +193,10 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 		$this->import_under(
 			self::BLOG_URL,
 			7305,
-			array( 'content' => '[gallery id="9700"]' )
+			array(
+				'content'                       => '[gallery id="9700"]',
+				'safe_publish_referenced_media' => array(),
+			)
 		);
 
 		// ASSERT: The row is resolved.
@@ -220,6 +223,7 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 		$dest_id  = $this->seed_target_post( 9700, self::BLOG_URL );
 		$modified = get_post_field( 'post_modified', $post_id );
 		$before   = count( wp_get_post_revisions( $post_id ) );
+		$this->mock_post_overrides['safe_publish_referenced_media'] = array();
 
 		// ACT: Retry the remap.
 		$outcome = $this->import_service->retry_gallery_ref_remap(
@@ -312,6 +316,7 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 			'warning',
 			self::BLOG_URL
 		);
+		$this->mock_post_overrides['safe_publish_referenced_media'] = array();
 
 		// ACT: Retry; source ref already equals the dest id, so no text changes.
 		$outcome = $this->import_service->retry_gallery_ref_remap(

@@ -266,19 +266,20 @@ class Content_Processor {
 			isset( $context['source_post_id'] ) ? (int) $context['source_post_id'] : 0
 		);
 
-		// Remap or strip the singular gallery/playlist `id` post reference.
-		$processed_content = $this->rewrite_gallery_post_references(
-			$processed_content,
+		// Pull before remapping so a failed set fetch leaves a source ID that
+		// the issue retry can still find.
+		$failed_refs = $this->import_referenced_media_sets(
+			$referenced,
 			$source_site_url,
 			$context
 		);
 
-		// Pull each referenced post's rendered set so the remapped shortcode
-		// fills on the destination.
-		$this->import_referenced_media_sets(
-			$referenced,
+		// Remap or strip the singular gallery/playlist `id` post reference.
+		$processed_content = $this->rewrite_gallery_post_references(
+			$processed_content,
 			$source_site_url,
-			$context
+			$context,
+			$failed_refs
 		);
 
 		// Import the bare [gallery]/[playlist] attached set (no rewrite).
@@ -400,12 +401,14 @@ class Content_Processor {
 	 * @param string               $source_site_url Source site URL.
 	 * @param array<string, mixed> $context         process_content() context; reads
 	 *                                              `session_id_map` and `source_post_id`.
+	 * @param array                $failed_refs    Source IDs whose media sets failed to fetch.
 	 * @return string Content with the singular id reference rewritten.
 	 */
 	private function rewrite_gallery_post_references(
 		string $content,
 		string $source_site_url,
-		array $context
+		array $context,
+		array $failed_refs
 	): string {
 		$session_id_map = isset( $context['session_id_map'] )
 			&& is_array( $context['session_id_map'] )
@@ -422,13 +425,16 @@ class Content_Processor {
 
 		$resolver = function ( int $source_id ) use (
 			$session_id_map,
-			$lookup_site_url
+			$lookup_site_url,
+			$failed_refs
 		): int {
-			$dest_id = $this->resolve_gallery_post_reference(
-				$source_id,
-				$session_id_map,
-				$lookup_site_url
-			);
+			$dest_id = in_array( $source_id, $failed_refs, true )
+				? 0
+				: $this->resolve_gallery_post_reference(
+					$source_id,
+					$session_id_map,
+					$lookup_site_url
+				);
 
 			if ( 0 === $dest_id ) {
 				$this->warnings[] = array(
@@ -485,14 +491,15 @@ class Content_Processor {
 	 * @param list<array{tag: string, type: string, source_id: int}> $referenced      Collected references.
 	 * @param string                                                 $source_site_url Source site URL.
 	 * @param array<string, mixed>                                   $context         process_content() context.
+	 * @return list<int> Source IDs whose referenced sets could not be fetched.
 	 */
 	private function import_referenced_media_sets(
 		array $referenced,
 		string $source_site_url,
 		array $context
-	): void {
+	): array {
 		if ( array() === $referenced ) {
-			return;
+			return array();
 		}
 
 		$session_id_map = isset( $context['session_id_map'] )
@@ -509,6 +516,7 @@ class Content_Processor {
 			$source_site_url
 		);
 
+		$failed = array();
 		foreach ( $referenced as $ref ) {
 			$dest_id = $this->resolve_gallery_post_reference(
 				$ref['source_id'],
@@ -520,27 +528,32 @@ class Content_Processor {
 				continue;
 			}
 
-			$this->pull_referenced_set(
+			if ( ! $this->pull_referenced_set(
 				$ref,
 				$dest_id,
 				$source_site_url,
 				$auth,
 				false
-			);
+			) ) {
+				$failed[ $ref['source_id'] ] = $ref['source_id'];
+			}
 		}
+
+		return array_values( $failed );
 	}
 
 	/**
 	 * Sideloads a referenced post's rendered set for one shortcode, applying
-	 * the source menu_order. A dangling or failed item is skipped, not fatal.
-	 * $parent_to_dest parents each item to the referenced post, for the retry
-	 * path that runs outside the persist-time forward pass.
+	 * the source menu_order. A dangling or failed item is skipped; on retry it
+	 * leaves the reference unresolved. $parent_to_dest parents each item to the
+	 * referenced post outside the persist-time forward pass.
 	 *
 	 * @param array{tag: string, type: string, source_id: int} $ref             Collected reference.
 	 * @param int                                              $dest_post_id    Destination referenced post.
 	 * @param string                                           $source_site_url Source site URL.
 	 * @param array                                            $auth            Source REST auth credentials.
 	 * @param bool                                             $parent_to_dest  Parent each item to dest.
+	 * @return bool Whether the set was fetched and, on retry, fully imported.
 	 */
 	private function pull_referenced_set(
 		array $ref,
@@ -548,23 +561,29 @@ class Content_Processor {
 		string $source_site_url,
 		array $auth,
 		bool $parent_to_dest
-	): void {
+	): bool {
 		$dest_post = get_post( $dest_post_id );
 
 		if ( ! ( $dest_post instanceof WP_Post ) ) {
-			return;
+			return false;
 		}
 
 		// Import preserves the post type slug, so B's source REST base resolves
 		// from the destination post's type.
-		$set = $this->media_importer->fetch_referenced_media_set(
+		$fetched = false;
+		$set     = $this->media_importer->fetch_referenced_media_set(
 			$ref['source_id'],
 			$dest_post->post_type,
 			self::reference_mime_group( $ref ),
 			$source_site_url,
-			$auth
+			$auth,
+			$fetched
 		);
+		if ( ! $fetched ) {
+			return false;
+		}
 
+		$complete = true;
 		foreach ( $set as $item ) {
 			$dest_id = $this->media_importer->import_source_media_by_id(
 				$item['id'],
@@ -573,6 +592,9 @@ class Content_Processor {
 			);
 
 			if ( ! is_int( $dest_id ) ) {
+				if ( $parent_to_dest ) {
+					$complete = false;
+				}
 				continue;
 			}
 
@@ -582,6 +604,8 @@ class Content_Processor {
 				$this->parent_attachment( $dest_id, $dest_post_id );
 			}
 		}
+
+		return $complete;
 	}
 
 	/**
@@ -1820,13 +1844,13 @@ class Content_Processor {
 	 * resolvable destination, rewriting the persisted content in place.
 	 *
 	 * Targeted counterpart to the import-time remap: It rewrites only the `id`
-	 * matching $target_ref and persists without a revision or post_modified
-	 * bump.
+	 * matching $target_ref after fetching the referenced media set, and
+	 * persists without a revision or post_modified bump.
 	 *
 	 * @param int    $affected_post_id Post holding the stale reference.
 	 * @param int    $target_ref       Source post ID to repoint.
 	 * @param string $source_site_url  Source identity scoping the lookup.
-	 * @return Reconcile_Outcome Resolved when repointed; target_absent,
+	 * @return Reconcile_Outcome Resolved when fetched and repointed; target_absent,
 	 *                           write_failed, or unresolved otherwise.
 	 */
 	public function repoint_gallery_reference(
@@ -1888,12 +1912,16 @@ class Content_Processor {
 
 		// B is now imported; pull the set the reference renders and parent it
 		// to dest-B.
-		$this->pull_referenced_sets_for_retry(
+		if ( ! $this->pull_referenced_sets_for_retry(
 			$post->post_content,
 			$target_ref,
 			$dest_id,
 			$source_site_url
-		);
+		) ) {
+			return Reconcile_Outcome::unresolved(
+				'Could not import the complete referenced media set.'
+			);
+		}
 
 		// Ref already correct (dest id equals the source id): Nothing to persist.
 		if ( $new_content === $post->post_content ) {
@@ -1925,13 +1953,14 @@ class Content_Processor {
 	 * @param int    $target_ref      Source post ID being repointed.
 	 * @param int    $dest_post_id    Its destination post ID.
 	 * @param string $source_site_url Source site URL.
+	 * @return bool Whether every referenced set was fully imported.
 	 */
 	private function pull_referenced_sets_for_retry(
 		string $content,
 		int $target_ref,
 		int $dest_post_id,
 		string $source_site_url
-	): void {
+	): bool {
 		$auth = Auth_Credential_Provider::get_credentials();
 
 		$references = $this->shortcode_id_rewriter->collect_cross_post_references(
@@ -1939,19 +1968,24 @@ class Content_Processor {
 			0
 		);
 
+		$fetched = true;
 		foreach ( $references as $ref ) {
 			if ( $ref['source_id'] !== $target_ref ) {
 				continue;
 			}
 
-			$this->pull_referenced_set(
+			if ( ! $this->pull_referenced_set(
 				$ref,
 				$dest_post_id,
 				$source_site_url,
 				$auth,
 				true
-			);
+			) ) {
+				$fetched = false;
+			}
 		}
+
+		return $fetched;
 	}
 
 	/**
