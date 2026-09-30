@@ -12,6 +12,7 @@ namespace Safe_Publish\Tests;
 use PHPUnit\Framework\TestCase;
 use Safe_Publish\Admin\Attention_Issues_Repository;
 use Safe_Publish\Admin\History_Repository;
+use Safe_Publish\Admin\Post_Import_Service;
 use Safe_Publish\Admin\Posts_Read_Service;
 use Safe_Publish\API\Post_Type_Fetcher;
 use WP_Error;
@@ -102,7 +103,12 @@ class PostsReadServiceTest extends TestCase {
 			'SAFE_PUBLISH_SHARED_SECRET',
 			'posts-service-test-secret'
 		);
-		$service = $this->service();
+		$import = $this->createMock( Fake_Import_Status_Service::class );
+		$import->expects( $this->once() )
+			->method( 'fetch_imported_posts_by_source_ids' )
+			->with( range( 1, 100 ), $this->anything() )
+			->willReturn( array() );
+		$service = $this->service( null, $import );
 
 		// ACT: Submit 101 raw entries with 100 unique IDs, then 101 unique IDs.
 		$accepted = $service->sync_status_batch(
@@ -164,16 +170,18 @@ class PostsReadServiceTest extends TestCase {
 	/**
 	 * Constructs the public reader with unused dependencies kept inert.
 	 *
-	 * @param Post_Type_Fetcher|null $fetcher Optional source type double.
+	 * @param Post_Type_Fetcher|null   $fetcher Optional source type double.
+	 * @param Post_Import_Service|null $import  Optional import service double.
 	 * @return Posts_Read_Service Public reader.
 	 */
 	private function service(
-		?Post_Type_Fetcher $fetcher = null
+		?Post_Type_Fetcher $fetcher = null,
+		?Post_Import_Service $import = null
 	): Posts_Read_Service {
 		return new Posts_Read_Service(
 			new Fake_Catalog_Source_Posts_API(),
 			new History_Repository(),
-			new Fake_Import_Status_Service(),
+			$import ?? new Fake_Import_Status_Service(),
 			$fetcher ?? $this->createMock( Post_Type_Fetcher::class ),
 			new Attention_Issues_Repository()
 		);
