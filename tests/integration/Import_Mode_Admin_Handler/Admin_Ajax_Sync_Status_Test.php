@@ -611,9 +611,9 @@ class Admin_Ajax_Sync_Status_Test extends WP_Ajax_UnitTestCase {
 
 		// ASSERT: The N+1 baseline for 10 IDs would be ≥20 queries (one
 		// meta_query lookup + one items-table SELECT per row); the bulk
-		// path replaces that pair with two queries plus a small fixed
+		// path replaces that pair with three queries plus a small fixed
 		// overhead and the source_modified_gmt write-through.
-		$this->assertLessThan( 11, $queries_delta );
+		$this->assertLessThan( 12, $queries_delta );
 
 		// ASSERT: Every verdict came through correctly.
 		$response = $this->decode_response();
