@@ -37,6 +37,7 @@ use WP_Post;
 class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 
 	use Failing_Query_Trait;
+	use Unfiltered_Html_Trait;
 
 	/**
 	 * Post import service instance.
@@ -58,6 +59,8 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 	#[\Override]
 	protected function setUp(): void {
 		parent::setUp();
+
+		$this->grant_current_user_unfiltered_html();
 
 		// Intercept wp/v2/media JSON API calls at higher priority than the
 		// base-class image mock (priority 10) so the API endpoint returns

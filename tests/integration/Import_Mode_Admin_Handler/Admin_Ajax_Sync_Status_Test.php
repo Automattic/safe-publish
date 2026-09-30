@@ -90,7 +90,7 @@ class Admin_Ajax_Sync_Status_Test extends WP_Ajax_UnitTestCase {
 	protected function tearDown(): void {
 		remove_filter( 'pre_http_request', array( $this, 'mock_catalog_request' ), 10 );
 		delete_option( Options::OPTION_CONNECTED_SITE_URL );
-		delete_site_transient( Admin_Ajax_Controller::AUTH_STATUS_TRANSIENT );
+		delete_transient( Admin_Ajax_Controller::AUTH_STATUS_TRANSIENT );
 		parent::tearDown();
 	}
 
@@ -612,8 +612,10 @@ class Admin_Ajax_Sync_Status_Test extends WP_Ajax_UnitTestCase {
 		// ASSERT: The N+1 baseline for 10 IDs would be ≥20 queries (one
 		// meta_query lookup + one items-table SELECT per row); the bulk
 		// path replaces that pair with two queries plus a small fixed
-		// overhead and the source_modified_gmt write-through.
-		$this->assertLessThan( 11, $queries_delta );
+		// overhead and the source_modified_gmt write-through. Multisite adds
+		// a constant handful of network lookups — measured flat from 10 to 40
+		// IDs, so the larger budget still catches an N+1.
+		$this->assertLessThan( is_multisite() ? 16 : 11, $queries_delta );
 
 		// ASSERT: Every verdict came through correctly.
 		$response = $this->decode_response();
