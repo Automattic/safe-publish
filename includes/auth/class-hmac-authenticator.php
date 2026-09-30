@@ -89,7 +89,7 @@ class HMAC_Authenticator {
 	 * @param WP_REST_Response|WP_Error|null $result  Response to return instead of continuing.
 	 * @param WP_REST_Server|null            $_server Server instance.
 	 * @param WP_REST_Request                $request Request object.
-	 * @return WP_REST_Response|WP_Error|null Original result on pass-through, or WP_Error on failure.
+	 * @return WP_REST_Response|WP_Error|null Original result on pass-through, or a rejection response on failure.
 	 */
 	public function authenticate_request(
 		WP_REST_Response|WP_Error|null $result,
@@ -151,7 +151,7 @@ class HMAC_Authenticator {
 	 * @param WP_REST_Request                $request REST request object.
 	 * @param array                          $headers Request headers.
 	 * @param WP_REST_Response|WP_Error|null $result  Original result to pass through on success.
-	 * @return WP_REST_Response|WP_Error|null Original result on success, or WP_Error on failure.
+	 * @return WP_REST_Response|WP_Error|null Original result on success, or a rejection response on failure.
 	 */
 	private function authenticate_shared_secret(
 		WP_REST_Request $request,
@@ -163,18 +163,18 @@ class HMAC_Authenticator {
 
 		$shared_secret = $this->shared_secret;
 
-		if ( empty( $shared_secret ) ) {
+		if ( '' === $shared_secret ) {
 			$this->logger->secret_not_configured( $route, $method );
 
-			return new WP_Error(
+			return $this->reject(
 				'safe_publish_auth_no_secret',
 				'Safe Publish shared secret not configured',
-				array( 'status' => 500 )
+				500
 			);
 		}
 
-		$timestamp = (int) $headers['x_safe_publish_timestamp'][0];
-		$signature = $headers['x_safe_publish_signature'][0];
+		$timestamp = (int) ( $headers['x_safe_publish_timestamp'][0] ?? 0 );
+		$signature = $headers['x_safe_publish_signature'][0] ?? '';
 		$max_diff  = $this->get_max_time_diff();
 
 		if ( ! $this->validate_timestamp( $timestamp, $max_diff ) ) {
@@ -189,57 +189,55 @@ class HMAC_Authenticator {
 				$max_diff
 			);
 
-			return new WP_Error(
+			return $this->reject(
 				'safe_publish_auth_expired',
 				sprintf( 'Request timestamp expired (difference: %d seconds)', $time_diff ),
-				array( 'status' => 401 )
+				401
 			);
 		}
 
 		if ( ! isset( $headers['x_safe_publish_content_hash'] ) ) {
 			$this->logger->content_hash_missing( $route, $method );
 
-			return new WP_Error(
+			return $this->reject(
 				'safe_publish_auth_content_hash_missing',
 				'Missing content hash header',
-				array( 'status' => 401 )
+				401
 			);
 		}
 
-		$received_hash = $headers['x_safe_publish_content_hash'][0];
-		$body          = $request->get_body();
+		$received_hash = $headers['x_safe_publish_content_hash'][0] ?? '';
+		$body          = $request->get_body() ?? '';
 
 		if ( ! $this->validate_content_hash( $body, $received_hash ) ) {
 			$this->logger->content_hash_mismatch( $route, $method );
 
-			return new WP_Error(
+			return $this->reject(
 				'safe_publish_auth_content_hash_invalid',
 				'Content hash verification failed',
-				array( 'status' => 401 )
+				401
 			);
 		}
 
-		if ( empty( $this->connected_site_url ) ) {
+		if ( '' === $this->connected_site_url ) {
 			$this->logger->connected_url_not_configured( $route, $method );
 
-			return new WP_Error(
+			return $this->reject(
 				'safe_publish_auth_no_connected_site_url',
 				'Safe Publish connected site URL not configured',
-				array( 'status' => 500 )
+				500
 			);
 		}
 
-		$request_site_url = isset( $headers['x_safe_publish_site_url'] )
-			? $headers['x_safe_publish_site_url'][0]
-			: '';
+		$request_site_url = $headers['x_safe_publish_site_url'][0] ?? '';
 
-		if ( empty( $request_site_url ) ) {
+		if ( '' === $request_site_url ) {
 			$this->logger->site_url_header_missing( $route, $method );
 
-			return new WP_Error(
+			return $this->reject(
 				'safe_publish_auth_site_url_missing',
 				'Missing X-Safe-Publish-Site-URL header',
-				array( 'status' => 401 )
+				401
 			);
 		}
 
@@ -251,16 +249,14 @@ class HMAC_Authenticator {
 				$this->connected_site_url
 			);
 
-			return new WP_Error(
+			return $this->reject(
 				'safe_publish_auth_site_url_mismatch',
 				'Request origin does not match the configured connected site URL',
-				array( 'status' => 403 )
+				403
 			);
 		}
 
-		$action = isset( $headers['x_safe_publish_action'] )
-			? (string) $headers['x_safe_publish_action'][0]
-			: '';
+		$action = (string) ( $headers['x_safe_publish_action'][0] ?? '' );
 
 		if ( ! $this->validate_signature(
 			$signature,
@@ -279,10 +275,10 @@ class HMAC_Authenticator {
 				strlen( $signature )
 			);
 
-			return new WP_Error(
+			return $this->reject(
 				'safe_publish_auth_invalid',
 				'Invalid Safe Publish authentication signature',
-				array( 'status' => 401 )
+				401
 			);
 		}
 
@@ -324,6 +320,27 @@ class HMAC_Authenticator {
 		}
 
 		return $result;
+	}
+
+	/**
+	 * Builds the rejection returned from the dispatch filter.
+	 *
+	 * Returns a response, not a WP_Error: Not every dispatch path converts an
+	 * error into a response before passing the result on.
+	 *
+	 * @param string $code    Error code.
+	 * @param string $message Error message.
+	 * @param int    $status  HTTP status code.
+	 * @return WP_REST_Response Rejection to serve instead of the request.
+	 */
+	private function reject(
+		string $code,
+		string $message,
+		int $status
+	): WP_REST_Response {
+		return rest_convert_error_to_response(
+			new WP_Error( $code, $message, array( 'status' => $status ) )
+		);
 	}
 
 	/**
