@@ -472,7 +472,8 @@ class Source_Media_REST_Field {
 		$urls    = array_merge(
 			$urls,
 			$this->line_broken_attribute_urls( $content, $host ),
-			$this->line_broken_block_urls( $content, $host )
+			$this->line_broken_block_urls( $content, $host ),
+			$this->line_broken_shortcode_urls( $content, $host )
 		);
 
 		if ( array() === $urls ) {
@@ -576,7 +577,11 @@ class Source_Media_REST_Field {
 	 * @return list<string> Normalized same-host block attribute URLs.
 	 */
 	private function line_broken_block_urls( string $content, string $host ): array {
-		if ( false === strpos( $content, '<!-- wp:' ) ) {
+		// JSON encodes line breaks with backslashes, so most blocks need no parse.
+		if (
+			false === strpos( $content, '<!-- wp:' )
+			|| false === strpos( $content, '\\' )
+		) {
 			return array();
 		}
 
@@ -648,6 +653,76 @@ class Source_Media_REST_Field {
 
 			if ( null !== $url ) {
 				$urls[] = $url;
+			}
+		}
+
+		return $urls;
+	}
+
+	/**
+	 * Reads line-broken media URLs from live audio and video shortcodes.
+	 *
+	 * @param string $content Raw post content.
+	 * @param string $host    Source site host.
+	 * @return list<string> Normalized same-host shortcode URLs.
+	 */
+	private function line_broken_shortcode_urls(
+		string $content,
+		string $host
+	): array {
+		if (
+			false === strpbrk( $content, "\t\n\r" )
+			|| (
+				false === stripos( $content, '[audio' )
+				&& false === stripos( $content, '[video' )
+			)
+		) {
+			return array();
+		}
+
+		$shortcode_pattern = '#\[(\[?)(audio|video)(?![\w-])([^\]]*)\](\]?)#';
+		$count             = preg_match_all(
+			$shortcode_pattern,
+			$content,
+			$matches,
+			PREG_SET_ORDER
+		);
+
+		if ( ! is_int( $count ) || 0 === $count ) {
+			return array();
+		}
+
+		$url_pattern = '#^https?://' . preg_quote( $host, '#' )
+			. '/[^\s"\'<>()]+$#i';
+		$urls        = array();
+
+		foreach ( $matches as $match ) {
+			if ( '[' === $match[1] && ']' === $match[4] ) {
+				continue;
+			}
+
+			$allowed = 'audio' === $match[2]
+				? array_merge( array( 'src' ), wp_get_audio_extensions() )
+				: array_merge( array( 'src', 'poster' ), wp_get_video_extensions() );
+			$attrs   = shortcode_parse_atts( $match[3] );
+
+			if ( ! is_array( $attrs ) ) {
+				continue;
+			}
+
+			foreach ( $attrs as $name => $value ) {
+				if ( ! in_array( $name, $allowed, true ) ) {
+					continue;
+				}
+
+				$url = $this->normalized_line_broken_url(
+					$value,
+					$url_pattern
+				);
+
+				if ( null !== $url ) {
+					$urls[] = $url;
+				}
 			}
 		}
 

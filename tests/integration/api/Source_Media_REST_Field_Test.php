@@ -375,6 +375,116 @@ class Source_Media_REST_Field_Test extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Verifies that live media shortcode URL attributes retain library metadata
+	 * across line breaks while escaped shortcodes are ignored.
+	 */
+	public function test_field_maps_line_broken_shortcode_urls(): void {
+		// ARRANGE: Video, poster, and audio URLs break within quoted values.
+		$parent = self::factory()->post->create();
+		$this->assertIsInt( $parent );
+		$video   = $this->seed_attachment( '2025/01/clip.mp4', 'Video' );
+		$poster  = $this->seed_attachment( '2025/01/poster.jpg', 'Poster' );
+		$audio   = $this->seed_attachment( '2025/01/track.mp3', 'Audio' );
+		$escaped = $this->seed_attachment( '2025/01/escaped.mp4' );
+		wp_update_post(
+			array(
+				'ID'             => $video['id'],
+				'post_mime_type' => 'video/mp4',
+				'post_parent'    => $parent,
+			)
+		);
+		wp_update_post(
+			array(
+				'ID'             => $audio['id'],
+				'post_mime_type' => 'audio/mpeg',
+			)
+		);
+		$content = '[video src="'
+			. str_replace( 'clip', "cl\nip", $video['url'] )
+			. '" poster="'
+			. str_replace( 'poster', "po\tster", $poster['url'] )
+			. '"] [audio mp3="'
+			. str_replace( 'track', "tr\rack", $audio['url'] )
+			. '"] [[video src="'
+			. str_replace( 'escaped', "es\ncaped", $escaped['url'] )
+			. '"]]';
+		$post_id = self::factory()->post->create(
+			array( 'post_content' => $content )
+		);
+		$this->force_hmac_authenticated( true );
+
+		// ACT: Export the post's media metadata.
+		$response = $this->server->dispatch(
+			new WP_REST_Request( 'GET', '/wp/v2/posts/' . $post_id )
+		);
+
+		// ASSERT: Only live URLs key their complete source library records.
+		$this->assertSame( 200, $response->get_status() );
+		$this->assertSame(
+			array(
+				$video['url']  => array(
+					'alt'         => 'Video alt',
+					'title'       => 'Video title',
+					'caption'     => 'Video caption',
+					'description' => 'Video description',
+					'parent'      => (string) $parent,
+				),
+				$poster['url'] => array(
+					'alt'         => 'Poster alt',
+					'title'       => 'Poster title',
+					'caption'     => 'Poster caption',
+					'description' => 'Poster description',
+					'parent'      => '0',
+				),
+				$audio['url']  => array(
+					'alt'         => 'Audio alt',
+					'title'       => 'Audio title',
+					'caption'     => 'Audio caption',
+					'description' => 'Audio description',
+					'parent'      => '0',
+				),
+			),
+			$response->get_data()['safe_publish_media']
+		);
+	}
+
+	/**
+	 * Verifies that single-quoted shortcode URLs and their query strings map to
+	 * attachments without collecting unsupported attributes or shortcode names.
+	 */
+	public function test_field_maps_single_quoted_shortcode_urls(): void {
+		// ARRANGE: Audio src and video codec URLs carry internal line breaks.
+		$audio   = $this->seed_attachment( '2025/01/voice.mp3', 'Audio' );
+		$video   = $this->seed_attachment( '2025/01/codec.mp4', 'Video' );
+		$ignored = $this->seed_attachment( '2025/01/ignored.jpg' );
+		$content = "[audio src='"
+			. str_replace( 'voice', "vo\nice", $audio['url'] )
+			. "?v=1'] [video mp4='"
+			. str_replace( 'codec', "co\tdec", $video['url'] )
+			. "'] [video data-url='"
+			. str_replace( 'ignored', "ig\nnored", $ignored['url'] )
+			. "'] [video-extra src='"
+			. str_replace( 'ignored', "ig\nnored", $ignored['url'] )
+			. "']";
+		$post_id = self::factory()->post->create(
+			array( 'post_content' => $content )
+		);
+		$this->force_hmac_authenticated( true );
+
+		// ACT: Export the post's media metadata.
+		$response = $this->server->dispatch(
+			new WP_REST_Request( 'GET', '/wp/v2/posts/' . $post_id )
+		);
+
+		// ASSERT: The query is stripped and only importable attrs are mapped.
+		$this->assertSame( 200, $response->get_status() );
+		$this->assertSame(
+			array( $audio['url'], $video['url'] ),
+			array_keys( $response->get_data()['safe_publish_media'] )
+		);
+	}
+
+	/**
 	 * Verifies that a plain URL ending before a line break is not joined to the
 	 * next word when the export collects library metadata.
 	 */
