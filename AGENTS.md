@@ -4,7 +4,7 @@
 
 - Analyze and verify human input before agreeing with it. Prioritize truth over agreement.
 - Never provide answers based on unverified or vague assumptions.
-- Before calling a defect unreachable or not worth fixing, prove the verdict with a throwaway integration test; reading the code establishes the mechanism, not the outcome.
+- Prove a defect with a throwaway probe or test before you claim it, file it, or call it unreachable or not worth fixing; reading the code establishes the mechanism, not the outcome.
 - Focus on being helpful and accurate. If uncertain about something, ask clarifying questions.
 - Read any provided instruction files in their entirety.
 
@@ -16,11 +16,12 @@
 ## Files
 
 - Use `trash` instead of `rm` when deleting files or folders. No flags needed for directories.
+- Keep throwaway scripts, tests, and notes in the git-ignored `.scratch/`; `trash` them once they are unneeded.
 
 ## Customer data
 
 - Beware when working on private tickets, or any information that contains customer data.
-- Never publish customer-identifying data — names, hostnames, URLs, account/site IDs, emails, or environment specifics — to the GitHub repo. This covers code and test fixtures, comments, commit messages, branch names, and PR/issue titles, descriptions, and comments.
+- Never publish customer-identifying data — names, hostnames, URLs, account/site IDs, emails, or environment specifics — to the GitHub repo. This covers code and test fixtures, comments, commit messages, branch names, screenshots, and PR/issue titles, descriptions, and comments.
 - When reproducing a customer-reported bug, replace any customer-identifying values from the report with neutral placeholders (e.g. `example.com`, `/blog`) before committing. Real values can stay in a private tracker.
 - If such data is pushed by mistake, treat it as a disclosure incident: notify the team, then scrub it from history and force-push — and note that on a public repo the force-pushed commit stays reachable until purged via GitHub Support.
 
@@ -56,13 +57,25 @@ These apply to comments in every language, not just PHP.
 - Implement tight assertions, prefer using `assertSame()` over `assertEquals()`.
 - Structure test bodies with `// ARRANGE:`, `// ACT:`, and `// ASSERT:` comments, with a short description.
 - When creating tests, temporarily mutate them to verify they fail when they should.
+- Restore a mutation from a copy under `.scratch/`, never with `git checkout` — that discards uncommitted work too. Confirm no mutation survives into the commit.
+- When a mutation changes nothing, establish which of three it is: the test is weak (strengthen it), the mutated code is shadowed by a duplicate check elsewhere (pin the ordering with an assertion, or drop the duplication), or it is deliberate defensive depth the suite cannot reach (keep it and record why in a comment).
 - When adding or hoisting shared setup, delete it and re-run: if nothing fails, no test depends on it. Have a positive-asserting test depend on it — denial assertions (403, 404, empty result) can pass for the wrong reason.
+- For every bug fix, establish why the suite missed it, then add or adjust the test that would have caught it.
 
-## PRs
+## Review loop
 
-- Keep PR and branch titles short and as identical as possible.
+- After implementing, review the session's changes for security issues, defects, gaps, simplification opportunities, code or comments the change left stale, outdated docs, unwanted side effects, and anything still missing.
+- Repeat until a pass finds nothing new.
+
+## Issues and PRs
+
+- Follow the templates under `.github/`, including when passing `--body` to `gh` skips them.
+- Label issues from the capitalized set (`Bug`, `Enhancement`, `Maintenance`, and so on); lowercase labels belong to GitHub and bots. Ask when none fit.
+- Match the issue title to its label: a `Bug` states the defect, an `Enhancement` states the change in the imperative.
+- Branch with a `fix/`, `add/`, or `update/` prefix, or another that fits.
+- Use short, imperative commit messages, PR titles, and branch titles; keep the PR and branch titles as identical as possible.
 - Keep PR descriptions short, focusing on decisions instead of small technical details; don't add any line wrapping.
-- Before creating a PR, ensure all tests pass by running `npm run test` and `npm run test:integration`.
+- Before creating a PR, ensure all tests pass by running `npm run test`, `npm run test:integration`, and `npm run test:e2e`.
 
 ## Code-review skill
 
@@ -85,7 +98,7 @@ Generally available and used by customers; anything introducing breaking changes
 
 - If whitespace issues occur during replacement, use `npm run fix` before trying to manually fix.
 - After applying changes, run `npm run fix` and then `npm run check`. Fix and repeat as needed. Disregard issues unrelated to our changes.
-- Run unit tests with `npm run test` and integration tests with `npm run test:integration`.
+- Run unit tests with `npm run test`, integration tests with `npm run test:integration`, and end-to-end tests with `npm run test:e2e`.
 - When adjustments are made to the single import/update path, verify whether identical changes are needed to the bulk import/update path, and vice versa.
 
 ## Worktrees
@@ -110,10 +123,11 @@ Use these sources of truth:
 When WordPress or PHP compatibility changes, or the plugin's minimum WordPress or PHP version changes, update all of the following together:
 
 1. In `.github/workflows/integration-tests.yml`, list every stable WordPress major/minor release from the plugin's minimum through the current release, and every PHP major/minor release from the plugin's minimum through the newest version supported by at least one of those WordPress releases. Add an `exclude` entry for every combination marked unsupported by WordPress. Keep every supported combination running on every pull request.
-2. In `.github/workflows/e2e-tests.yml`, include every supported WordPress major/minor release once, paired with the highest PHP version that release supports.
-3. In `.github/workflows/unit-tests.yml`, test every PHP major/minor version from the plugin's minimum through the newest PHP version represented in the integration matrix.
-4. In `.github/workflows/static-checks.yml`, run PHP checks on the plugin's minimum PHP version.
-5. Verify each stable `WordPress/WordPress#X.Y-branch` ref exists, parse every workflow as YAML, and run `npm run fix` followed by `npm run check`.
+2. In the same file, keep the multisite job covering every supported WordPress major/minor release once, paired with the highest PHP version that release supports — multisite is an install mode, not a PHP-compatibility axis, so it does not need the full matrix — and keep the aggregate check gating on both jobs.
+3. In `.github/workflows/e2e-tests.yml`, include every supported WordPress major/minor release once, paired with the highest PHP version that release supports.
+4. In `.github/workflows/unit-tests.yml`, test every PHP major/minor version from the plugin's minimum through the newest PHP version represented in the integration matrix.
+5. In `.github/workflows/static-checks.yml`, run PHP checks on the plugin's minimum PHP version.
+6. Verify each stable `WordPress/WordPress#X.Y-branch` ref exists, parse every workflow as YAML, and run `npm run fix` followed by `npm run check`.
 
 The integration commands use wp-env's `/wordpress-phpunit` mount so the test library matches each matrix row; don't replace it with the Composer-pinned minimum-version test library in CI.
 
