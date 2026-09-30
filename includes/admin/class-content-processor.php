@@ -812,9 +812,15 @@ class Content_Processor {
 		$current_site_url = get_site_url();
 		$source_host      = wp_parse_url( $source_site_url, PHP_URL_HOST );
 		$current_host     = wp_parse_url( $current_site_url, PHP_URL_HOST );
+		$source_port      = wp_parse_url( $source_site_url, PHP_URL_PORT );
+		$current_port     = wp_parse_url( $current_site_url, PHP_URL_PORT );
 
-		// Skip if URLs are the same.
-		if ( $source_host === $current_host ) {
+		// Skip if URLs are the same. The same host on another port is another
+		// site, so both have to agree before the content is left alone.
+		if (
+			$source_host === $current_host
+			&& $source_port === $current_port
+		) {
 			return $content;
 		}
 
@@ -826,9 +832,13 @@ class Content_Processor {
 		// Match both http and https variants of the source URL so that legacy
 		// http:// references are also replaced. The lookahead prevents partial
 		// domain matches (e.g., "source.example.com" must not match inside
-		// "source.example.company.com").
+		// "source.example.company.com"). The source's own port is optional, so
+		// a URL carrying it has the port consumed instead of left behind the
+		// replacement URL's port. Excluding ":" from the lookahead keeps any
+		// other port from matching at all.
 		$pattern = '/https?:\/\/' . preg_quote( $source_host, '/' )
-			. '(?=[^a-zA-Z0-9.]|$)/';
+			. ( is_int( $source_port ) ? '(?::' . $source_port . ')?' : '' )
+			. '(?=[^a-zA-Z0-9.:]|$)/';
 
 		$result = preg_replace( $pattern, $current_site_url, $content );
 
