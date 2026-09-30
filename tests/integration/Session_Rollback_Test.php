@@ -24,6 +24,7 @@ use WP_Error;
 class Session_Rollback_Test extends Integration_Test_Case {
 
 	use Failing_Query_Trait;
+	use Unfiltered_Html_Trait;
 
 	/**
 	 * Probe post type registered exclude_from_search.
@@ -60,6 +61,8 @@ class Session_Rollback_Test extends Integration_Test_Case {
 	#[\Override]
 	protected function setUp(): void {
 		parent::setUp();
+
+		$this->grant_current_user_unfiltered_html();
 
 		$this->repository       = new History_Repository();
 		$this->rollback_service = new Session_Rollback_Service( $this->repository );
@@ -962,7 +965,9 @@ class Session_Rollback_Test extends Integration_Test_Case {
 		register_taxonomy( 'sp_atomic_taxonomy', 'post' );
 
 		try {
-			$deleted_author = $this->factory()->user->create();
+			// Non-existent ID, not a deleted one: on multisite
+			// wp_delete_user() only unlinks the user from the site.
+			$missing_author = 999999;
 			$deleted_parent = $this->factory()->post->create();
 			$previous_image = $this->factory()->attachment->create(
 				array( 'post_mime_type' => 'application/pdf' )
@@ -971,7 +976,6 @@ class Session_Rollback_Test extends Integration_Test_Case {
 			$current_term   = wp_insert_term( 'Current Term', 'sp_atomic_taxonomy' );
 			$this->assertIsArray( $deleted_term );
 			$this->assertIsArray( $current_term );
-			wp_delete_user( $deleted_author );
 			wp_delete_post( $deleted_parent, true );
 			wp_delete_term( (int) $deleted_term['term_id'], 'sp_atomic_taxonomy' );
 			register_taxonomy( '123', 'post' );
@@ -987,7 +991,7 @@ class Session_Rollback_Test extends Integration_Test_Case {
 						'sp_atomic_taxonomy'  => array( (int) $deleted_term['term_id'] ),
 						'123'                 => array( (int) $previous_term['term_id'] ),
 					),
-					'previous_author'         => $deleted_author,
+					'previous_author'         => $missing_author,
 					'previous_parent'         => $deleted_parent,
 					'previous_post_type'      => 'sp_missing_type',
 					'previous_featured_image' => $previous_image,
@@ -1049,7 +1053,7 @@ class Session_Rollback_Test extends Integration_Test_Case {
 				array( (int) $deleted_term['term_id'] ),
 				$omissions[1]['term_ids']
 			);
-			$this->assertSame( $deleted_author, $omissions[2]['id'] );
+			$this->assertSame( $missing_author, $omissions[2]['id'] );
 			$this->assertSame( $deleted_parent, $omissions[3]['id'] );
 			$this->assertSame( 'sp_missing_type', $omissions[4]['slug'] );
 			$this->assertSame( $previous_image, $omissions[5]['id'] );
