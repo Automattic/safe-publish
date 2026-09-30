@@ -34,6 +34,14 @@ module.exports = {
 				],
 				exclude: /node_modules/,
 			},
+			{
+				test: /[\\/]dataviews-item-actions[\\/]index\.js$/,
+				include: /[\\/]dataviews[\\/]build-module[\\/]/,
+				loader: path.resolve(
+					__dirname,
+					'webpack.kebab-case-loader.js'
+				),
+			},
 		],
 	},
 	optimization: {
