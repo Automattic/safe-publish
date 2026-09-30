@@ -7,16 +7,16 @@
 
 declare(strict_types=1);
 
-function get_site_transient( string $key ): mixed {
-	return $GLOBALS['_test_site_transients'][ $key ] ?? false;
+function get_transient( string $key ): mixed {
+	return $GLOBALS['_test_transients'][ $key ] ?? false;
 }
 
-function set_site_transient(
+function set_transient(
 	string $key,
 	mixed $value,
 	int $_expiration = 0
 ): bool {
-	$GLOBALS['_test_site_transients'][ $key ] = $value;
+	$GLOBALS['_test_transients'][ $key ] = $value;
 	return true;
 }
 
