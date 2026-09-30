@@ -23,7 +23,7 @@ use WP_Error;
  */
 final class Connection_Service {
 
-	/** Site transient key for the cached auth probe. */
+	/** Per-site transient key for the cached auth probe. */
 	public const AUTH_STATUS_TRANSIENT = 'safe_publish_auth_status';
 
 	/** Auth probe cache lifetime in seconds. */
@@ -125,19 +125,22 @@ final class Connection_Service {
 	// phpcs:enable Generic.CodeAnalysis.UnusedFunctionParameter.Found
 
 	/**
-	 * Deletes the cached auth-status site transient.
+	 * Deletes the cached auth-status transient for the current site.
 	 */
 	public static function bust_auth_status_cache(): void {
-		delete_site_transient( self::AUTH_STATUS_TRANSIENT );
+		delete_transient( self::AUTH_STATUS_TRANSIENT );
 	}
 
 	/**
 	 * Returns the cached auth-status probe result, refreshing it if absent.
 	 *
+	 * The cache is per-site: on multisite each site configures its own source,
+	 * so a network-wide slot would serve one site's verdict to every other.
+	 *
 	 * @return array Probe result from VIP_Safe_Auth::test_authorization().
 	 */
 	private function get_cached_auth_status(): array {
-		$cached = get_site_transient( self::AUTH_STATUS_TRANSIENT );
+		$cached = get_transient( self::AUTH_STATUS_TRANSIENT );
 		if ( is_array( $cached ) && isset( $cached['status'] ) ) {
 			return $cached;
 		}
@@ -147,7 +150,7 @@ final class Connection_Service {
 			Auth_Credential_Provider::get_credentials()
 		);
 
-		set_site_transient(
+		set_transient(
 			self::AUTH_STATUS_TRANSIENT,
 			$result,
 			self::AUTH_STATUS_TTL

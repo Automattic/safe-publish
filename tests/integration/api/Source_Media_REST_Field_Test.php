@@ -15,6 +15,7 @@ use Safe_Publish\API\Source_Media_REST_Field;
 use Safe_Publish\Auth\Auth_Logger;
 use Safe_Publish\Auth\HMAC_Authenticator;
 use Safe_Publish\Auth\Permission_Manager;
+use Safe_Publish\Tests\Integration\Unfiltered_Html_Trait;
 use ReflectionClass;
 use WP_REST_Request;
 use WP_REST_Server;
@@ -29,6 +30,8 @@ use WP_UnitTestCase;
  * attachment record.
  */
 class Source_Media_REST_Field_Test extends WP_UnitTestCase {
+
+	use Unfiltered_Html_Trait;
 
 	/**
 	 * REST server instance used for dispatching requests.
@@ -676,6 +679,7 @@ class Source_Media_REST_Field_Test extends WP_UnitTestCase {
 		wp_set_current_user(
 			self::factory()->user->create( array( 'role' => 'administrator' ) )
 		);
+		$this->grant_current_user_unfiltered_html();
 		$post_id = self::factory()->post->create(
 			array(
 				'post_content' => '<img srcset="' . $image['sized_url']
