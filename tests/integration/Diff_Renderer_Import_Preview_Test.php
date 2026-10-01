@@ -346,6 +346,37 @@ class Diff_Renderer_Import_Preview_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that an image whose attachment class was changed here reports in
+	 * the block view, as it does in the content diff.
+	 */
+	public function test_image_class_change_reports_in_the_block_view(): void {
+		// ARRANGE: Import an image block, then change only its class here.
+		$source = $this->image_block( self::IMAGE_URL );
+		$this->store_imported( $source );
+		$edited = preg_replace(
+			'/wp-image-\d+/',
+			'wp-image-424242',
+			(string) get_post_field( 'post_content', $this->post_id )
+		);
+		wp_update_post(
+			array(
+				'ID'           => $this->post_id,
+				'post_content' => wp_slash( (string) $edited ),
+			)
+		);
+
+		// ACT: Compare against the untouched source.
+		$result = $this->render_diff( $source );
+
+		// ASSERT: Both views report the change.
+		$this->assertSame(
+			array( 'core/image' ),
+			$this->modified_block_names( $result )
+		);
+		$this->assertNotSame( '', $result['contentDiffHtml'] );
+	}
+
+	/**
 	 * Builds the fixture content: a reusable-block reference, an internal
 	 * link, a nav link, and an image, plus a paragraph a test can edit.
 	 *

@@ -672,9 +672,6 @@ final class Diff_Renderer {
 			// Normalize self-closing tags spacing.
 			$html = preg_replace( '/\s+\/>/', '/>', $html );
 
-			// Normalize wp-image-* numeric class volatility (retain class marker).
-			$html = preg_replace( '/wp-image-\d+/', 'wp-image-XXX', $html );
-
 			// Trim again.
 			return trim( $html );
 		};
