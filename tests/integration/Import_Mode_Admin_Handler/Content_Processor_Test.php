@@ -2503,6 +2503,166 @@ class Content_Processor_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that a failed protocol-relative image names the requested URL.
+	 */
+	public function test_failed_protocol_relative_image_names_requested_url(): void {
+		// ARRANGE: A core/image block with a protocol-relative source URL.
+		// The link triggers the existing block media pass.
+		$raw_url = '//source.example.com/gone.jpg';
+		$url     = 'https://source.example.com/gone.jpg';
+		$content = '<!-- wp:image {"url":"' . $raw_url . '"} -->'
+			. '<figure class="wp-block-image"><img src="' . $raw_url . '"/></figure>'
+			. '<!-- /wp:image -->'
+			. '<p>Source <a href="https://source.example.com/page">page</a></p>';
+
+		// ACT: Force the resolved download to fail.
+		$this->process_with_all_downloads_failing( $content );
+
+		// ASSERT: The report names the URL actually requested and its block.
+		$this->assertSame(
+			array( $url => 'core/image' ),
+			$this->processor->get_failed_media()
+		);
+		$this->assertContains( $url, $this->requested_urls );
+		$this->assertSame(
+			'Import failed: 1 media file(s) could not be downloaded: '
+				. $url . ' (core/image)',
+			$this->processor->get_failed_media_error_message()
+		);
+	}
+
+	/**
+	 * Verifies that a failed srcset URL names the resolved request URL.
+	 */
+	public function test_failed_srcset_names_requested_url(): void {
+		// ARRANGE: Classic content with a protocol-relative srcset candidate.
+		$raw_url = '//source.example.com/gone-2x.jpg';
+		$url     = 'https://source.example.com/gone-2x.jpg';
+		$content = '<img src="https://third.example.com/other.jpg" srcset="'
+			. $raw_url . ' 2x">';
+
+		// ACT: Force the resolved download to fail.
+		$this->process_with_all_downloads_failing( $content );
+
+		// ASSERT: The failed candidate reports the URL actually requested.
+		$this->assertContains( $url, $this->requested_urls );
+		$this->assertSame( array( $url => '' ), $this->processor->get_failed_media() );
+		$this->assertSame(
+			'Import failed: 1 media file(s) could not be downloaded: ' . $url,
+			$this->processor->get_failed_media_error_message()
+		);
+	}
+
+	/**
+	 * Verifies that a failed shortcode URL names the requested URL.
+	 */
+	public function test_failed_shortcode_names_requested_url(): void {
+		// ARRANGE: A video shortcode with a protocol-relative source URL.
+		$raw_url = '//source.example.com/gone.mp4';
+		$url     = 'https://source.example.com/gone.mp4';
+		$content = '[video src="' . $raw_url . '"]';
+
+		// ACT: Force the resolved download to fail.
+		$this->process_with_all_downloads_failing( $content );
+
+		// ASSERT: The failed shortcode reports the URL actually requested.
+		$this->assertContains( $url, $this->requested_urls );
+		$this->assertSame( array( $url => '' ), $this->processor->get_failed_media() );
+		$this->assertSame(
+			'Import failed: 1 media file(s) could not be downloaded: ' . $url,
+			$this->processor->get_failed_media_error_message()
+		);
+	}
+
+	/**
+	 * Verifies that query variants of a failed block media URL share one report key.
+	 */
+	public function test_failed_block_query_variants_name_one_request_url(): void {
+		// ARRANGE: Two image blocks resolve to the same download URL.
+		$url     = 'https://source.example.com/gone-block.jpg';
+		$content = '';
+		foreach ( array( '?v=1', '?v=2' ) as $query ) {
+			$variant  = $url . $query;
+			$content .= '<!-- wp:image {"url":"' . $variant . '"} -->'
+				. '<figure class="wp-block-image"><img src="' . $variant . '"/></figure>'
+				. '<!-- /wp:image -->';
+		}
+
+		// ACT: Fail the first download; the second variant uses the failure cache.
+		$this->process_with_all_downloads_failing( $content );
+
+		// ASSERT: The shared download has one block-labeled report entry.
+		$this->assert_failed_query_variants( $url, 'core/image' );
+	}
+
+	/**
+	 * Verifies that query variants in inline image attrs share one report key.
+	 */
+	public function test_failed_inline_query_variants_name_one_request_url(): void {
+		// ARRANGE: Two classic images differ only by their query strings.
+		$url     = 'https://source.example.com/gone-inline.jpg';
+		$content = '<img src="' . $url . '?v=1"><img src="' . $url . '?v=2">';
+
+		// ACT: Fail the first download; the second variant uses the failure cache.
+		$this->process_with_all_downloads_failing( $content );
+
+		// ASSERT: The report names the URL actually requested.
+		$this->assert_failed_query_variants( $url, '' );
+	}
+
+	/**
+	 * Verifies that query variants in srcset share one failed request URL.
+	 */
+	public function test_failed_srcset_query_variants_name_one_request_url(): void {
+		// ARRANGE: Two candidates use the same media path.
+		$url     = 'https://source.example.com/gone-srcset.jpg';
+		$content = '<img src="https://third.example.com/other.jpg" srcset="'
+			. $url . '?v=1 1x, ' . $url . '?v=2 2x">';
+
+		// ACT: Fail the first download; the second variant uses the failure cache.
+		$this->process_with_all_downloads_failing( $content );
+
+		// ASSERT: The shared download has one report entry.
+		$this->assert_failed_query_variants( $url, '' );
+	}
+
+	/**
+	 * Verifies that query variants in shortcodes share one failed request URL.
+	 */
+	public function test_failed_shortcode_query_variants_name_one_request_url(): void {
+		// ARRANGE: Two video shortcodes use the same media path.
+		$url     = 'https://source.example.com/gone-video.mp4';
+		$content = '[video src="' . $url . '?v=1"]'
+			. '[video src="' . $url . '?v=2"]';
+
+		// ACT: Fail the first download; the second variant uses the failure cache.
+		$this->process_with_all_downloads_failing( $content );
+
+		// ASSERT: The report names the shared request URL.
+		$this->assert_failed_query_variants( $url, '' );
+	}
+
+	/**
+	 * Asserts that query variants use and report one query-free URL.
+	 *
+	 * @param string $url        Expected request URL.
+	 * @param string $block_name Expected originating block name.
+	 */
+	private function assert_failed_query_variants( string $url, string $block_name ): void {
+		$this->assertSame( array( $url ), $this->requested_urls );
+		$this->assertSame(
+			array( $url => $block_name ),
+			$this->processor->get_failed_media()
+		);
+		$this->assertSame( array(), $this->processor->get_unprocessable_media() );
+		$this->assertSame(
+			'Import failed: 1 media file(s) could not be downloaded: '
+				. $url . ( '' === $block_name ? '' : ' (' . $block_name . ')' ),
+			$this->processor->get_failed_media_error_message()
+		);
+	}
+
+	/**
 	 * Verifies that a failed core/gallery image names the block in the message.
 	 */
 	public function test_failed_media_message_names_the_gallery_block(): void {
