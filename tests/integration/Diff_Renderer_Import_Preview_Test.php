@@ -16,6 +16,7 @@ use Safe_Publish\API\Request_Actions;
 use Safe_Publish\Content\Content_Media_Processor;
 use Safe_Publish\Content\Shortcode_ID_Rewriter;
 use Safe_Publish\Media\Media_Importer;
+use Safe_Publish\Utils\Audit_Log_Table;
 use Safe_Publish\Utils\Options;
 use WP_REST_Request;
 
@@ -29,6 +30,7 @@ use WP_REST_Request;
 class Diff_Renderer_Import_Preview_Test extends Integration_Test_Case {
 
 	use Image_Byte_Mock_Trait;
+	use Per_Source_Id_Media_Api_Mock_Trait;
 
 	private const SOURCE         = 'https://source.example.com';
 	private const SOURCE_POST_ID = 99123;
@@ -220,8 +222,8 @@ class Diff_Renderer_Import_Preview_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Verifies that the preview attempts no outbound request and leaves every
-	 * post and meta row as it found them.
+	 * Verifies that the preview requests nothing but the attachment lookup and
+	 * leaves every post, meta and audit row as it found them.
 	 *
 	 * Asserts on the attempt rather than the outcome: the bootstrap blocks
 	 * unmocked requests, so a download the importer does try would fail
@@ -229,23 +231,31 @@ class Diff_Renderer_Import_Preview_Test extends Integration_Test_Case {
 	 */
 	public function test_preview_writes_nothing_and_downloads_nothing(): void {
 		// ARRANGE: Content whose media the destination has never imported,
-		// plus a cross-post gallery whose set the import would pull and
-		// reparent, behind a filter recording every request the run attempts.
+		// including a gallery attachment named by ID, plus a cross-post gallery
+		// whose set the import would pull and reparent, behind a filter
+		// recording every request the run attempts.
 		$referenced = self::factory()->post->create();
 		$this->mark_imported( $referenced, 99900 );
 		$content = $this->image_block( self::SOURCE . '/wp-content/uploads/new.jpg' )
 			. "\n\n" . '<!-- wp:paragraph --><p>[audio src="'
 			. self::SOURCE . '/wp-content/uploads/clip.mp3"]'
-			. '[gallery id="99900"]</p><!-- /wp:paragraph -->';
-		$before  = $this->content_snapshot();
+			. '[gallery id="99900"][gallery ids="' . self::SOURCE_FILE_ID . '"]'
+			. '</p><!-- /wp:paragraph -->';
+		$this->add_per_source_id_media_api_mock();
+		$before = $this->content_snapshot();
 		$this->record_http_attempts();
 
 		// ACT: Preview it.
 		$preview = $this->preview( $content );
 
-		// ASSERT: Nothing was requested, no row moved, and the unimported URLs
-		// are left for the host swap alone.
-		$this->assertSame( array(), $this->http_attempts );
+		// ASSERT: Only the attachment was looked up, no row moved, and the
+		// unimported URLs are left for the host swap alone.
+		$this->assertSame(
+			array(
+				self::SOURCE . '/wp-json/wp/v2/media/' . self::SOURCE_FILE_ID,
+			),
+			$this->http_attempts
+		);
 		$this->assertSame( $before, $this->content_snapshot() );
 		$this->assertStringContainsString( '/wp-content/uploads/new.jpg', $preview );
 		$this->assertStringNotContainsString( self::SOURCE, $preview );
@@ -344,6 +354,49 @@ class Diff_Renderer_Import_Preview_Test extends Integration_Test_Case {
 		$result = $this->render_diff( $classic );
 
 		// ASSERT: Nothing is reported.
+		$this->assertSame( '', $result['contentDiffHtml'] );
+	}
+
+	/**
+	 * Verifies that a gallery naming its own post reports no differences, as
+	 * the comparison strips the reference the way the import does.
+	 */
+	public function test_self_referencing_gallery_is_unchanged(): void {
+		// ARRANGE: Import a gallery naming the post's own source ID.
+		$source = '<!-- wp:shortcode -->[gallery id="' . self::SOURCE_POST_ID
+			. '"]<!-- /wp:shortcode -->';
+		$this->store_imported( $source );
+
+		// ACT: Compare against the untouched source.
+		$result = $this->render_diff( $source );
+
+		// ASSERT: The import stripped the reference, and nothing is reported.
+		$this->assertStringContainsString(
+			'[gallery]',
+			(string) get_post_field( 'post_content', $this->post_id )
+		);
+		$this->assertSame( '', $result['contentDiffHtml'] );
+	}
+
+	/**
+	 * Verifies that gallery attachment IDs an earlier import remapped report no
+	 * differences, as the comparison looks each up for its imported copy.
+	 */
+	public function test_gallery_ids_imported_earlier_are_unchanged(): void {
+		// ARRANGE: Import a gallery listing a source attachment ID.
+		$source = '<!-- wp:shortcode -->[gallery ids="' . self::SOURCE_FILE_ID
+			. '"]<!-- /wp:shortcode -->';
+		$this->add_per_source_id_media_api_mock();
+		$this->store_imported( $source );
+
+		// ACT: Compare against the untouched source.
+		$result = $this->render_diff( $source );
+
+		// ASSERT: The import remapped the ID, and nothing is reported.
+		$this->assertStringContainsString(
+			'ids="' . $this->imported_attachment_id( self::IMAGE_URL ) . '"',
+			(string) get_post_field( 'post_content', $this->post_id )
+		);
 		$this->assertSame( '', $result['contentDiffHtml'] );
 	}
 
@@ -515,7 +568,7 @@ class Diff_Renderer_Import_Preview_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Runs process_content() over content.
+	 * Runs process_content() over content as the local post's import does.
 	 *
 	 * @param string $source Source content.
 	 * @return string Imported content.
@@ -527,7 +580,11 @@ class Diff_Renderer_Import_Preview_Test extends Integration_Test_Case {
 			$media_importer,
 			new Content_Media_Processor( $media_importer ),
 			new Shortcode_ID_Rewriter()
-		) )->process_content( $source, self::SOURCE );
+		) )->process_content(
+			$source,
+			self::SOURCE,
+			array( 'source_post_id' => self::SOURCE_POST_ID )
+		);
 
 		$this->assertIsString( $result );
 
@@ -602,16 +659,17 @@ class Diff_Renderer_Import_Preview_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Snapshots every post and meta row a content pass could touch, so a
-	 * comparison catches a new attachment, a reparent, a menu-order write and
-	 * a meta write alike.
+	 * Snapshots every post, meta and audit row a content pass could touch, so a
+	 * comparison catches a new attachment, a reparent, a menu-order write, a
+	 * meta write and a logged event alike.
 	 *
-	 * @return array{posts: list<array>, meta: list<array>} Table snapshot.
+	 * @return array{audit: int, posts: list<array>, meta: list<array>} Table snapshot.
 	 */
 	private function content_snapshot(): array {
 		global $wpdb;
 
 		return array(
+			'audit' => Audit_Log_Table::count(),
 			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 			'posts' => (array) $wpdb->get_results(
 				"SELECT ID, post_content, post_parent, menu_order, post_modified_gmt
@@ -644,6 +702,26 @@ class Diff_Renderer_Import_Preview_Test extends Integration_Test_Case {
 		}
 
 		return $names;
+	}
+
+	/**
+	 * Serves the source media record the gallery attachment ID names.
+	 *
+	 * @param int $source_media_id Source media ID from the request URL.
+	 * @return array<string, mixed>|null Mock body, or null when not mocked.
+	 */
+	#[\Override]
+	protected function mock_body_for_source_media_id(
+		int $source_media_id
+	): ?array {
+		if ( self::SOURCE_FILE_ID !== $source_media_id ) {
+			return null;
+		}
+
+		return array(
+			'id'         => $source_media_id,
+			'source_url' => self::IMAGE_URL,
+		);
 	}
 
 	/**
