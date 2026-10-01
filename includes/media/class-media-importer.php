@@ -138,7 +138,7 @@ class Media_Importer {
 		}
 
 		if ( isset( $this->failed_media[ $media_url ] ) ) {
-			return false;
+			return $skip_if_not_media ? null : false;
 		}
 
 		$this->ensure_media_functions_loaded();
@@ -340,7 +340,7 @@ class Media_Importer {
 		}
 
 		if ( isset( $this->failed_media[ $media_url ] ) ) {
-			return false;
+			return $skip_if_not_media ? null : false;
 		}
 
 		$this->ensure_media_functions_loaded();
