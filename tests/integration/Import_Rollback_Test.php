@@ -1214,16 +1214,13 @@ class Import_Rollback_Test extends Source_Posts_API_Test_Base {
 	 * the database layer rejects the post insert.
 	 */
 	public function test_inline_media_is_deleted_when_post_insert_is_rejected(): void {
-		// ARRANGE: One downloadable inline image. The post-type guard keeps the
-		// rejection off the sideload's own attachment inserts.
+		// ARRANGE: One downloadable inline image and a rejected post insert.
 		$inline_url                = 'https://source.example.com/inline-insert.jpg';
 		$this->mock_post_overrides = array(
 			'content' => '<p><img src="' . $inline_url . '" alt="inline"></p>',
 		);
 
-		$reject_insert = static fn( $maybe_empty, array $postarr ): bool =>
-			'post' === ( $postarr['post_type'] ?? '' ) ? true : (bool) $maybe_empty;
-		add_filter( 'wp_insert_post_empty_content', $reject_insert, 10, 2 );
+		$reject_insert = $this->reject_post_insert();
 
 		$session_id         = $this->repository->create_session( 'https://source.example.com', 'bulk' );
 		$attachments_before = $this->get_attachment_count();
@@ -1280,10 +1277,10 @@ class Import_Rollback_Test extends Source_Posts_API_Test_Base {
 	}
 
 	/**
-	 * Verifies that a featured-image abort names the media its cleanup could
-	 * not delete, so the operator can remove it by hand.
+	 * Verifies that a featured-image abort on the create path names the media
+	 * its cleanup could not delete, so the operator can remove it by hand.
 	 */
-	public function test_featured_image_abort_names_media_it_could_not_delete(): void {
+	public function test_featured_image_abort_on_create_names_media_it_could_not_delete(): void {
 		// ARRANGE: One downloadable inline image, a featured image that 404s,
 		// and attachment deletion blocked so the cleanup leaves it behind.
 		$inline_url                = 'https://source.example.com/inline-survivor.jpg';
@@ -1318,6 +1315,112 @@ class Import_Rollback_Test extends Source_Posts_API_Test_Base {
 		// ASSERT: The surviving attachment is named in both the message and
 		// the result payload.
 		$this->assertFalse( $result['success'], 'The import should fail.' );
+
+		$this->assert_survivor_reported( $result, $inline_url );
+	}
+
+	/**
+	 * Verifies that a featured-image abort on the update path names the media
+	 * its cleanup could not delete.
+	 */
+	public function test_featured_image_abort_on_update_names_media_it_could_not_delete(): void {
+		$session_id = $this->repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		// ARRANGE: Import once without media so the post exists.
+		$post_data = array(
+			'id'        => 9612,
+			'title'     => 'Post Whose Update Cleanup Cannot Delete Its Media',
+			'content'   => '<p>Original content.</p>',
+			'link'      => 'https://source.example.com/update-cleanup-survivor',
+			'post_type' => 'posts',
+		);
+
+		$first = $this->import_service->import_post( $post_data, $session_id );
+		$this->assertTrue(
+			$first['success'],
+			'Initial import should succeed.'
+		);
+
+		// ARRANGE: Re-import with a downloadable inline image, a featured image
+		// that 404s, and attachment deletion blocked.
+		$inline_url                = 'https://source.example.com/inline-update-survivor.jpg';
+		$this->mock_post_overrides = array(
+			'featured_media' => 100,
+			'content'        => '<p><img src="' . $inline_url . '" alt="inline"></p>',
+		);
+
+		$fail_media_api = $this->make_featured_image_fail_filter();
+		add_filter( 'pre_http_request', $fail_media_api, 6, 3 );
+
+		$block_deletion = static fn() => false;
+		add_filter( 'pre_delete_attachment', $block_deletion, 10, 3 );
+
+		// ACT: Re-import the same post, hitting the update path.
+		$result = $this->import_service->import_post( $post_data, $session_id );
+
+		remove_filter( 'pre_delete_attachment', $block_deletion, 10 );
+		remove_filter( 'pre_http_request', $fail_media_api, 6 );
+
+		// ASSERT: The featured image aborted the re-import, and the surviving
+		// attachment is named in both the message and the result payload.
+		$this->assertFalse( $result['success'], 'The re-import should fail.' );
+		$this->assertSame(
+			'featured_image_import_failed',
+			$result['original_error_code'] ?? null,
+			'The featured image should be the reported cause.'
+		);
+
+		$this->assert_survivor_reported( $result, $inline_url );
+	}
+
+	/**
+	 * Verifies that a rejected post insert names the media its cleanup could
+	 * not delete.
+	 */
+	public function test_rejected_insert_names_media_it_could_not_delete(): void {
+		// ARRANGE: One downloadable inline image, a rejected post insert, and
+		// attachment deletion blocked.
+		$inline_url                = 'https://source.example.com/inline-insert-survivor.jpg';
+		$this->mock_post_overrides = array(
+			'content' => '<p><img src="' . $inline_url . '" alt="inline"></p>',
+		);
+
+		$reject_insert = $this->reject_post_insert();
+
+		$block_deletion = static fn() => false;
+		add_filter( 'pre_delete_attachment', $block_deletion, 10, 3 );
+
+		$session_id = $this->repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		// ACT: Attempt the import.
+		$result = $this->import_service->import_post(
+			array(
+				'id'        => 9613,
+				'title'     => 'Post Whose Rejected Insert Leaves Media Behind',
+				'content'   => '<p>Stale content.</p>',
+				'link'      => 'https://source.example.com/insert-cleanup-survivor',
+				'post_type' => 'posts',
+			),
+			$session_id
+		);
+
+		remove_filter( 'pre_delete_attachment', $block_deletion, 10 );
+		remove_filter( 'wp_insert_post_empty_content', $reject_insert, 10 );
+
+		// ASSERT: The rejected insert aborted the import, and the surviving
+		// attachment is named in both the message and the result payload.
+		$this->assertFalse( $result['success'], 'The import should fail.' );
+		$this->assertSame(
+			'empty_content',
+			$result['original_error_code'] ?? null,
+			'The rejected insert should be the reported cause.'
+		);
 
 		$this->assert_survivor_reported( $result, $inline_url );
 	}
@@ -1627,6 +1730,61 @@ class Import_Rollback_Test extends Source_Posts_API_Test_Base {
 	}
 
 	/**
+	 * Verifies that a discarded concurrent duplicate names the media its
+	 * cleanup could not delete.
+	 */
+	public function test_discarded_duplicate_names_media_it_could_not_delete(): void {
+		// ARRANGE: No pre-existing attachment, so the losing run downloads the
+		// featured image, with attachment deletion blocked.
+		$this->mock_post_overrides = array( 'featured_media' => 100 );
+
+		$source_id   = 9614;
+		$claim_rival = $this->make_rival_claim_filter( $source_id );
+		add_filter( 'pre_http_request', $claim_rival, 4, 3 );
+
+		$block_deletion = static fn() => false;
+		add_filter( 'pre_delete_attachment', $block_deletion, 10, 3 );
+
+		$session_id = $this->repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		// ACT: Import, losing the race to the claim the filter inserts.
+		$result = $this->import_service->import_post(
+			array(
+				'id'        => $source_id,
+				'title'     => 'Concurrent Loser Whose Cleanup Cannot Delete',
+				'content'   => '<p>Content.</p>',
+				'link'      => 'https://source.example.com/duplicate-cleanup-survivor',
+				'post_type' => 'posts',
+			),
+			$session_id
+		);
+
+		remove_filter( 'pre_delete_attachment', $block_deletion, 10 );
+		remove_filter( 'pre_http_request', $claim_rival, 4 );
+
+		// ASSERT: The discard aborted the import, and the featured image the
+		// losing run downloaded is named in both the message and the result
+		// payload.
+		$this->assertFalse(
+			$result['success'],
+			'The losing import should fail.'
+		);
+		$this->assertSame(
+			'duplicate_import',
+			$result['original_error_code'] ?? null,
+			'The discard should be the reported cause.'
+		);
+
+		$this->assert_survivor_reported(
+			$result,
+			'https://source.example.com/featured.jpg'
+		);
+	}
+
+	/**
 	 * Asserts that an aborted import reported the attachment its cleanup could
 	 * not delete, in both the result payload and the error message.
 	 *
@@ -1847,6 +2005,22 @@ class Import_Rollback_Test extends Source_Posts_API_Test_Base {
 		);
 
 		add_filter( 'pre_insert_term', $filter );
+
+		return $filter;
+	}
+
+	/**
+	 * Rejects the import's post insert, the trigger these cases use to reach
+	 * the rejected-insert abort. Only posts are rejected, so the sideload's own
+	 * attachment inserts still go through.
+	 *
+	 * @return Closure The filter, so the caller can remove it.
+	 */
+	private function reject_post_insert(): Closure {
+		$filter = static fn( $maybe_empty, array $postarr ): bool =>
+			'post' === ( $postarr['post_type'] ?? '' ) || (bool) $maybe_empty;
+
+		add_filter( 'wp_insert_post_empty_content', $filter, 10, 2 );
 
 		return $filter;
 	}
