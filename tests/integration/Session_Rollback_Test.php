@@ -16,6 +16,7 @@ use Safe_Publish\Utils\Audit_Log_Table;
 use Safe_Publish\Utils\Import_Items_Table;
 use Safe_Publish\Utils\Imports_Table;
 use Safe_Publish\Utils\Options;
+use RuntimeException;
 use WP_Error;
 
 /**
@@ -1179,6 +1180,15 @@ class Session_Rollback_Test extends Integration_Test_Case {
 		} finally {
 			remove_action( 'save_post', $delete_term );
 		}
+
+		// ACT: Retry once the term deletion no longer interferes.
+		$retry = $this->rollback_service->rollback_item( $history['item_id'] );
+
+		// ASSERT: The reopened item rolls back this time and is recorded.
+		$this->assertIsArray( $retry );
+		$this->assertSame( 'restored', $retry['action'] );
+		$item = $this->repository->get_item( $history['item_id'] );
+		$this->assertSame( 1, (int) $item['rolled_back'] );
 	}
 
 	/**
@@ -1726,6 +1736,56 @@ class Session_Rollback_Test extends Integration_Test_Case {
 				)
 			)
 		);
+	}
+
+	/**
+	 * Verifies that a revert interrupted by a throwing hook releases its
+	 * claim, so the item stays retryable.
+	 */
+	public function test_rollback_item_reopens_when_a_hook_throws(): void {
+		// ARRANGE: An updated item whose save filter throws before the post
+		// is written.
+		$history = $this->create_updated_item( array() );
+		$throw   = static function (): never {
+			throw new RuntimeException( 'Hook failure.' );
+		};
+		add_filter( 'wp_insert_post_data', $throw );
+		$thrown = null;
+
+		try {
+			// ACT: Roll the item back through the throwing filter.
+			$this->rollback_service->rollback_item( $history['item_id'] );
+		} catch ( RuntimeException $exception ) {
+			$thrown = $exception;
+		} finally {
+			remove_filter( 'wp_insert_post_data', $throw );
+		}
+
+		// ASSERT: The exception reaches the caller.
+		$this->assertInstanceOf( RuntimeException::class, $thrown );
+		$this->assertSame( 'Hook failure.', $thrown->getMessage() );
+
+		// ASSERT: The post is untouched, and the item was reopened rather
+		// than left claimed.
+		$this->assertSame(
+			'Current content.',
+			get_post_field( 'post_content', $history['post_id'] )
+		);
+		$item = $this->repository->get_item( $history['item_id'] );
+		$this->assertSame( 0, (int) $item['rolled_back'] );
+
+		// ACT: Retry once the filter is gone.
+		$result = $this->rollback_service->rollback_item( $history['item_id'] );
+
+		// ASSERT: The retry restores the post and records the rollback.
+		$this->assertIsArray( $result );
+		$this->assertSame( 'restored', $result['action'] );
+		$this->assertSame(
+			'Previous content.',
+			get_post_field( 'post_content', $history['post_id'] )
+		);
+		$item = $this->repository->get_item( $history['item_id'] );
+		$this->assertSame( 1, (int) $item['rolled_back'] );
 	}
 
 	/**

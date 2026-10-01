@@ -11,6 +11,7 @@ namespace Safe_Publish\Admin;
 
 use Safe_Publish\Content\Shortcode_ID_Rewriter;
 use Safe_Publish\Utils\Options;
+use Throwable;
 use WP_Error;
 use WP_Post;
 
@@ -58,6 +59,7 @@ final class Session_Rollback_Service {
 	 *
 	 * @param int $item_id Item ID to roll back.
 	 * @return array{action: string, post_id: int, post_title: string, omissions: array}|WP_Error Rollback result or error.
+	 * @throws Throwable When a hook throws during the revert.
 	 */
 	public function rollback_item( int $item_id ): array|WP_Error {
 		$item = $this->repository->get_item( $item_id );
@@ -88,7 +90,13 @@ final class Session_Rollback_Service {
 				: $this->refused( $claimed );
 		}
 
-		$result = $this->rollback_item_row( $item );
+		try {
+			$result = $this->rollback_item_row( $item );
+		} catch ( Throwable $error ) {
+			// A hook that throws mid-revert must not leave the item claimed.
+			$this->repository->release_rollback_claim( $item_id );
+			throw $error;
+		}
 
 		if ( is_wp_error( $result ) ) {
 			return $this->release_claim( $item_id, $result );
