@@ -10,7 +10,7 @@
 
 <!-- The behavior this pull request introduces. -->
 
-## Automated checks
+## Testing
 
 <!-- List the commands run and their results. Keep manual verification below. -->
 
