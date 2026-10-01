@@ -467,18 +467,20 @@ class Source_Media_REST_Field {
 			return array();
 		}
 
-		$port      = wp_parse_url( $site_url, PHP_URL_PORT );
-		$authority = $host . ( is_int( $port ) ? ':' . $port : '' );
-		$pattern   = '#(?<![a-z0-9:/])(?:(?:https?:)?//'
+		$port                = wp_parse_url( $site_url, PHP_URL_PORT );
+		$authority           = $host . ( is_int( $port ) ? ':' . $port : '' );
+		$url_pattern         = '(?:(?:https?:)?//'
 			. preg_quote( $authority, '#' )
-			. '/|/(?!/))[^\s"\'<>()]+#i';
-		$count     = preg_match_all( $pattern, $content, $matches );
-		$urls      = is_int( $count ) && 0 < $count ? $matches[0] : array();
-		$urls      = array_merge(
+			. '/|/(?!/))[^\s"\'<>()]+';
+		$pattern             = '#(?<![a-z0-9:/<])(?<!<!-- )' . $url_pattern . '#i';
+		$line_broken_pattern = '#^' . $url_pattern . '$#i';
+		$count               = preg_match_all( $pattern, $content, $matches );
+		$urls                = is_int( $count ) && 0 < $count ? $matches[0] : array();
+		$urls                = array_merge(
 			$urls,
-			$this->line_broken_attribute_urls( $content, $host ),
-			$this->line_broken_block_urls( $content, $host ),
-			$this->line_broken_shortcode_urls( $content, $host )
+			$this->line_broken_attribute_urls( $content, $line_broken_pattern ),
+			$this->line_broken_block_urls( $content, $line_broken_pattern ),
+			$this->line_broken_shortcode_urls( $content, $line_broken_pattern )
 		);
 
 		if ( array() === $urls ) {
@@ -550,16 +552,14 @@ class Source_Media_REST_Field {
 	 * content scan cannot cross whitespace without joining unrelated text.
 	 *
 	 * @param string $content Raw post content.
-	 * @param string $host    Source site host.
+	 * @param string $pattern Accepted source media URL pattern.
 	 * @return list<string> Normalized same-host attribute URLs.
 	 */
 	private function line_broken_attribute_urls(
 		string $content,
-		string $host
+		string $pattern
 	): array {
 		$processor = new WP_HTML_Tag_Processor( $content );
-		$pattern   = '#^https?://' . preg_quote( $host, '#' )
-			. '/[^\s"\'<>()]+$#i';
 		$urls      = array();
 
 		while ( $processor->next_tag() ) {
@@ -584,10 +584,13 @@ class Source_Media_REST_Field {
 	 * only after parsing the block comment.
 	 *
 	 * @param string $content Raw post content.
-	 * @param string $host    Source site host.
+	 * @param string $pattern Accepted source media URL pattern.
 	 * @return list<string> Normalized same-host block attribute URLs.
 	 */
-	private function line_broken_block_urls( string $content, string $host ): array {
+	private function line_broken_block_urls(
+		string $content,
+		string $pattern
+	): array {
 		// JSON encodes line breaks with backslashes, so most blocks need no parse.
 		if (
 			false === strpos( $content, '<!-- wp:' )
@@ -596,9 +599,7 @@ class Source_Media_REST_Field {
 			return array();
 		}
 
-		$pattern = '#^https?://' . preg_quote( $host, '#' )
-			. '/[^\s"\'<>()]+$#i';
-		$urls    = array();
+		$urls = array();
 
 		foreach ( parse_blocks( $content ) as $block ) {
 			$urls = array_merge(
@@ -674,12 +675,12 @@ class Source_Media_REST_Field {
 	 * Reads line-broken media URLs from live audio and video shortcodes.
 	 *
 	 * @param string $content Raw post content.
-	 * @param string $host    Source site host.
+	 * @param string $pattern Accepted source media URL pattern.
 	 * @return list<string> Normalized same-host shortcode URLs.
 	 */
 	private function line_broken_shortcode_urls(
 		string $content,
-		string $host
+		string $pattern
 	): array {
 		if (
 			false === strpbrk( $content, "\t\n\r" )
@@ -703,9 +704,7 @@ class Source_Media_REST_Field {
 			return array();
 		}
 
-		$url_pattern = '#^https?://' . preg_quote( $host, '#' )
-			. '/[^\s"\'<>()]+$#i';
-		$urls        = array();
+		$urls = array();
 
 		foreach ( $matches as $match ) {
 			if ( '[' === $match[1] && ']' === $match[4] ) {
@@ -728,7 +727,7 @@ class Source_Media_REST_Field {
 
 				$url = $this->normalized_line_broken_url(
 					$value,
-					$url_pattern
+					$pattern
 				);
 
 				if ( null !== $url ) {
