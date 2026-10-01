@@ -12,11 +12,30 @@ namespace Safe_Publish\Tests\Integration;
 use Safe_Publish\Utils\Import_Items_Table;
 
 /**
- * Exercises the has_previous_content realignment the upgrade performs, which
- * brings rows written under the old derivation in line with the condition
- * rollback dispatches on.
+ * Exercises the table upgrade, including the has_previous_content realignment
+ * that brings rows written under the old derivation in line with the
+ * condition rollback dispatches on.
  */
 class Import_Items_Schema_Test extends Integration_Test_Case {
+
+	use Failing_Query_Trait;
+
+	/**
+	 * Option key tracking the installed table schema version, spelled out
+	 * independently of the production constant so a change has to be
+	 * deliberate.
+	 */
+	private const VERSION_OPTION = 'safe_publish_import_items_version';
+
+	/**
+	 * Tear down test environment.
+	 */
+	#[\Override]
+	protected function tearDown(): void {
+		$this->restore_failing_queries();
+
+		parent::tearDown();
+	}
 
 	/**
 	 * Inserts an item row with the flag and payload written verbatim.
@@ -104,5 +123,54 @@ class Import_Items_Schema_Test extends Integration_Test_Case {
 
 		// ASSERT: A row the old rule already had right is left alone.
 		$this->assertSame( '1', $this->stored_flag( $restorable ) );
+	}
+
+	/**
+	 * Verifies that a completed upgrade records the schema version.
+	 */
+	public function test_completed_upgrade_records_the_schema_version(): void {
+		// ARRANGE: No recorded version, as on an install yet to upgrade.
+		delete_option( self::VERSION_OPTION );
+
+		// ACT: Run the table upgrade.
+		Import_Items_Table::create_table();
+
+		// ASSERT: The version was recorded.
+		$this->assertNotFalse( get_option( self::VERSION_OPTION ) );
+	}
+
+	/**
+	 * Verifies that a failed row update leaves the schema version unrecorded,
+	 * so the upgrade is retried rather than marked complete over stale rows.
+	 *
+	 * @dataProvider upgrade_query_provider
+	 *
+	 * @param string $fingerprint SQL fragment unique to the query to break.
+	 */
+	public function test_failed_upgrade_query_leaves_the_version_unrecorded(
+		string $fingerprint
+	): void {
+		// ARRANGE: No recorded version, and one row update forced to fail.
+		delete_option( self::VERSION_OPTION );
+		$this->fail_queries_matching( $fingerprint );
+
+		// ACT: Run the table upgrade.
+		Import_Items_Table::create_table();
+
+		// ASSERT: The version stayed unrecorded.
+		$this->assertFalse( get_option( self::VERSION_OPTION ) );
+	}
+
+	/**
+	 * Provides a fingerprint for each row update the upgrade runs.
+	 *
+	 * @return array<string, array{string}> Row update cases.
+	 */
+	public function upgrade_query_provider(): array {
+		return array(
+			'modified-date seed' => array( 'SET source_modified_gmt =' ),
+			'flag realignment'   => array( 'SET has_previous_content = 1' ),
+			'flag clearing'      => array( 'SET has_previous_content = 0' ),
+		);
 	}
 }

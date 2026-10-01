@@ -98,26 +98,29 @@ final class Import_Items_Table {
 		// Seed existing rows so the Outdated SQL filter (column-to-column)
 		// defaults to "not outdated" until the next sync_status_batch cycle.
 		// phpcs:disable WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.DirectDatabaseQuery.SchemaChange
-		$wpdb->query(
+		$seeded = $wpdb->query(
 			"UPDATE `{$table}` SET source_modified_gmt = import_date_gmt"
 				. ' WHERE source_modified_gmt IS NULL'
 		);
 		// Realign rows written while has_previous_content required a non-empty
 		// snapshot, which mispredicts delete versus restore.
-		$wpdb->query(
+		$flagged = $wpdb->query(
 			"UPDATE `{$table}` SET has_previous_content = 1"
 				. " WHERE has_previous_content = 0 AND status = 'updated'"
 				. ' AND content_changes LIKE \'%"previous_content":%\''
 		);
 		// The old rule only flagged a non-empty previous_content, so a flagged
 		// row either stored the key or stored nothing — no payload to scan.
-		$wpdb->query(
+		$unflagged = $wpdb->query(
 			"UPDATE `{$table}` SET has_previous_content = 0"
 				. " WHERE has_previous_content = 1 AND ( status <> 'updated'"
 				. ' OR content_changes IS NULL )'
 		);
 		// phpcs:enable WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.DirectDatabaseQuery.SchemaChange
 
-		update_option( self::VERSION_OPTION, self::VERSION, false );
+		// The version records only on success, so an error retries.
+		if ( false !== $seeded && false !== $flagged && false !== $unflagged ) {
+			update_option( self::VERSION_OPTION, self::VERSION, false );
+		}
 	}
 }
