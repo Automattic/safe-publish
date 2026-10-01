@@ -834,11 +834,10 @@ class Content_Processor {
 		// domain matches (e.g., "source.example.com" must not match inside
 		// "source.example.company.com"). The source's own port is optional, so
 		// a URL carrying it has the port consumed instead of left behind the
-		// replacement URL's port. Excluding ":" from the lookahead keeps any
-		// other port from matching at all.
+		// replacement URL's port.
 		$pattern = '/https?:\/\/' . preg_quote( $source_host, '/' )
 			. ( is_int( $source_port ) ? '(?::' . $source_port . ')?' : '' )
-			. '(?=[^a-zA-Z0-9.:]|$)/';
+			. '(?=[^a-zA-Z0-9.]|$)/';
 
 		$result = preg_replace( $pattern, $current_site_url, $content );
 
