@@ -31,6 +31,7 @@ class TelemetryEventsTest extends TestCase {
 			'content_cleanup_failed',
 			'content_verification_failed',
 			'content_restore_failed',
+			'terms_restore_failed',
 			'trashed_copy_exists',
 		);
 
@@ -42,20 +43,6 @@ class TelemetryEventsTest extends TestCase {
 
 		// ASSERT: Every code is returned as-is.
 		$this->assertSame( $codes, $results );
-	}
-
-	/**
-	 * Verifies that a failed term restoration keeps its telemetry error code.
-	 */
-	public function test_normalize_error_code_allows_terms_restore_failed(): void {
-		// ARRANGE: A rollback failure emitted by the post import service.
-		$code = 'terms_restore_failed';
-
-		// ACT: Normalize the failure action.
-		$result = Telemetry_Events::normalize_error_code( $code );
-
-		// ASSERT: Preserve the specific failure reason.
-		$this->assertSame( $code, $result );
 	}
 
 	/**

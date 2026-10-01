@@ -2865,7 +2865,7 @@ class Post_Import_Service {
 	 *
 	 * @param int   $post_id  Post ID.
 	 * @param array $snapshot Snapshot from capture_pre_update_state().
-	 * @return WP_Error|null Error when the post or terms were not fully restored.
+	 * @return WP_Error|null Error when post or terms could not be restored.
 	 */
 	private function restore_pre_update_state(
 		int $post_id,
@@ -2937,8 +2937,9 @@ class Post_Import_Service {
 
 			return new WP_Error(
 				$content_error->get_error_code(),
-				$content_error->get_error_message() . ' ' . $terms_error->get_error_message(),
-				$content_error->get_error_data()
+				$content_error->get_error_message() . ' '
+					. $terms_error->get_error_message(),
+				array( 'action' => 'terms_restore_failed' )
 			);
 		}
 
@@ -2951,7 +2952,7 @@ class Post_Import_Service {
 	 *
 	 * @param int   $post_id  Post ID.
 	 * @param array $snapshot Snapshot from capture_pre_update_state().
-	 * @return WP_Error|null Error when the post or terms were not fully restored.
+	 * @return WP_Error|null Error when post or terms could not be restored.
 	 */
 	private function rollback_failed_update(
 		int $post_id,
@@ -3001,9 +3002,9 @@ class Post_Import_Service {
 			$restore_error->get_error_code(),
 			$restore_error->get_error_message() . ' ' . $cleanup_message,
 			array(
-				'action'              => $restore_error->get_error_code(),
-				'original_error_code' => $restore_error->get_error_code(),
-				'media_ids'           => $media_ids,
+				'action'    => $restore_error->get_error_data()['action']
+					?? $restore_error->get_error_code(),
+				'media_ids' => $media_ids,
 			)
 		);
 	}
