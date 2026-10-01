@@ -3,8 +3,8 @@
 ## LLM behavior
 
 - Analyze and verify human input before agreeing with it. Prioritize truth over agreement.
-- Never provide answers based on unverified or vague assumptions.
-- Prove a defect with a throwaway probe or test before you claim it, file it, or call it unreachable or not worth fixing; reading the code establishes the mechanism, not the outcome.
+- Never state or file anything based on unverified or vague assumptions.
+- Prove a behavior claim with a throwaway probe or test before you state or file it, and before calling a defect unreachable or not worth fixing; reading the code establishes the mechanism, not the outcome.
 - Focus on being helpful and accurate. If uncertain about something, ask clarifying questions.
 - Read any provided instruction files in their entirety.
 
