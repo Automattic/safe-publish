@@ -1434,6 +1434,70 @@ class Content_Processor_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that scheme-less custom block media attributes are imported.
+	 *
+	 * @dataProvider scheme_less_custom_media_provider
+	 * @param string $serialized_url URL in the serialized block comment.
+	 * @param string $media_url      Parsed attribute URL to import.
+	 * @param string $resolved_url   Expected source request URL.
+	 */
+	public function test_process_custom_block_imports_scheme_less_media_from_attrs(
+		string $serialized_url,
+		string $media_url,
+		string $resolved_url
+	): void {
+		// ARRANGE: Store media only in attrs alongside a bare design token.
+		$source_site_url    = 'https://source.example.com';
+		$content            = '<!-- wp:my-plugin/hero {"backgroundUrl":"'
+			. $serialized_url . '","icon":"star.svg"} -->'
+			. '<div class="wp-block-my-plugin-hero"></div>'
+			. '<!-- /wp:my-plugin/hero -->';
+		$attachments_before = $this->get_attachment_count();
+		$this->assertSame( $media_url, parse_blocks( $content )[0]['attrs']['backgroundUrl'] );
+
+		// ACT: Process the custom block through the Gutenberg path.
+		$processed = $this->processor->process_content( $content, $source_site_url );
+
+		// ASSERT: Only the media URL is requested and localized.
+		$this->assertSame( array( $resolved_url ), $this->requested_urls );
+		$this->assertSame( $attachments_before + 1, $this->get_attachment_count() );
+		$this->assertStringNotContainsString( $media_url, $processed );
+		$this->assertStringContainsString( 'wp-content/uploads', $processed );
+		$this->assertStringContainsString( '"icon":"star.svg"', $processed );
+		$this->assertSame( array(), $this->processor->get_failed_media() );
+	}
+
+	/**
+	 * Provides scheme-less custom block media URLs and their resolved forms.
+	 *
+	 * @return array<string, array{string, string, string}>
+	 */
+	public static function scheme_less_custom_media_provider(): array {
+		return array(
+			'protocol-relative'  => array(
+				'//source.example.com/custom.jpg',
+				'//source.example.com/custom.jpg',
+				'https://source.example.com/custom.jpg',
+			),
+			'root-relative'      => array(
+				'/wp-content/uploads/custom.jpg',
+				'/wp-content/uploads/custom.jpg',
+				'https://source.example.com/wp-content/uploads/custom.jpg',
+			),
+			'escaped-slashes'    => array(
+				'\/wp-content\/uploads\/custom.jpg',
+				'/wp-content/uploads/custom.jpg',
+				'https://source.example.com/wp-content/uploads/custom.jpg',
+			),
+			'leading-whitespace' => array(
+				' /wp-content/uploads/custom.jpg',
+				' /wp-content/uploads/custom.jpg',
+				'https://source.example.com/wp-content/uploads/custom.jpg',
+			),
+		);
+	}
+
+	/**
 	 * Verifies that an absolute source media URL whose path carries non-ASCII
 	 * characters is downloaded from that URL unchanged.
 	 *
