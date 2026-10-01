@@ -33,8 +33,8 @@ final class Session_Rollback_Service {
 	private const SCAN_PAGE_SIZE = 500;
 
 	/**
-	 * Error data key marking a rollback that declined before changing
-	 * anything, rather than failing partway.
+	 * Error data key marking a rollback that declined without touching the
+	 * post, rather than failing partway.
 	 */
 	private const REFUSED = 'refused';
 
@@ -111,7 +111,7 @@ final class Session_Rollback_Service {
 	 * Reports whether an error is a refusal.
 	 *
 	 * @param WP_Error $error Error a rollback returned.
-	 * @return bool True when nothing was changed.
+	 * @return bool True when the post was left untouched.
 	 */
 	public static function is_refusal( WP_Error $error ): bool {
 		$data = $error->get_error_data();

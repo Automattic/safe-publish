@@ -114,7 +114,7 @@ When a captured author, parent, post type, featured image, taxonomy, or term is 
 
 Rollback does not restore or remove imported custom metadata, delete created term objects, or restore changes to shared term fields. When an update changes the post type, WordPress may add a default category or another taxonomy's default term outside the import payload; rollback does not currently remove those.
 
-The server re-checks this on every request, so a listing loaded before an earlier rollback cannot re-apply it. A rollback is refused, with nothing written, when:
+The server re-checks this on every request, so a listing loaded before an earlier rollback cannot re-apply it. A rollback is refused, leaving the post untouched, when:
 
 - The item was already rolled back, or a concurrent rollback claimed it first.
 - An update's destination post is in the trash.
