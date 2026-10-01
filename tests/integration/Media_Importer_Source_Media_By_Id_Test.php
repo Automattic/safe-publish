@@ -19,9 +19,9 @@ use WP_UnitTestCase;
  * Exercises the shared source-ID resolver that both featured-image import and
  * shortcode ID rewriting rely on, asserting its three outcomes: A resolved and
  * sideloaded attachment ID, null for a dangling reference (unreachable record,
- * or a record with a missing or non-string source_url), and false for a
- * resolved URL whose bytes fail to download. Also covers the action its lookup
- * declares.
+ * or a record with a missing or non-string source_url) or for media a
+ * resolve-only importer has not imported, and false for a resolved URL whose
+ * bytes fail to download. Also covers the action its lookup declares.
  */
 class Media_Importer_Source_Media_By_Id_Test extends WP_UnitTestCase {
 
@@ -243,6 +243,37 @@ class Media_Importer_Source_Media_By_Id_Test extends WP_UnitTestCase {
 
 		// ASSERT: Genuine sideload failure signalled by false; nothing created.
 		$this->assertFalse( $result );
+		$this->assert_no_new_attachments( $count );
+	}
+
+	/**
+	 * Verifies that a resolve-only importer returns null for a resolvable ID it
+	 * has not imported, rather than reporting a failed download.
+	 */
+	public function test_resolve_only_returns_null_when_not_imported(): void {
+		// ARRANGE: Mock the media record; nothing is imported yet.
+		$this->add_per_source_id_media_api_mock();
+		$count = $this->get_attachment_count();
+
+		$importer = new Media_Importer( new HTTP_Client(), true );
+
+		// ACT: Resolve the source ID without downloading.
+		try {
+			$result = $importer->import_source_media_by_id(
+				9910001,
+				self::SOURCE
+			);
+		} finally {
+			$this->remove_per_source_id_media_api_mock();
+		}
+
+		// ASSERT: Unresolved rather than failed, after the record resolved its
+		// URL; nothing sideloaded.
+		$this->assertNull( $result );
+		$this->assertSame(
+			array( self::SOURCE_MEDIA[9910001] ),
+			$importer->take_unresolved_urls()
+		);
 		$this->assert_no_new_attachments( $count );
 	}
 

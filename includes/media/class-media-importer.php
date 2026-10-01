@@ -323,18 +323,19 @@ class Media_Importer {
 	 *
 	 * @param string $media_url       Source media URL.
 	 * @param string $source_site_url Source site URL for resolving relative URLs.
-	 * @return int|false Attachment ID on success, false on failure.
+	 * @return int|false|null Attachment ID on success, false on failure, null
+	 *                        when a resolve-only instance has not imported it.
 	 */
 	public function import_owned_media_as_attachment(
 		string $media_url,
 		string $source_site_url
-	): int|false {
+	): int|false|null {
 		$media_url = URL_Validator::resolve_relative_url(
 			$media_url,
 			$source_site_url
 		);
 
-		return $this->sideload_media( $media_url, $source_site_url ) ?? false;
+		return $this->sideload_media( $media_url, $source_site_url );
 	}
 
 	/**
@@ -751,8 +752,9 @@ class Media_Importer {
 	 * @param array  $auth_credentials Optional. Authentication credentials. Default empty array.
 	 * @return int|false|null Destination attachment ID on success, null when the
 	 *                        source record is unreachable or carries no
-	 *                        source_url (a dangling reference), false when the
-	 *                        resolved URL fails to sideload.
+	 *                        source_url (a dangling reference) or when a
+	 *                        resolve-only instance has not imported it, false
+	 *                        when the resolved URL fails to sideload.
 	 */
 	public function import_source_media_by_id(
 		int $source_id,
