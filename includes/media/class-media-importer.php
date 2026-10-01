@@ -29,9 +29,9 @@ if ( ! defined( 'ABSPATH' ) ) {
  * Handles importing media files from the source site into the WordPress media
  * library.
  *
- * A resolve-only instance answers from the library alone: it returns media an
- * earlier import already sideloaded and yields null for anything else, so a
- * caller previewing an import downloads nothing and writes nothing.
+ * A resolve-only instance downloads nothing, so a caller can preview an import:
+ * It returns media an earlier import already sideloaded and yields null for
+ * anything else. A source ID is still looked up, as a preview, for its URL.
  */
 class Media_Importer {
 
@@ -734,9 +734,12 @@ class Media_Importer {
 			$media_api_url = add_query_arg( 'context', 'edit', $media_api_url );
 		}
 
+		// A preview imports nothing, so the source must not log an export.
 		$response = $this->http_client->make_request(
 			$media_api_url,
-			Request_Actions::MEDIA_IMPORT,
+			$this->resolve_only
+				? Request_Actions::PREVIEW
+				: Request_Actions::MEDIA_IMPORT,
 			$auth_credentials
 		);
 

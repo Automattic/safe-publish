@@ -12,6 +12,7 @@ namespace Safe_Publish\Tests\Integration;
 use Safe_Publish\Admin\Content_Processor;
 use Safe_Publish\API\Diff_Renderer;
 use Safe_Publish\API\HTTP_Client;
+use Safe_Publish\API\Request_Actions;
 use Safe_Publish\Content\Content_Media_Processor;
 use Safe_Publish\Content\Shortcode_ID_Rewriter;
 use Safe_Publish\Media\Media_Importer;
@@ -33,6 +34,7 @@ class Diff_Renderer_Import_Preview_Test extends Integration_Test_Case {
 	private const SOURCE_POST_ID = 99123;
 	private const SOURCE_REF_ID  = 99500;
 	private const SOURCE_LINK_ID = 99501;
+	private const SOURCE_FILE_ID = 99600;
 	private const IMAGE_URL      = self::SOURCE . '/wp-content/uploads/2024/01/photo.jpg';
 
 	/**
@@ -346,6 +348,37 @@ class Diff_Renderer_Import_Preview_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that the comparison sends its attachment lookup as a preview,
+	 * carrying the source credentials, so the source logs no export.
+	 */
+	public function test_attachment_lookup_is_sent_as_a_preview(): void {
+		// ARRANGE: Record the action each attachment lookup declares.
+		$actions = array();
+		add_filter(
+			'pre_http_request',
+			static function ( $preempt, $args, $url ) use ( &$actions ) {
+				if ( str_contains( (string) $url, '/wp-json/wp/v2/media/' ) ) {
+					$actions[] = $args['headers']['X-Safe-Publish-Action']
+						?? null;
+				}
+
+				return $preempt;
+			},
+			1,
+			3
+		);
+
+		// ACT: Compare a gallery listing a source attachment ID.
+		$this->render_diff(
+			'[gallery ids="' . self::SOURCE_FILE_ID . '"]',
+			array( 'shared_secret' => str_repeat( 's', 32 ) )
+		);
+
+		// ASSERT: The single lookup declared a preview.
+		$this->assertSame( array( Request_Actions::PREVIEW ), $actions );
+	}
+
+	/**
 	 * Verifies that an image whose attachment class was changed here reports in
 	 * the block view, as it does in the content diff.
 	 */
@@ -616,10 +649,14 @@ class Diff_Renderer_Import_Preview_Test extends Integration_Test_Case {
 	/**
 	 * Runs the diff preview against a source payload carrying given content.
 	 *
-	 * @param string $source Source post content.
+	 * @param string $source      Source post content.
+	 * @param array  $credentials Optional. Source REST auth credentials.
 	 * @return array render_diff() result.
 	 */
-	private function render_diff( string $source ): array {
+	private function render_diff(
+		string $source,
+		array $credentials = array()
+	): array {
 		$make_request = static function ( $url ) use ( $source ) {
 			if ( str_contains( (string) $url, '/catalog/post-types' ) ) {
 				return \_safe_publish_test_catalog_response();
@@ -647,7 +684,7 @@ class Diff_Renderer_Import_Preview_Test extends Integration_Test_Case {
 		$result = ( new Diff_Renderer() )->render_diff(
 			$request,
 			$make_request,
-			array()
+			$credentials
 		);
 
 		$this->assertIsArray( $result );

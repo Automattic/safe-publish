@@ -225,7 +225,7 @@ class Content_Processor {
 	}
 
 	/**
-	 * Reports the content process_content() would store, writing nothing.
+	 * Reports the content process_content() would store, importing nothing.
 	 *
 	 * Runs the same passes as the import, so a caller compares against what an
 	 * update would produce. The cross-post and attached media-set passes are
