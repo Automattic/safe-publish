@@ -3,8 +3,8 @@
 ## LLM behavior
 
 - Analyze and verify human input before agreeing with it. Prioritize truth over agreement.
-- Never provide answers based on unverified or vague assumptions.
-- Prove a defect with a throwaway probe or test before you claim it, file it, or call it unreachable or not worth fixing; reading the code establishes the mechanism, not the outcome.
+- Never state or file anything based on unverified or vague assumptions.
+- Prove a behavior claim with a throwaway probe or test before you state or file it, and before calling a defect unreachable or not worth fixing; reading the code establishes the mechanism, not the outcome.
 - Focus on being helpful and accurate. If uncertain about something, ask clarifying questions.
 - Read any provided instruction files in their entirety.
 
@@ -109,7 +109,7 @@ Generally available and used by customers; anything introducing breaking changes
 
 ## Dependencies
 
-**Runtime `@wordpress/*` packages and WP stubs are pinned to the wp-6.9 dist-tag line** to match the plugin's `Requires at least: 6.9`. Externalized packages resolve to `wp.*` globals, so an off-line version type-checks against APIs the floor lacks. `@wordpress/dataviews` and `@wordpress/icons` are bundled instead, but dataviews unlocks private APIs from the externalized `@wordpress/components`: an off-line copy destructures names core doesn't expose, yielding `undefined` silently until render. Development-only build, lint, test, and local-environment tools may move beyond the line when the upgrade exposes no newer browser APIs or types to plugin code — `@wordpress/base-styles` counts, since it compiles into our own stylesheet and never resolves against core; call out any such decision in the PR description. Raising the WP floor requires updating the plugin header, `minimum_supported_wp_version` in `phpcs.xml.dist`, `php-stubs/wordpress-{stubs,tests-stubs}`, `wp-phpunit/wp-phpunit`, the relevant runtime `@wordpress/*` packages to the next wp-X.Y dist-tag, and the minimum stated in the docs.
+**Runtime `@wordpress/*` packages and WP stubs are pinned to the wp-6.9 dist-tag line** to match the plugin's `Requires at least: 6.9`. Externalized packages resolve to `wp.*` globals, so an off-line version type-checks against APIs the floor lacks. `@wordpress/dataviews` and `@wordpress/icons` are bundled instead, but dataviews unlocks private APIs from the externalized `@wordpress/components`: an off-line copy destructures names core doesn't expose, yielding `undefined` silently until render. The skew also runs the other way when a newer core drops a private name the pinned dataviews still unlocks: `webpack.kebab-case-loader.js` patches the bundled dataviews to fall back to a local `kebabCase` when core no longer exposes it (removed upstream in Gutenberg #81294), and fails the build when a dataviews bump changes the patched line. The other names dataviews 10.1.7 unlocks — `Menu`, `Badge`, `Picker`, `DateCalendar`, `DateRangeCalendar`, and the `Validated*` form controls — have no fallback. WordPress `master` already lacks most of them and `Picker` is gone since 7.0, so check them against `master`, not the newest stable core, before adding DataForm or a typed field: `integer`, `number`, `boolean`, `array`, `color`, `date`, and `datetime` fields get filters that render these controls. Development-only build, lint, test, and local-environment tools may move beyond the line when the upgrade exposes no newer browser APIs or types to plugin code — `@wordpress/base-styles` counts, since it compiles into our own stylesheet and never resolves against core; call out any such decision in the PR description. Raising the WP floor requires updating the plugin header, `minimum_supported_wp_version` in `phpcs.xml.dist`, `php-stubs/wordpress-{stubs,tests-stubs}`, `wp-phpunit/wp-phpunit`, the relevant runtime `@wordpress/*` packages to the next wp-X.Y dist-tag, and the minimum stated in the docs.
 
 ## CI compatibility matrix
 
