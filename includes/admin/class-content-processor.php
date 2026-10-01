@@ -1566,7 +1566,13 @@ class Content_Processor {
 				);
 			} elseif (
 				is_string( $value ) &&
-				URL_Validator::is_absolute_http_url( $value ) &&
+				(
+					URL_Validator::is_absolute_http_url( $value ) ||
+					str_starts_with(
+						URL_Validator::normalize_url_whitespace( $value ),
+						'/'
+					)
+				) &&
 				$this->content_media_processor
 					->has_uploadable_file_extension( $value )
 			) {
@@ -1624,15 +1630,16 @@ class Content_Processor {
 	}
 
 	/**
-	 * Whether the content contains HTTP URLs, the trigger for the media/URL
-	 * transformation. Only that pass depends on this check; block-ID remapping
-	 * is gated separately by content_has_id_reference_blocks().
+	 * Whether the content contains HTTP or root-relative URLs, the trigger for
+	 * the media/URL transformation. Only that pass depends on this check;
+	 * block-ID remapping is gated separately.
 	 *
 	 * @param string $content Content to check.
-	 * @return bool True when the content contains an HTTP URL.
+	 * @return bool True when the content may contain a media URL.
 	 */
 	private function content_needs_processing( string $content ): bool {
-		return false !== strpos( $content, 'http' );
+		return false !== strpos( $content, 'http' )
+			|| 1 === preg_match( '~"\s*(?:\\\\)?/~', $content );
 	}
 
 	/**
