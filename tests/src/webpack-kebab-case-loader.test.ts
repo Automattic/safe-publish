@@ -16,6 +16,12 @@ const loader: ( source: string ) => string = require(
 const UNLOCK_LINE =
 	'const { Menu, kebabCase } = unlock(componentsPrivateApis);';
 
+// The module webpack resolves for the bundled DataViews item actions.
+const ITEM_ACTIONS_MODULE = path.join(
+	path.dirname( require.resolve( '@wordpress/dataviews/package.json' ) ),
+	'build-module/components/dataviews-item-actions/index.js'
+);
+
 /**
  * Evaluates the loader's output with a stubbed private API and returns the
  * kebabCase binding the patched module would use.
@@ -33,16 +39,7 @@ function resolveKebabCase(
 describe( 'webpack.kebab-case-loader', () => {
 	it( 'should patch the installed DataViews item-actions module', () => {
 		// ARRANGE: Read the module the build feeds through the loader.
-		const packageDir = path.dirname(
-			require.resolve( '@wordpress/dataviews/package.json' )
-		);
-		const source = readFileSync(
-			path.join(
-				packageDir,
-				'build-module/components/dataviews-item-actions/index.js'
-			),
-			'utf8'
-		);
+		const source = readFileSync( ITEM_ACTIONS_MODULE, 'utf8' );
 
 		// ACT: Run the loader.
 		const output = loader( source );
@@ -51,6 +48,24 @@ describe( 'webpack.kebab-case-loader', () => {
 		expect( source ).toContain( UNLOCK_LINE );
 		expect( output ).not.toContain( UNLOCK_LINE );
 		expect( output ).toContain( 'const kebabCase = coreKebabCase ??' );
+	} );
+
+	it( 'should route the item-actions module through the loader', () => {
+		// ARRANGE: Find the webpack rule that applies the loader.
+		const { rules } = require( '../../webpack.config.js' ).module;
+		const rule = rules.find(
+			( candidate: { loader?: unknown } ) =>
+				typeof candidate.loader === 'string' &&
+				candidate.loader.endsWith( 'webpack.kebab-case-loader.js' )
+		);
+
+		// ACT: Match the rule against the module webpack resolves.
+		const matches =
+			rule.test.test( ITEM_ACTIONS_MODULE ) &&
+			rule.include.test( ITEM_ACTIONS_MODULE );
+
+		// ASSERT: The build patches the module.
+		expect( matches ).toBe( true );
 	} );
 
 	it( 'should prefer the kebabCase core provides', () => {
@@ -68,11 +83,13 @@ describe( 'webpack.kebab-case-loader', () => {
 		// ARRANGE: A private API without kebabCase, as on WordPress 7.2.
 		const kebabCase = resolveKebabCase( { Menu: {} } );
 
-		// ACT + ASSERT: Kebab-case action IDs pass through, camelCase converts.
+		// ACT + ASSERT: Kebab-case action IDs pass through, camelCase and
+		// separators convert.
 		expect( kebabCase( 'ignore-needs-attention' ) ).toBe(
 			'ignore-needs-attention'
 		);
 		expect( kebabCase( 'fooBar' ) ).toBe( 'foo-bar' );
+		expect( kebabCase( 'foo bar_baz' ) ).toBe( 'foo-bar-baz' );
 	} );
 
 	it( 'should fail the build when the unlock line is missing', () => {
