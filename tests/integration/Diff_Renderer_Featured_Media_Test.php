@@ -481,23 +481,24 @@ class Diff_Renderer_Featured_Media_Test extends Integration_Test_Case {
 
 	/**
 	 * Verifies that a source media record whose source_url is not a string is
-	 * treated as a missing image rather than cast into the markup, and that
-	 * the unusable record is logged.
+	 * treated as unreadable rather than cast into the markup, and that the
+	 * unusable record is logged.
 	 */
-	public function test_non_string_source_url_counts_as_absent(): void {
-		// ARRANGE: The post holds an unrelated image, so the preview renders.
+	public function test_non_string_source_url_counts_as_unreadable(): void {
+		// ARRANGE: The audit log is empty.
 		Audit_Log_Table::clear( 'content' );
-		set_post_thumbnail(
-			$this->post_id,
-			$this->sideload( self::UNRELATED_SRC )
-		);
 
 		// ACT: Render the diff against a malformed media record.
 		$result = $this->render_diff( self::MALFORMED_MEDIA_ID );
 
-		// ASSERT: The record resolves to nothing, so no cast value reaches the
-		// markup and the preview stays empty.
-		$this->assertSame( '', $result['nonContentDiffs']['featuredMedia'] );
+		// ASSERT: The incoming image reads as unavailable, and no cast value
+		// reaches the markup.
+		$html = $result['nonContentDiffs']['featuredMedia'];
+		$this->assertStringContainsString(
+			'<div><em>Unavailable</em></div>',
+			$html
+		);
+		$this->assertStringNotContainsString( 'Array', $html );
 
 		// ASSERT: The unusable record is recorded rather than swallowed.
 		$events = Audit_Log_Table::get_events(
@@ -552,32 +553,85 @@ class Diff_Renderer_Featured_Media_Test extends Integration_Test_Case {
 
 	/**
 	 * Verifies that an unfetchable incoming media record with no destination
-	 * copy reports nothing, rather than reading as a removal against the image
-	 * the post holds.
+	 * copy reports the image as unavailable, with a note, rather than as a
+	 * removal or as no difference: The update fails on the same record.
+	 *
+	 * @param bool $has_thumbnail Whether the post holds an unrelated image.
+	 *
+	 * @dataProvider thumbnail_provider
 	 */
-	public function test_unknown_incoming_record_reports_nothing(): void {
-		// ARRANGE: The post holds an unrelated image and nothing was imported
-		// for the incoming media ID.
-		set_post_thumbnail(
-			$this->post_id,
-			$this->sideload( self::UNRELATED_SRC )
-		);
+	public function test_unreadable_record_without_copy_reports_unavailable(
+		bool $has_thumbnail
+	): void {
+		// ARRANGE: Nothing was imported for the incoming media ID.
+		if ( $has_thumbnail ) {
+			set_post_thumbnail(
+				$this->post_id,
+				$this->sideload( self::UNRELATED_SRC )
+			);
+		}
 
 		// ACT: Render the diff with the media endpoint failing.
 		$result = $this->render_diff( self::MEDIA_ID, true );
 
-		// ASSERT: The preview reports nothing.
-		$this->assertNoDifferences( $result );
+		// ASSERT: The incoming side reads as unavailable, and the note says
+		// why.
+		$html = $result['nonContentDiffs']['featuredMedia'];
+		$this->assertStringContainsString(
+			'<div><em>Unavailable</em></div>',
+			$html
+		);
+		$this->assertStringContainsString(
+			'The incoming image could not be read from the source.',
+			$html
+		);
 	}
 
 	/**
-	 * Verifies that an unfetchable incoming media record reports nothing even
-	 * when its destination copy is known and the post holds another image.
+	 * Supplies whether the post holds a thumbnail of its own.
+	 *
+	 * @return array<string, array{0: bool}> Thumbnail states.
 	 */
-	public function test_unreadable_record_with_known_copy_reports_nothing(): void {
+	public static function thumbnail_provider(): array {
+		return array(
+			'unrelated thumbnail' => array( true ),
+			'no thumbnail'        => array( false ),
+		);
+	}
+
+	/**
+	 * Verifies that an unfetchable incoming media record with no destination
+	 * copy does not preview the global post, which an attachment ID of 0
+	 * resolves to.
+	 */
+	public function test_unreadable_record_without_copy_ignores_global_post(): void {
+		// ARRANGE: The global post is an attachment; tear down resets it.
+		// phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited
+		$GLOBALS['post'] = get_post( $this->sideload( self::UNRELATED_SRC ) );
+
+		// ACT: Render the diff with the media endpoint failing.
+		$result = $this->render_diff( self::MEDIA_ID, true );
+
+		// ASSERT: The incoming side still reads as unavailable.
+		$this->assertStringContainsString(
+			'<div><em>Unavailable</em></div>',
+			$result['nonContentDiffs']['featuredMedia']
+		);
+	}
+
+	/**
+	 * Verifies that an unfetchable incoming media record with a known
+	 * destination copy previews that copy, since the update reuses it without
+	 * reading the record.
+	 */
+	public function test_unreadable_record_previews_known_copy(): void {
 		// ARRANGE: The incoming image is imported, but the post holds a
 		// different one.
-		$this->import_featured( self::MEDIA_ID );
+		$copy_url = wp_get_attachment_image_url(
+			$this->import_featured( self::MEDIA_ID ),
+			'full'
+		);
+		$this->assertIsString( $copy_url );
 		set_post_thumbnail(
 			$this->post_id,
 			$this->sideload( self::UNRELATED_SRC )
@@ -586,9 +640,14 @@ class Diff_Renderer_Featured_Media_Test extends Integration_Test_Case {
 		// ACT: Render the diff with the media endpoint failing.
 		$result = $this->render_diff( self::MEDIA_ID, true );
 
-		// ASSERT: The preview reports nothing rather than reading as a
-		// removal against the image the post holds.
-		$this->assertNoDifferences( $result );
+		// ASSERT: The incoming side shows the copy the update would set, and
+		// carries no note.
+		$html = $result['nonContentDiffs']['featuredMedia'];
+		$this->assertStringContainsString( 'src="' . $copy_url . '"', $html );
+		$this->assertStringNotContainsString(
+			'safe-publish-diff-notes',
+			$html
+		);
 	}
 
 	/**
@@ -607,8 +666,8 @@ class Diff_Renderer_Featured_Media_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Verifies that a failed source media fetch reports nothing and is still
-	 * logged, so the preview stays silent while the failure is recorded.
+	 * Verifies that a failed source media fetch reports nothing when the post
+	 * holds the copy the import would reuse, and is still logged.
 	 */
 	public function test_media_fetch_failure_reports_nothing_and_logs(): void {
 		// ARRANGE: The post holds the imported copy, and the audit log is empty.

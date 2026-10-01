@@ -516,8 +516,10 @@ final class Diff_Renderer {
 	 *
 	 * Returns an empty string when the incoming image resolves to the
 	 * attachment the post already holds, or when neither side has an image;
-	 * the client uses that signal to omit the section. A difference the import
-	 * would not apply carries a note below the preview.
+	 * the client uses that signal to omit the section. When the incoming record
+	 * cannot be read, the preview shows the copy the import would reuse, or
+	 * notes the failure when there is none. A difference the import would not
+	 * apply carries a note too.
 	 *
 	 * @param int      $local_post_id   Local post ID.
 	 * @param string   $source_site_url Source site URL.
@@ -591,21 +593,32 @@ final class Diff_Renderer {
 			$source_site_url,
 			$incoming_featured_url
 		);
-		$is_unchanged         = $resolved_featured_id > 0
-			&& $resolved_featured_id === $current_featured_id;
 
-		// An unreadable incoming record says nothing about the source's image,
-		// so it must not read as a removal. The failure reaches the audit log.
-		$is_incoming_unknown = $incoming_featured_id > 0
-			&& '' === $incoming_featured_url;
-
-		// With no URL on either side the preview has nothing to draw.
-		$is_drawable = '' !== $current_featured_url
-			|| '' !== $incoming_featured_url;
-
-		if ( $is_unchanged || $is_incoming_unknown || ! $is_drawable ) {
+		if (
+			$resolved_featured_id > 0
+			&& $resolved_featured_id === $current_featured_id
+		) {
 			return '';
 		}
+
+		// The import reuses a known copy without reading the record, so an
+		// unreadable record previews the copy the update would set.
+		if ( '' === $incoming_featured_url && $resolved_featured_id > 0 ) {
+			$incoming_featured_url = (string) wp_get_attachment_image_url(
+				$resolved_featured_id,
+				'full'
+			);
+		}
+
+		// With no image on either side the preview has nothing to draw.
+		if ( 0 === $incoming_featured_id && '' === $current_featured_url ) {
+			return '';
+		}
+
+		// A source image that cannot be shown must not read as a removal.
+		$incoming_placeholder = $incoming_featured_id > 0
+			? __( 'Unavailable', 'safe-publish' )
+			: __( 'None', 'safe-publish' );
 
 		$current_img  = '' !== $current_featured_url
 			? sprintf(
@@ -618,7 +631,7 @@ final class Diff_Renderer {
 				'<a href="%1$s" target="_blank" rel="noopener noreferrer"><img alt="" src="%1$s" /></a>',
 				esc_url( $incoming_featured_url )
 			)
-			: '<em>' . esc_html__( 'None', 'safe-publish' ) . '</em>';
+			: '<em>' . esc_html( $incoming_placeholder ) . '</em>';
 
 		$preview = sprintf(
 			'<div class="incoming-featured-media-preview">
@@ -629,13 +642,19 @@ final class Diff_Renderer {
 			$incoming_img
 		);
 
-		// The import only ever sets a thumbnail, so a source that dropped its
-		// featured image is a difference the update leaves in place.
 		$notes = array();
 
+		// The import only ever sets a thumbnail, so a source that dropped its
+		// featured image is a difference the update leaves in place.
 		if ( 0 === $incoming_featured_id ) {
 			$notes[] = __(
 				'The import will not clear this image.',
+				'safe-publish'
+			);
+		} elseif ( '' === $incoming_featured_url ) {
+			// With no known copy, the update fails without this record.
+			$notes[] = __(
+				'The incoming image could not be read from the source.',
 				'safe-publish'
 			);
 		}
