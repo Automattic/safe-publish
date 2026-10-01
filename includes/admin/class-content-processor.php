@@ -801,7 +801,8 @@ class Content_Processor {
 	 * markup (entity encoding, self-closing tags, whitespace, etc.).
 	 *
 	 * @param string $content         Content to process.
-	 * @param string $source_site_url Source site URL (scheme://host).
+	 * @param string $source_site_url Source site URL, with its port and path
+	 *                                when it has them.
 	 * @return string|WP_Error Content with URLs replaced, or WP_Error on failure.
 	 */
 	public function replace_source_urls( string $content, string $source_site_url ): string|WP_Error {

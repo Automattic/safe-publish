@@ -430,9 +430,32 @@ class Content_Processor_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that a source served on a port has the port replaced along with
+	 * the host, rather than left behind after the destination's URL.
+	 */
+	public function test_replace_source_urls_consumes_the_source_port(): void {
+		// ARRANGE: A link to a source site that answers on a port.
+		$source_site_url = 'https://source.example.com:8889';
+		$current_url     = get_site_url();
+		$content         = '<a href="' . $source_site_url . '/page">L</a>';
+
+		// ACT: Call replace_source_urls() directly.
+		$processed = $this->processor->replace_source_urls(
+			$content,
+			$source_site_url
+		);
+
+		// ASSERT: The whole origin was replaced, port included.
+		$this->assertSame(
+			'<a href="' . $current_url . '/page">L</a>',
+			$processed,
+			'The source port must be consumed by the replacement'
+		);
+	}
+
+	/**
 	 * Verifies that a source sharing the destination's host on another port is
-	 * treated as a separate site, so its URLs are still replaced. The port is
-	 * replaced along with the host.
+	 * treated as a separate site, so its URLs are still replaced.
 	 */
 	public function test_replace_source_urls_separates_sites_by_port(): void {
 		// ARRANGE: A source on the destination's own host, but another port.
