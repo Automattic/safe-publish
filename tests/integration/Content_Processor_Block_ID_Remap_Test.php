@@ -1292,12 +1292,13 @@ class Content_Processor_Block_ID_Remap_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Verifies that a private target keeps re-deriving, its permalink already
-	 * being the address the post is served at.
+	 * Verifies that a private target is re-derived even when the current user
+	 * cannot read it.
 	 */
 	public function test_rederives_private_post_target(): void {
-		// ARRANGE: Pretty permalinks; the target is private.
+		// ARRANGE: Pretty permalinks; a private target and a logged-out user.
 		$this->set_permalink_structure( '/%postname%/' );
+		wp_set_current_user( 0 );
 		$dest_post = self::factory()->post->create(
 			array(
 				'post_type'   => 'page',
