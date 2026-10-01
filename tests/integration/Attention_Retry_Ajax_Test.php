@@ -17,6 +17,7 @@ use Safe_Publish\Utils\Audit_Log_Table;
 use Safe_Publish\Utils\Log_Events;
 use Safe_Publish\Utils\Options;
 use WP_Ajax_UnitTestCase;
+use WP_Error;
 
 /**
  * Exercises the controller glue for the attention-issue endpoints: Retry type
@@ -64,8 +65,37 @@ class Attention_Retry_Ajax_Test extends WP_Ajax_UnitTestCase {
 	 */
 	#[\Override]
 	protected function tearDown(): void {
+		remove_filter( 'pre_http_request', array( $this, 'mock_empty_gallery_set' ) );
 		delete_option( Options::OPTION_CONNECTED_SITE_URL );
 		parent::tearDown();
+	}
+
+	/**
+	 * Serves a valid empty media set for the gallery target.
+	 *
+	 * @param false|array|WP_Error $preempt Prior HTTP response.
+	 * @param array                $_args   HTTP arguments.
+	 * @param string               $url     Requested URL.
+	 * @return false|array|WP_Error Mock response or prior value.
+	 */
+	public function mock_empty_gallery_set(
+		false|array|WP_Error $preempt,
+		array $_args,
+		string $url
+	): false|array|WP_Error {
+		if ( false !== $preempt
+			|| ! str_contains( $url, '/wp-json/wp/v2/pages/9700' ) ) {
+			return $preempt;
+		}
+
+		return array(
+			'response' => array(
+				'code'    => 200,
+				'message' => 'OK',
+			),
+			'body'     => '{"safe_publish_referenced_media":{}}',
+			'headers'  => array(),
+		);
 	}
 
 	/**
@@ -119,6 +149,7 @@ class Attention_Retry_Ajax_Test extends WP_Ajax_UnitTestCase {
 		);
 		$dest_id = $this->seed_target_post( 9700 );
 		$this->open_issue( $post_id, 'unmapped_gallery_reference', 9700, 'post' );
+		add_filter( 'pre_http_request', array( $this, 'mock_empty_gallery_set' ), 10, 3 );
 
 		// ACT: Retry through the endpoint.
 		$response = $this->retry(
@@ -809,6 +840,7 @@ class Attention_Retry_Ajax_Test extends WP_Ajax_UnitTestCase {
 		);
 		$dest_id = $this->seed_target_post( 9700 );
 		$this->open_issue( $post_id, 'unmapped_gallery_reference', 9700, 'post' );
+		add_filter( 'pre_http_request', array( $this, 'mock_empty_gallery_set' ), 10, 3 );
 		$user = self::factory()->user->create_and_get(
 			array( 'role' => 'subscriber' )
 		);
@@ -855,6 +887,7 @@ class Attention_Retry_Ajax_Test extends WP_Ajax_UnitTestCase {
 		);
 		$dest_id = $this->seed_target_post( 9700 );
 		$this->open_issue( $post_id, 'unmapped_gallery_reference', 9700, 'post' );
+		add_filter( 'pre_http_request', array( $this, 'mock_empty_gallery_set' ), 10, 3 );
 		$user = self::factory()->user->create_and_get(
 			array( 'role' => 'subscriber' )
 		);

@@ -87,6 +87,11 @@ trait Mock_Post_API_Trait {
 				$this->mock_post_overrides['safe_publish_terms'];
 		}
 
+		if ( isset( $this->mock_post_overrides['safe_publish_referenced_media'] ) ) {
+			$body['safe_publish_referenced_media'] =
+				$this->mock_post_overrides['safe_publish_referenced_media'];
+		}
+
 		if ( ! empty( $this->mock_post_overrides['terms'] ) ) {
 			$term_groups = array();
 			foreach ( $this->mock_post_overrides['terms'] as $taxonomy => $term_names ) {

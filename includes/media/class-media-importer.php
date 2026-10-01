@@ -791,14 +791,15 @@ class Media_Importer {
 	 * Fetches a source post's attached media set of a given type: The ordered
 	 * { id, menu_order } list a cross-post [gallery id="B"]/[playlist id="B"]
 	 * renders. Reads the source's referenced-media enrichment field, since the
-	 * media REST omits menu_order. Any fetch or shape failure yields an empty
-	 * set so the caller degrades rather than aborts.
+	 * media REST omits menu_order. The optional success flag distinguishes a
+	 * valid empty set from a failed fetch.
 	 *
 	 * @param int    $source_post_id   Referenced source post ID.
 	 * @param string $source_post_type Its post type slug, to resolve the REST base.
 	 * @param string $mime_group       Media type group: image, audio, or video.
 	 * @param string $source_site_url  Source site URL.
 	 * @param array  $auth_credentials Optional. Authentication credentials. Default empty array.
+	 * @param bool   $fetch_succeeded  Optional. Whether the set was fetched successfully.
 	 * @return list<array{id: int, menu_order: int}> Ordered set, or empty.
 	 */
 	public function fetch_referenced_media_set(
@@ -806,15 +807,22 @@ class Media_Importer {
 		string $source_post_type,
 		string $mime_group,
 		string $source_site_url,
-		array $auth_credentials = array()
+		array $auth_credentials = array(),
+		?bool &$fetch_succeeded = null
 	): array {
-		$rest_base = Source_Post_Type_Resolver::resolve_rest_base(
+		$fetch_succeeded = false;
+		$rest_base       = Source_Post_Type_Resolver::resolve_rest_base(
 			$source_post_type,
 			$source_site_url,
 			array( $this->http_client, 'make_request' ),
 			$auth_credentials
 		);
 		if ( is_wp_error( $rest_base ) ) {
+			$this->logger->source_media_fetch_failed(
+				$source_post_id,
+				$source_site_url,
+				$rest_base->get_error_message()
+			);
 			return array();
 		}
 
@@ -831,6 +839,21 @@ class Media_Importer {
 		);
 
 		if ( is_wp_error( $response ) ) {
+			$this->logger->source_media_fetch_failed(
+				$source_post_id,
+				$source_site_url,
+				$response->get_error_message()
+			);
+			return array();
+		}
+
+		$status = wp_remote_retrieve_response_code( $response );
+		if ( 200 !== $status ) {
+			$this->logger->source_media_fetch_failed(
+				$source_post_id,
+				$source_site_url,
+				'Source post returned HTTP ' . $status . '.'
+			);
 			return array();
 		}
 
@@ -838,10 +861,31 @@ class Media_Importer {
 		$field = is_array( $data )
 			? ( $data[ Source_Media_REST_Field::REFERENCED_FIELD_NAME ] ?? null )
 			: null;
+		if ( ! is_array( $field )
+			|| ( array_key_exists( $mime_group, $field )
+				&& ! is_array( $field[ $mime_group ] ) ) ) {
+			$this->logger->source_media_fetch_failed(
+				$source_post_id,
+				$source_site_url,
+				'Source post returned a malformed referenced media set.'
+			);
+			return array();
+		}
 
-		return Source_Media_REST_Field::normalize_menu_order_set(
-			is_array( $field ) ? ( $field[ $mime_group ] ?? null ) : null
-		);
+		$items = $field[ $mime_group ] ?? array();
+		$set   = Source_Media_REST_Field::normalize_menu_order_set( $items );
+		if ( ! array_is_list( $items ) || count( $set ) !== count( $items ) ) {
+			$this->logger->source_media_fetch_failed(
+				$source_post_id,
+				$source_site_url,
+				'Source post returned a malformed referenced media set.'
+			);
+			return array();
+		}
+
+		$fetch_succeeded = true;
+
+		return $set;
 	}
 
 	/**

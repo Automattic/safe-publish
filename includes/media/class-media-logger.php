@@ -139,10 +139,10 @@ class Media_Logger extends Logger {
 	}
 
 	/**
-	 * Logs a failure to fetch a source attachment's details by ID from the
-	 * source site.
+	 * Logs a failure to fetch source media data by attachment or referenced
+	 * post ID from the source site.
 	 *
-	 * @param int    $media_id        Source media ID being fetched.
+	 * @param int    $media_id        Source attachment or post ID being fetched.
 	 * @param string $source_site_url Source site the request targeted.
 	 * @param string $error           WP_Error message from the request.
 	 */

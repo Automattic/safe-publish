@@ -15,12 +15,14 @@ use Safe_Publish\Admin\History_Repository;
 use Safe_Publish\Admin\Navigation_Ref_Rewriter;
 use Safe_Publish\Admin\Post_Import_Service;
 use Safe_Publish\API\HTTP_Client;
+use Safe_Publish\API\Source_Post_Type_Resolver;
 use Safe_Publish\API\Meta_Terms_Manager;
 use Safe_Publish\API\Source_Posts_API;
 use Safe_Publish\Content\Content_Media_Processor;
 use Safe_Publish\Content\Shortcode_ID_Rewriter;
 use Safe_Publish\Media\Media_Importer;
 use Safe_Publish\Utils\Options;
+use Safe_Publish\Utils\Log_Events;
 use Safe_Publish\Utils\Reconcile_Outcome;
 use Safe_Publish\Utils\Telemetry_Service;
 use WP_Error;
@@ -319,6 +321,35 @@ class Cross_Post_Gallery_Media_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that an import retains a retryable source reference when its
+	 * referenced media set could not be fetched.
+	 */
+	public function test_import_keeps_gallery_reference_when_set_fetch_fails(): void {
+		// ARRANGE: B is imported, but its source media-set fetch fails.
+		$this->seed_imported_post( self::B_SOURCE );
+		$this->post_bodies[ self::A_SOURCE ] = $this->referencing_post_body(
+			'[gallery id="' . self::B_SOURCE . '"]'
+		);
+
+		// ACT: Import A while the source has no response for B.
+		$dest_a = $this->import( self::A_SOURCE );
+
+		// ASSERT: The source ID and warning remain for a later retry.
+		$this->assertSame(
+			'[gallery id="' . self::B_SOURCE . '"]',
+			get_post_field( 'post_content', $dest_a )
+		);
+		$this->assertNotNull(
+			( new Attention_Issues_Repository() )->get_issue(
+				$dest_a,
+				'unmapped_gallery_reference',
+				self::B_SOURCE,
+				'post'
+			)
+		);
+	}
+
+	/**
 	 * Verifies that in the A-then-B order the issue retry repoints A's
 	 * reference and pulls B's set, parenting it to dest-B, once B is imported.
 	 */
@@ -374,6 +405,297 @@ class Cross_Post_Gallery_Media_Test extends Integration_Test_Case {
 		$this->assertSame(
 			array( $image->ID ),
 			$this->gallery_children( $dest_b )
+		);
+	}
+
+	/**
+	 * Verifies that a failed referenced-set fetch leaves the retry open and
+	 * preserves the source reference for a later attempt.
+	 */
+	public function test_retry_keeps_issue_when_referenced_set_fetch_fails(): void {
+		// ARRANGE: A references imported B, but B's REST response is absent.
+		$dest_a = self::factory()->post->create(
+			array( 'post_content' => '[gallery id="' . self::B_SOURCE . '"]' )
+		);
+		$this->assertIsInt( $dest_a );
+		$this->seed_imported_post( self::B_SOURCE );
+		$fetch_failures = array();
+		$capture        = static function (
+			string $channel,
+			string $event,
+			array $data
+		) use ( &$fetch_failures ): void {
+			if ( 'media' === $channel
+				&& Log_Events::SOURCE_MEDIA_FETCH_FAILED === $event ) {
+				$fetch_failures[] = $data;
+			}
+		};
+		add_action( 'safe_publish_event_logged', $capture, 10, 3 );
+
+		// ACT: Retry the gallery reference without a fetched media set.
+		$outcome = $this->service->retry_gallery_ref_remap(
+			$dest_a,
+			self::B_SOURCE,
+			self::SOURCE
+		);
+		remove_action( 'safe_publish_event_logged', $capture, 10 );
+
+		// ASSERT: The reference remains retryable and its content is intact.
+		$this->assertSame( Reconcile_Outcome::UNRESOLVED, $outcome->type );
+		$this->assertSame(
+			'[gallery id="' . self::B_SOURCE . '"]',
+			get_post_field( 'post_content', $dest_a )
+		);
+		$this->assertCount( 1, $fetch_failures );
+		$this->assertSame( self::B_SOURCE, $fetch_failures[0]['media_id'] );
+		$this->assertStringContainsString(
+			'No mock body registered',
+			$fetch_failures[0]['error']
+		);
+	}
+
+	/**
+	 * Verifies that a failed item leaves the retry open until it can be imported.
+	 */
+	public function test_retry_keeps_issue_when_referenced_item_fails(): void {
+		// ARRANGE: A has an open reference to B's two-image gallery.
+		$this->post_bodies[ self::A_SOURCE ] = $this->referencing_post_body(
+			'[gallery id="' . self::B_SOURCE . '"]'
+		);
+		$dest_a                              = $this->import( self::A_SOURCE );
+		$dest_b                              = $this->seed_imported_post( self::B_SOURCE );
+		$good_url                            = $this->media_url( 8811 );
+		$failed_url                          = $this->media_url( 8812 );
+		$this->media_bodies                  = array(
+			8811 => $this->media_body( 8811, $good_url ),
+			8812 => $this->media_body( 8812, $failed_url ),
+		);
+		$this->post_bodies[ self::B_SOURCE ] = $this->referenced_post_body(
+			array(
+				'image' => array(
+					array(
+						'id'         => 8811,
+						'menu_order' => 1,
+					),
+					array(
+						'id'         => 8812,
+						'menu_order' => 2,
+					),
+				),
+			)
+		);
+		$this->poisoned_urls                 = array( $failed_url );
+
+		// ACT: Retry while the second image download fails.
+		$outcome = $this->service->retry_gallery_ref_remap(
+			$dest_a,
+			self::B_SOURCE,
+			self::SOURCE
+		);
+
+		// ASSERT: The first image imports, but the issue and source ID remain.
+		$this->assertSame( Reconcile_Outcome::UNRESOLVED, $outcome->type );
+		$this->assertSame(
+			'[gallery id="' . self::B_SOURCE . '"]',
+			get_post_field( 'post_content', $dest_a )
+		);
+		$this->assertNotNull(
+			( new Attention_Issues_Repository() )->get_issue(
+				$dest_a,
+				'unmapped_gallery_reference',
+				self::B_SOURCE,
+				'post'
+			)
+		);
+		$this->assertCount( 1, $this->gallery_children( $dest_b ) );
+		$this->assertNull( $this->find_dest_attachment( $failed_url ) );
+
+		// ACT: Retry after the image becomes available.
+		$this->poisoned_urls = array();
+		$outcome             = $this->service->retry_gallery_ref_remap(
+			$dest_a,
+			self::B_SOURCE,
+			self::SOURCE
+		);
+
+		// ASSERT: The full gallery imports and the reference issue clears.
+		$this->assertSame( Reconcile_Outcome::RESOLVED, $outcome->type );
+		$this->assertSame(
+			'[gallery id="' . $dest_b . '"]',
+			get_post_field( 'post_content', $dest_a )
+		);
+		$this->assertSame(
+			array(
+				$this->dest_attachment_for( $good_url )->ID,
+				$this->dest_attachment_for( $failed_url )->ID,
+			),
+			$this->gallery_children( $dest_b )
+		);
+		$this->assertNull(
+			( new Attention_Issues_Repository() )->get_issue(
+				$dest_a,
+				'unmapped_gallery_reference',
+				self::B_SOURCE,
+				'post'
+			)
+		);
+	}
+
+	/**
+	 * Verifies that a fetched empty set still permits the reference retry.
+	 */
+	public function test_retry_resolves_with_fetched_empty_set(): void {
+		// ARRANGE: B has no gallery media, but its REST set is available.
+		$dest_a = self::factory()->post->create(
+			array( 'post_content' => '[gallery id="' . self::B_SOURCE . '"]' )
+		);
+		$this->assertIsInt( $dest_a );
+		$dest_b                              = $this->seed_imported_post( self::B_SOURCE );
+		$this->post_bodies[ self::B_SOURCE ] = $this->referenced_post_body(
+			array()
+		);
+
+		// ACT: Retry the reference to B's empty gallery.
+		$outcome = $this->service->retry_gallery_ref_remap(
+			$dest_a,
+			self::B_SOURCE,
+			self::SOURCE
+		);
+
+		// ASSERT: The verified empty set resolves the reference.
+		$this->assertSame( Reconcile_Outcome::RESOLVED, $outcome->type );
+		$this->assertSame(
+			'[gallery id="' . $dest_b . '"]',
+			get_post_field( 'post_content', $dest_a )
+		);
+	}
+
+	/**
+	 * Verifies that a custom type's failed catalog lookup keeps retry open.
+	 */
+	public function test_retry_keeps_issue_when_catalog_fetch_fails(): void {
+		// ARRANGE: B is a custom type whose source catalog is unavailable.
+		register_post_type(
+			'sp_gallery_test',
+			array(
+				'public'       => true,
+				'show_in_rest' => true,
+			)
+		);
+		$dest_b = self::factory()->post->create(
+			array( 'post_type' => 'sp_gallery_test' )
+		);
+		$this->assertIsInt( $dest_b );
+		update_post_meta( $dest_b, Options::META_SOURCE_POST_ID, self::B_SOURCE );
+		update_post_meta( $dest_b, Options::META_SOURCE_SITE_URL, self::SOURCE );
+		$dest_a = self::factory()->post->create(
+			array( 'post_content' => '[gallery id="' . self::B_SOURCE . '"]' )
+		);
+		$this->assertIsInt( $dest_a );
+		$fail_catalog = static function (
+			false|array|WP_Error $preempt,
+			array $_args,
+			string $url
+		): false|array|WP_Error {
+			return str_contains( $url, '/catalog/post-types' )
+				? new WP_Error( 'catalog_unavailable', 'Catalog unavailable' )
+				: $preempt;
+		};
+		Source_Post_Type_Resolver::reset_cache();
+		add_filter( 'pre_http_request', $fail_catalog, 0, 3 );
+
+		// ACT: Retry while source type resolution fails.
+		$outcome = $this->service->retry_gallery_ref_remap(
+			$dest_a,
+			self::B_SOURCE,
+			self::SOURCE
+		);
+		remove_filter( 'pre_http_request', $fail_catalog, 0 );
+		unregister_post_type( 'sp_gallery_test' );
+
+		// ASSERT: B exists locally, but A's reference remains retryable.
+		$this->assertSame( Reconcile_Outcome::UNRESOLVED, $outcome->type );
+		$this->assertSame(
+			'[gallery id="' . self::B_SOURCE . '"]',
+			get_post_field( 'post_content', $dest_a )
+		);
+	}
+
+	/**
+	 * Verifies that a non-200 source response cannot resolve the retry.
+	 */
+	public function test_retry_keeps_issue_on_non_200_response(): void {
+		// ARRANGE: B exists locally, but its source returns HTTP 503.
+		$this->seed_imported_post( self::B_SOURCE );
+		$dest_a = self::factory()->post->create(
+			array( 'post_content' => '[gallery id="' . self::B_SOURCE . '"]' )
+		);
+		$this->assertIsInt( $dest_a );
+		$fail_post = static function (
+			false|array|WP_Error $preempt,
+			array $_args,
+			string $url
+		): false|array|WP_Error {
+			if ( ! str_contains( $url, '/wp-json/wp/v2/posts/' . self::B_SOURCE ) ) {
+				return $preempt;
+			}
+
+			return array(
+				'response' => array(
+					'code'    => 503,
+					'message' => 'Unavailable',
+				),
+				'body'     => '{}',
+				'headers'  => array(),
+			);
+		};
+		add_filter( 'pre_http_request', $fail_post, 0, 3 );
+
+		// ACT: Retry the source reference.
+		$outcome = $this->service->retry_gallery_ref_remap(
+			$dest_a,
+			self::B_SOURCE,
+			self::SOURCE
+		);
+		remove_filter( 'pre_http_request', $fail_post, 0 );
+
+		// ASSERT: The retry remains unresolved and preserves the shortcode.
+		$this->assertSame( Reconcile_Outcome::UNRESOLVED, $outcome->type );
+		$this->assertSame(
+			'[gallery id="' . self::B_SOURCE . '"]',
+			get_post_field( 'post_content', $dest_a )
+		);
+	}
+
+	/**
+	 * Verifies that a malformed referenced-media item cannot clear a retry.
+	 */
+	public function test_retry_keeps_issue_on_malformed_media_set(): void {
+		// ARRANGE: B returns a media group with an invalid item.
+		$this->seed_imported_post( self::B_SOURCE );
+		$dest_a = self::factory()->post->create(
+			array( 'post_content' => '[gallery id="' . self::B_SOURCE . '"]' )
+		);
+		$this->assertIsInt( $dest_a );
+		$this->post_bodies[ self::B_SOURCE ] = array(
+			'id'                            => self::B_SOURCE,
+			'safe_publish_referenced_media' => array(
+				'image' => array( array( 'menu_order' => 1 ) ),
+			),
+		);
+
+		// ACT: Retry against the malformed response.
+		$outcome = $this->service->retry_gallery_ref_remap(
+			$dest_a,
+			self::B_SOURCE,
+			self::SOURCE
+		);
+
+		// ASSERT: The source reference remains available for retry.
+		$this->assertSame( Reconcile_Outcome::UNRESOLVED, $outcome->type );
+		$this->assertSame(
+			'[gallery id="' . self::B_SOURCE . '"]',
+			get_post_field( 'post_content', $dest_a )
 		);
 	}
 

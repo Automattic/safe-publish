@@ -16,6 +16,7 @@ use Safe_Publish\Content\Content_Media_Processor;
 use Safe_Publish\Content\Shortcode_ID_Rewriter;
 use Safe_Publish\Media\Media_Importer;
 use Safe_Publish\Utils\Options;
+use WP_Error;
 
 /**
  * Drives the singular gallery/playlist `id` post-reference rewrite via the
@@ -26,6 +27,52 @@ use Safe_Publish\Utils\Options;
 class Content_Processor_Gallery_Post_Reference_Test extends Integration_Test_Case {
 
 	private const SOURCE = 'https://source.example.com';
+
+	/**
+	 * Serves a fetched empty set for post-reference remap tests.
+	 */
+	#[\Override]
+	protected function setUp(): void {
+		parent::setUp();
+		add_filter( 'pre_http_request', array( $this, 'mock_empty_set' ), 10, 3 );
+	}
+
+	/**
+	 * Removes the source response mock.
+	 */
+	#[\Override]
+	protected function tearDown(): void {
+		remove_filter( 'pre_http_request', array( $this, 'mock_empty_set' ) );
+		parent::tearDown();
+	}
+
+	/**
+	 * Returns a valid empty media set for source post requests.
+	 *
+	 * @param false|array|WP_Error $preempt Prior HTTP response.
+	 * @param array                $_args   HTTP arguments.
+	 * @param string               $url     Requested URL.
+	 * @return false|array|WP_Error Mock response or prior value.
+	 */
+	public function mock_empty_set(
+		false|array|WP_Error $preempt,
+		array $_args,
+		string $url
+	): false|array|WP_Error {
+		if ( false !== $preempt
+			|| 1 !== preg_match( '#/wp-json/wp/v2/(posts|pages)/\d+#', $url ) ) {
+			return $preempt;
+		}
+
+		return array(
+			'response' => array(
+				'code'    => 200,
+				'message' => 'OK',
+			),
+			'body'     => '{"safe_publish_referenced_media":{}}',
+			'headers'  => array(),
+		);
+	}
 
 	/**
 	 * Builds a Content_Processor wired against real WP dependencies.
@@ -65,19 +112,24 @@ class Content_Processor_Gallery_Post_Reference_Test extends Integration_Test_Cas
 		// ARRANGE: The referenced source post B maps to a dest id in this batch.
 		$processor = $this->build_processor();
 		$content   = '[gallery id="500"]';
+		$dest_b    = self::factory()->post->create();
+		$this->assertIsInt( $dest_b );
 
 		// ACT: Process with B => dest in the session map.
 		$result = $processor->process_content(
 			$content,
 			self::SOURCE,
 			array(
-				'session_id_map' => array( 500 => 8080 ),
+				'session_id_map' => array( 500 => $dest_b ),
 				'source_post_id' => 700,
 			)
 		);
 
 		// ASSERT: The id is remapped, no warning raised.
-		$this->assertStringContainsString( '[gallery id="8080"]', $result );
+		$this->assertStringContainsString(
+			'[gallery id="' . $dest_b . '"]',
+			$result
+		);
 		$this->assertSame( array(), $processor->get_warnings() );
 	}
 
