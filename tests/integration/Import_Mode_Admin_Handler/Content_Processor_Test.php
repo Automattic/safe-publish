@@ -16,6 +16,7 @@ use Safe_Publish\Content\Shortcode_ID_Rewriter;
 use Safe_Publish\Media\Media_Importer;
 use Safe_Publish\Tests\Integration\Integration_Test_Case;
 use Safe_Publish\Tests\Integration\Mock_Media_HTTP_Trait;
+use Safe_Publish\Utils\Options;
 use WP_Error;
 
 /**
@@ -1465,6 +1466,92 @@ class Content_Processor_Test extends Integration_Test_Case {
 		);
 		$this->assertSame( array(), $this->processor->get_failed_media() );
 		$this->assertStringContainsString( 'wp-content/uploads', $processed );
+	}
+
+	/**
+	 * Verifies that a line-broken URL receives source library metadata after
+	 * sideloading from classic HTML or a Gutenberg block attribute.
+	 *
+	 * @dataProvider line_broken_media_content_provider
+	 * @param bool $block Whether to import from a block URL attribute.
+	 */
+	public function test_line_broken_media_applies_library_metadata(
+		bool $block
+	): void {
+		// ARRANGE: The export map uses the normalized URL as its key.
+		$source_site_url = 'https://source.example.com';
+		$media_url       = $source_site_url
+			. '/wp-content/uploads/2025/01/line-broken.jpg';
+		$broken_url      = str_replace( 'line-broken', "line-\nbroken", $media_url );
+		$metadata        = array(
+			'alt'         => 'Library alt',
+			'title'       => 'Library title',
+			'caption'     => 'Library caption',
+			'description' => 'Library description',
+			'parent'      => '4242',
+		);
+		$content         = $block
+			? serialize_block(
+				array(
+					'blockName'    => 'core/cover',
+					'attrs'        => array( 'url' => $broken_url ),
+					'innerBlocks'  => array(),
+					'innerHTML'    => '',
+					'innerContent' => array(),
+				)
+			)
+			: '<img src="' . $broken_url . '">';
+
+		// ACT: Process the content with the exported metadata map.
+		$processed = $this->processor->process_content(
+			$content,
+			$source_site_url,
+			array( 'library_metadata_map' => array( $media_url => $metadata ) )
+		);
+
+		// ASSERT: The normalized URL is fetched and its metadata is applied.
+		$this->assertIsString( $processed );
+		$this->assertSame( array( $media_url ), $this->requested_urls );
+		$attachments = get_posts(
+			array(
+				'post_type'      => 'attachment',
+				'post_status'    => 'inherit',
+				'meta_key'       => Options::META_ORIGINAL_URL,
+				'fields'         => 'ids',
+				'posts_per_page' => -1,
+			)
+		);
+		$this->assertCount( 1, $attachments );
+		$attachment_id = $attachments[0];
+		$attachment    = get_post( $attachment_id );
+		$this->assertSame(
+			$media_url,
+			get_post_meta( $attachment_id, Options::META_ORIGINAL_URL, true )
+		);
+		$this->assertSame( 'Library alt', get_post_meta( $attachment_id, '_wp_attachment_image_alt', true ) );
+		$this->assertSame( 'Library title', $attachment->post_title );
+		$this->assertSame( 'Library caption', $attachment->post_excerpt );
+		$this->assertSame( 'Library description', $attachment->post_content );
+		$this->assertSame(
+			'4242',
+			get_post_meta(
+				$attachment_id,
+				Options::META_SOURCE_ATTACHMENT_PARENT_ID,
+				true
+			)
+		);
+	}
+
+	/**
+	 * Provides classic HTML and block attribute media paths.
+	 *
+	 * @return array<string, array{bool}>
+	 */
+	public static function line_broken_media_content_provider(): array {
+		return array(
+			'classic HTML'    => array( false ),
+			'block attribute' => array( true ),
+		);
 	}
 
 	/**
