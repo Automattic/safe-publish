@@ -12,7 +12,7 @@
 
 ## Testing
 
-<!-- List the commands run and their results. Keep manual verification below. -->
+<!-- List the commands reviewers should run. Keep manual verification below. -->
 
 ## Human testing steps
 
