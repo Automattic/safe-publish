@@ -363,6 +363,33 @@ class Diff_Renderer_Featured_Media_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that both preview images carry alt text, so each link has an
+	 * accessible name.
+	 */
+	public function test_preview_images_carry_alt_text(): void {
+		// ARRANGE: The post holds the copy of one image; the source now
+		// advertises another.
+		set_post_thumbnail(
+			$this->post_id,
+			$this->import_featured( self::MEDIA_ID )
+		);
+
+		// ACT: Render the diff.
+		$result = $this->render_diff( self::OTHER_MEDIA_ID );
+
+		// ASSERT: Each side names its image.
+		$html = $result['nonContentDiffs']['featuredMedia'];
+		$this->assertStringContainsString(
+			'alt="Current featured image"',
+			$html
+		);
+		$this->assertStringContainsString(
+			'alt="Incoming featured image"',
+			$html
+		);
+	}
+
+	/**
 	 * Verifies that a repoint to an image the destination library already
 	 * holds reports, since the import would swap the thumbnail for it.
 	 */

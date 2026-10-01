@@ -622,14 +622,16 @@ final class Diff_Renderer {
 
 		$current_img  = '' !== $current_featured_url
 			? sprintf(
-				'<a href="%1$s" target="_blank" rel="noopener noreferrer"><img alt="" src="%1$s" /></a>',
-				esc_url( $current_featured_url )
+				'<a href="%1$s" target="_blank" rel="noopener noreferrer"><img alt="%2$s" src="%1$s" /></a>',
+				esc_url( $current_featured_url ),
+				esc_attr__( 'Current featured image', 'safe-publish' )
 			)
 			: '<em>' . esc_html__( 'None', 'safe-publish' ) . '</em>';
 		$incoming_img = '' !== $incoming_featured_url
 			? sprintf(
-				'<a href="%1$s" target="_blank" rel="noopener noreferrer"><img alt="" src="%1$s" /></a>',
-				esc_url( $incoming_featured_url )
+				'<a href="%1$s" target="_blank" rel="noopener noreferrer"><img alt="%2$s" src="%1$s" /></a>',
+				esc_url( $incoming_featured_url ),
+				esc_attr__( 'Incoming featured image', 'safe-publish' )
 			)
 			: '<em>' . esc_html( $incoming_placeholder ) . '</em>';
 
