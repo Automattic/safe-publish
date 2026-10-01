@@ -2813,6 +2813,10 @@ class Content_Processor {
 			return true;
 		}
 
+		if ( ! $this->has_ancestor_path( $post_id ) ) {
+			return false;
+		}
+
 		foreach ( get_post_ancestors( $post_id ) as $ancestor_id ) {
 			if ( in_array( get_post_status( $ancestor_id ), $unsettled, true ) ) {
 				return true;
@@ -2820,6 +2824,23 @@ class Content_Processor {
 		}
 
 		return false;
+	}
+
+	/**
+	 * Whether ancestor slugs form part of a post's permalink: Only hierarchical
+	 * types nest them, and a plain structure only through a query var.
+	 *
+	 * @param int $post_id Destination post id.
+	 * @return bool True when an ancestor's slug can move the permalink.
+	 */
+	private function has_ancestor_path( int $post_id ): bool {
+		$type = get_post_type_object( (string) get_post_type( $post_id ) );
+		if ( ! ( $type instanceof WP_Post_Type ) || ! $type->hierarchical ) {
+			return false;
+		}
+
+		return '' !== get_option( 'permalink_structure' )
+			|| is_string( $type->query_var );
 	}
 
 	/**

@@ -308,7 +308,7 @@ Navigation links and submenus are the exception: they carry an explicit entity r
 
 ### Navigation links to draft targets or their children may 404 or open the wrong page
 
-WordPress settles a post's slug only when it leaves draft or pending, so a link to a target in either status keeps the host-swapped source path instead of a URL that would move later. The same applies when a parent page the target sits under is a draft, pending, or in the trash (where its slug carries a temporary `__trashed` suffix), because the parent's slug forms part of the child's path.
+WordPress settles a post's slug only when it leaves draft or pending, so a link to a target in either status keeps the host-swapped source path instead of a URL that would move later. The same applies when a parent page the target sits under is a draft, pending, or in the trash (where its slug carries a temporary `__trashed` suffix), because the parent's slug forms part of the child's path. Under plain permalinks, a page's URL uses its ID instead of a path, so its parents don't matter.
 
 Such a link behaves like an [internal body link](#internal-body-links-may-404-or-open-the-wrong-page) — it can 404 or open the wrong page under a slug collision or a different permalink structure. Re-import the referring content after the target and its parents are published to re-derive the URL; the Retry action does not cover this case.
 
