@@ -212,7 +212,11 @@ class Shortcode_Media_Rewriter {
 		}
 
 		if ( false === $new_url ) {
-			$this->failed_media[ $value ] = '';
+			$download_url                        = Media_Importer::get_download_url(
+				$value,
+				$source_site_url
+			);
+			$this->failed_media[ $download_url ] = '';
 		}
 
 		// null: Third-party or already-local — leave the URL as-is.
