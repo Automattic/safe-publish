@@ -127,6 +127,7 @@ class Post_Import_Service {
 	 */
 	private const ATTENTION_POST_ISSUE_TYPES = array(
 		'unmapped_block_reference',
+		'deferred_navigation_url',
 		'unmapped_gallery_reference',
 		'parent_orphaned',
 		'unregistered_taxonomy',
@@ -1348,6 +1349,13 @@ class Post_Import_Service {
 			list( $bucket, $ref ) = $class;
 			$resolvable[ $index ] = 'none' !== $bucket
 				&& isset( $maps[ $bucket ][ $ref ] );
+			if (
+				$resolvable[ $index ]
+				&& 'deferred_navigation_url' === $issue_rows[ $index ]['issue_type']
+			) {
+				$resolvable[ $index ] = $this->content_processor
+					->is_post_path_final( $maps['post'][ $ref ] );
+			}
 		}
 
 		return $resolvable;
@@ -1925,6 +1933,14 @@ class Post_Import_Service {
 				),
 			);
 		}
+		if ( 'deferred_navigation_url' === $type ) {
+			return array(
+				'issue_type'  => $type,
+				'target_ref'  => (int) $warning['source_id'],
+				'target_kind' => 'post',
+				'severity'    => 'warning',
+			);
+		}
 
 		if ( 'unmapped_gallery_reference' === $type ) {
 			return array(
@@ -2083,6 +2099,24 @@ class Post_Import_Service {
 			$target_kind,
 			$source_site_url
 		);
+		if ( Content_Processor::DEFERRED_URL_DETAIL === $outcome->detail ) {
+			$this->attention_issues->upsert_issue(
+				$affected_post_id,
+				'deferred_navigation_url',
+				$target_ref,
+				'post',
+				'warning',
+				$source_site_url
+			);
+			$this->resolve_or_touch(
+				true,
+				$affected_post_id,
+				'unmapped_block_reference',
+				$target_ref,
+				$target_kind
+			);
+			return $outcome;
+		}
 
 		$this->resolve_or_touch(
 			$outcome->is_resolved(),
@@ -2092,6 +2126,34 @@ class Post_Import_Service {
 			$target_kind
 		);
 
+		return $outcome;
+	}
+
+	/**
+	 * Repairs a mapped navigation URL once the target path is final.
+	 *
+	 * @param int    $affected_post_id Post holding the link.
+	 * @param int    $target_ref       Source target post id.
+	 * @param string $source_site_url  Source identity for lookup.
+	 * @return Reconcile_Outcome Result of the URL-only repair.
+	 */
+	public function retry_deferred_navigation_url(
+		int $affected_post_id,
+		int $target_ref,
+		string $source_site_url
+	): Reconcile_Outcome {
+		$outcome = $this->content_processor->repair_deferred_link_url(
+			$affected_post_id,
+			$target_ref,
+			$source_site_url
+		);
+		$this->resolve_or_touch(
+			$outcome->is_resolved(),
+			$affected_post_id,
+			'deferred_navigation_url',
+			$target_ref,
+			'post'
+		);
 		return $outcome;
 	}
 

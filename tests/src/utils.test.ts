@@ -22,6 +22,7 @@ import {
 import type {
 	AttentionIssue,
 	AuthorFallbackWarning,
+	DeferredNavigationUrlWarning,
 	HistoryWriteFailedWarning,
 	NavRefRewriteFailedWarning,
 	ParentOrphanedWarning,
@@ -449,6 +450,22 @@ describe( 'renderWarningMessage', () => {
 		expect( message ).toContain( 'nav' );
 	} );
 
+	it( 'Verifies that deferred URL warnings explain the repair', () => {
+		// ARRANGE: A mapped link whose target path is not final.
+		const warning: DeferredNavigationUrlWarning = {
+			type: 'deferred_navigation_url',
+			source_id: 9701,
+		};
+
+		// ACT: Render the single-import warning.
+		const message = renderWarningMessage( warning );
+
+		// ASSERT: The source ID and Needs attention repair are readable.
+		expect( message ).toContain( '9701' );
+		expect( message ).toContain( 'Retry from Needs attention' );
+		expect( message ).not.toContain( '[object Object]' );
+	} );
+
 	it( 'should render the Patterns hint for a core/block unmapped reference', () => {
 		// ARRANGE: An unresolved core/block ref (reusable block).
 		const warning: UnmappedBlockReferenceWarning = {
@@ -606,6 +623,20 @@ describe( 'renderWarningShortLabel', () => {
 		const label = renderWarningShortLabel( warning );
 		// ASSERT: Short label is the comma-joinable string used in the bulk modal.
 		expect( label ).toBe( 'unmapped block reference' );
+	} );
+
+	it( 'Verifies that deferred URLs have a bulk-result label', () => {
+		// ARRANGE: A deferred navigation warning in an import result.
+		const warning: DeferredNavigationUrlWarning = {
+			type: 'deferred_navigation_url',
+			source_id: 9701,
+		};
+
+		// ACT: Render the bulk-result label.
+		const label = renderWarningShortLabel( warning );
+
+		// ASSERT: The short label is readable and comma-joinable.
+		expect( label ).toBe( 'deferred navigation URL' );
 	} );
 
 	it( 'should return "reusable block reference" for a core/block unmapped reference', () => {

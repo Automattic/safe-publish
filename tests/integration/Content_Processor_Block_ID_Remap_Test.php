@@ -932,6 +932,111 @@ class Content_Processor_Block_ID_Remap_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that an empty URL does not create an unrepairable deferral.
+	 */
+	public function test_does_not_defer_empty_navigation_url(): void {
+		// ARRANGE: A draft target and a link with no URL to repair.
+		$target  = self::factory()->post->create(
+			array(
+				'post_type'   => 'page',
+				'post_status' => 'draft',
+			)
+		);
+		$content = $this->nav_block_content(
+			array( $this->post_link( 99052, '' ) )
+		);
+
+		// ACT: Remap the target ID.
+		$result = $this->processor->process_content(
+			$content,
+			self::SOURCE_SITE_URL,
+			array( 'session_id_map' => array( 99052 => $target ) )
+		);
+
+		// ASSERT: The ID maps, but no deferred URL warning is recorded.
+		$this->assertStringContainsString( '"id":' . $target, (string) $result );
+		$this->assertSame( array(), $this->processor->get_warnings() );
+	}
+
+	/**
+	 * Verifies that a published child under a pending parent still defers its
+	 * URL because the ancestor can change the served path.
+	 */
+	public function test_defers_published_child_of_pending_parent(): void {
+		// ARRANGE: The child's own slug is final, but its parent's is not.
+		$this->set_permalink_structure( '/%postname%/' );
+		$parent  = self::factory()->post->create(
+			array(
+				'post_type'   => 'page',
+				'post_status' => 'pending',
+			)
+		);
+		$child   = self::factory()->post->create(
+			array(
+				'post_type'   => 'page',
+				'post_status' => 'publish',
+				'post_parent' => $parent,
+			)
+		);
+		$content = $this->nav_block_content(
+			array( $this->post_link( 99050, self::SOURCE_SITE_URL . '/child' ) )
+		);
+
+		// ACT: Import a link to the child.
+		$result = $this->processor->process_content(
+			$content,
+			self::SOURCE_SITE_URL,
+			array( 'session_id_map' => array( 99050 => $child ) )
+		);
+
+		// ASSERT: The ID is mapped while the URL and warning record deferral.
+		$this->assertStringContainsString( '"id":' . $child, (string) $result );
+		$this->assertSame(
+			'http://example.org/child',
+			$this->first_nav_link_url( (string) $result )
+		);
+		$this->assertSame(
+			'deferred_navigation_url',
+			$this->processor->get_warnings()[0]['type']
+		);
+	}
+
+	/**
+	 * Verifies that scheduled and custom-status targets have final slugs.
+	 */
+	public function test_derives_urls_for_future_and_custom_statuses(): void {
+		// ARRANGE: Both statuses have final slugs despite being non-public.
+		$this->set_permalink_structure( '/%postname%/' );
+		register_post_status( 'sp_review', array( 'public' => false ) );
+		foreach ( array( 'future', 'sp_review' ) as $status ) {
+			$target  = self::factory()->post->create(
+				array(
+					'post_type'   => 'page',
+					'post_status' => $status,
+					'post_name'   => 'about-' . $status,
+				)
+			);
+			$content = $this->nav_block_content(
+				array( $this->post_link( 99051, self::SOURCE_SITE_URL . '/about' ) )
+			);
+
+			// ACT: Import the link against the non-public target.
+			$result = $this->processor->process_content(
+				$content,
+				self::SOURCE_SITE_URL,
+				array( 'session_id_map' => array( 99051 => $target ) )
+			);
+
+			// ASSERT: The URL has the slug and no deferral was recorded.
+			$this->assertSame(
+				'http://example.org/about-' . $status . '/',
+				$this->first_nav_link_url( (string) $result )
+			);
+			$this->assertSame( array(), $this->processor->get_warnings() );
+		}
+	}
+
+	/**
 	 * Verifies that a custom taxonomy's registered query var is stripped, found
 	 * dynamically from the destination term's taxonomy.
 	 */
