@@ -459,8 +459,9 @@ class URLValidatorTest extends TestCase {
 	}
 
 	/**
-	 * Verifies that only genuinely relative URLs are resolved, and that the
-	 * base URL's own path is kept so subsite sources resolve correctly.
+	 * Verifies that only genuinely relative URLs are resolved, and that a
+	 * root-relative URL drops the base URL's path, since a subsite serves its
+	 * uploads from the host root.
 	 *
 	 * @dataProvider resolve_relative_url_provider
 	 *
@@ -531,6 +532,11 @@ class URLValidatorTest extends TestCase {
 				'url'      => '/wp-content/image.png',
 				'base'     => 'https://example.com:8443/blog',
 				'expected' => 'https://example.com:8443/wp-content/image.png',
+			),
+			'schemeless base concatenates'  => array(
+				'url'      => '/wp-content/image.png',
+				'base'     => 'example.com',
+				'expected' => 'example.com/wp-content/image.png',
 			),
 			'leading space stays absolute'  => array(
 				'url'      => ' https://example.com/image.png',

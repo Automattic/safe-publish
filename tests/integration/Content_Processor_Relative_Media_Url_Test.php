@@ -278,13 +278,18 @@ class Content_Processor_Relative_Media_Url_Test extends Integration_Test_Case {
 	 * for byte, so escaped attributes survive the import unchanged.
 	 */
 	public function test_untouched_block_content_is_returned_verbatim(): void {
-		// ARRANGE: Prose whose block attributes carry the escapes Core writes,
-		// plus a relative anchor that is not a media reference.
-		$html   = '<!-- wp:paragraph '
-			. '{"metadata":{"name":"Café "notes""}} -->' . "\n"
+		// ARRANGE: Prose whose block attributes carry escapes Core rewrites on
+		// re-serializing, as plain json_encode() writes them, plus a relative
+		// anchor that is not a media reference.
+		$html = '<!-- wp:paragraph '
+			. '{"metadata":{"name":"Caf\u00e9 \"notes\""}} -->' . "\n"
 			. '<p>See <a href="/about">about</a>: namespace App\Models; '
 			. '$re = "\d+";</p>' . "\n"
 			. '<!-- /wp:paragraph -->';
+		$this->assertSame(
+			'Café "notes"',
+			parse_blocks( $html )[0]['attrs']['metadata']['name']
+		);
 		$before = $this->get_attachment_count();
 
 		// ACT: Run the full pipeline.
@@ -320,28 +325,39 @@ class Content_Processor_Relative_Media_Url_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Verifies that relative media imports alongside an ID-reference block.
-	 * Such a block used to be the only reason http-free content was processed
-	 * at all, and it drove the ID remap rather than the media pass.
+	 * Verifies that relative media imports beside an ID-reference block whose
+	 * ID is remapped in the same run. Such a block used to be the only reason
+	 * http-free content was processed at all, and it drove the ID remap rather
+	 * than the media pass.
 	 */
 	public function test_relative_media_imports_beside_id_reference_block(): void {
-		// ARRANGE: A navigation link and a protocol-relative image, no "http".
-		$html = '<!-- wp:navigation-link {"id":99,"kind":"post-type"} -->'
-			. '<!-- /wp:navigation-link -->'
+		// ARRANGE: A navigation link mapped to a destination post, and a
+		// protocol-relative image, no "http".
+		$dest_post = self::factory()->post->create();
+		$source_id = 99001; // Clear of auto-incremented post IDs.
+		$html      = '<!-- wp:navigation-link {"id":' . $source_id
+			. ',"kind":"post-type"} --><!-- /wp:navigation-link -->'
 			. '<!-- wp:image --><figure class="wp-block-image">'
 			. '<img src="//source.example.com/combo.jpg" alt=""/>'
 			. '</figure><!-- /wp:image -->';
 		$this->assertStringNotContainsString( 'http', $html );
 		$before = $this->get_attachment_count();
 
-		// ACT: Run the full pipeline.
-		$result = (string) $this->processor->process_content( $html, self::SOURCE );
+		// ACT: Run the full pipeline with the link's mapping in the session.
+		$result = (string) $this->processor->process_content(
+			$html,
+			self::SOURCE,
+			array( 'session_id_map' => array( $source_id => $dest_post ) )
+		);
 
-		// ASSERT: The image imported and the navigation block survived.
+		// ASSERT: The image imported and the link ID was remapped.
 		$this->assertSame( $before + 1, $this->get_attachment_count() );
 		$this->assertSame( array( self::SOURCE . '/combo.jpg' ), $this->requested );
 		$this->assertStringNotContainsString( '//source.example.com', $result );
-		$this->assertStringContainsString( 'wp:navigation-link', $result );
+		$this->assertSame(
+			$dest_post,
+			parse_blocks( $result )[0]['attrs']['id']
+		);
 	}
 
 	/**

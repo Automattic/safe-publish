@@ -775,8 +775,9 @@ class Content_Processor {
 		);
 
 		// Re-serializing rewrites attribute escapes, so return the original
-		// bytes when nothing changed and no ID remap is due. Absolute URLs are
-		// excluded: replace_source_urls() needs serialize_blocks() to unescape.
+		// bytes when nothing changed and no ID remap is due. Content holding
+		// "http" is excluded: replace_source_urls() needs serialize_blocks() to
+		// unescape absolute URLs.
 		if (
 			! $needs_id_remap
 			&& false === strpos( $content, 'http' )
