@@ -75,6 +75,7 @@ These apply to comments in every language, not just PHP.
 - Branch with a `fix/`, `add/`, or `update/` prefix, or another that fits.
 - Use short, imperative commit messages, PR titles, and branch titles; keep the PR and branch titles as identical as possible.
 - Keep PR descriptions short, focusing on decisions instead of small technical details; don't add any line wrapping.
+- In Human testing steps, give manual setup, actions, expected observations, and cleanup when needed. Put automated test commands under Testing; running a test suite is not a human testing step.
 - Before creating a PR, ensure all tests pass by running `npm run test`, `npm run test:integration`, and `npm run test:e2e`.
 
 ## Code-review skill
