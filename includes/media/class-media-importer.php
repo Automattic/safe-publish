@@ -77,6 +77,15 @@ class Media_Importer {
 	private bool $resolve_only;
 
 	/**
+	 * Source media URLs a resolve-only instance found no earlier import of,
+	 * keyed by query-stripped URL. An ambiguous URL is left out, since the
+	 * import may keep it as a link.
+	 *
+	 * @var array<string, true>
+	 */
+	private array $unresolved_urls = array();
+
+	/**
 	 * Constructs the Media_Importer instance.
 	 *
 	 * @param HTTP_Client $http_client  HTTP client for downloading files.
@@ -150,6 +159,10 @@ class Media_Importer {
 		}
 
 		if ( $this->resolve_only ) {
+			if ( ! $skip_if_not_media ) {
+				$this->unresolved_urls[ (string) $media_url ] = true;
+			}
+
 			return null;
 		}
 
@@ -351,6 +364,10 @@ class Media_Importer {
 		}
 
 		if ( $this->resolve_only ) {
+			if ( ! $skip_if_not_media ) {
+				$this->unresolved_urls[ (string) $media_url ] = true;
+			}
+
 			return null;
 		}
 
@@ -536,6 +553,19 @@ class Media_Importer {
 	 */
 	public function get_newly_created_attachment_ids(): array {
 		return $this->newly_created_attachment_ids;
+	}
+
+	/**
+	 * Returns the source media URLs this resolve-only instance found no earlier
+	 * import of, then forgets them.
+	 *
+	 * @return list<string> Query-stripped source media URLs.
+	 */
+	public function take_unresolved_urls(): array {
+		$urls                  = array_keys( $this->unresolved_urls );
+		$this->unresolved_urls = array();
+
+		return $urls;
 	}
 
 	/**

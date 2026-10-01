@@ -246,10 +246,9 @@ class Diff_Renderer_Import_Preview_Test extends Integration_Test_Case {
 		$this->record_http_attempts();
 
 		// ACT: Preview it.
-		$preview = $this->preview( $content );
+		$this->preview( $content );
 
-		// ASSERT: Only the attachment was looked up, no row moved, and the
-		// unimported URLs are left for the host swap alone.
+		// ASSERT: Only the attachment was looked up, and no row moved.
 		$this->assertSame(
 			array(
 				self::SOURCE . '/wp-json/wp/v2/media/' . self::SOURCE_FILE_ID,
@@ -257,8 +256,49 @@ class Diff_Renderer_Import_Preview_Test extends Integration_Test_Case {
 			$this->http_attempts
 		);
 		$this->assertSame( $before, $this->content_snapshot() );
-		$this->assertStringContainsString( '/wp-content/uploads/new.jpg', $preview );
-		$this->assertStringNotContainsString( self::SOURCE, $preview );
+	}
+
+	/**
+	 * Verifies that media this site has not imported keeps its source URL, so
+	 * the comparison shows the source file, while a file URL the import may
+	 * keep as a link takes the host swap like any link.
+	 */
+	public function test_unimported_media_keeps_its_source_url(): void {
+		// ARRANGE: An image and a file block, plus a file link and a custom
+		// block attribute the import may keep as links, none imported here.
+		$image   = self::SOURCE . '/wp-content/uploads/2024/01/new.jpg';
+		$file    = self::SOURCE . '/wp-content/uploads/2024/01/doc.pdf';
+		$link    = '/wp-content/uploads/2024/01/other.pdf';
+		$attr    = '/wp-content/uploads/2024/01/brochure.pdf';
+		$content = implode(
+			"\n\n",
+			array(
+				$this->image_block( $image ),
+				'<!-- wp:file {"id":901,"href":"' . $file . '"} -->'
+					. '<div class="wp-block-file"><a href="' . $file
+					. '">doc</a></div><!-- /wp:file -->',
+				'<!-- wp:paragraph --><p><a href="' . self::SOURCE . $link
+					. '">Other</a></p><!-- /wp:paragraph -->',
+				'<!-- wp:acme/card {"file":"' . self::SOURCE . $attr
+					. '"} /-->',
+			)
+		);
+
+		// ACT: Preview it.
+		$preview = $this->preview( $content );
+
+		// ASSERT: The image and the file block stay on the source, and the
+		// possible links move to this site.
+		$this->assertStringContainsString( 'src="' . $image . '"', $preview );
+		$this->assertStringContainsString( '"href":"' . $file . '"', $preview );
+		$this->assertStringContainsString(
+			'href="' . get_site_url() . $link . '"',
+			$preview
+		);
+		$this->assertStringContainsString(
+			'"file":"' . get_site_url() . $attr . '"',
+			$preview
+		);
 	}
 
 	/**

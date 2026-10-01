@@ -230,7 +230,8 @@ class Content_Processor {
 	 * Runs the same passes as the import, so a caller compares against what an
 	 * update would produce. The cross-post and attached media-set passes are
 	 * skipped, as they exist to write; media downloads are avoided by
-	 * injecting a resolve-only Media_Importer.
+	 * injecting a resolve-only Media_Importer. Media this site has not imported
+	 * keeps its source URL, as the copy an update would create does not exist.
 	 *
 	 * @param string               $content         Post content to preview.
 	 * @param string               $source_site_url Source site URL.
@@ -255,6 +256,19 @@ class Content_Processor {
 		$this->failed_media        = array();
 		$this->unprocessable_media = array();
 		$this->warnings            = array();
+
+		if ( is_wp_error( $preview ) ) {
+			return $preview;
+		}
+
+		// Undo the URL swap for media this site has no file for.
+		foreach ( $this->media_importer->take_unresolved_urls() as $url ) {
+			$swapped = $this->replace_source_urls( $url, $source_site_url );
+
+			if ( is_string( $swapped ) ) {
+				$preview = str_replace( $swapped, $url, $preview );
+			}
+		}
 
 		return $preview;
 	}
