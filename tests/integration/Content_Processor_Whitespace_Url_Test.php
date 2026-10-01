@@ -310,6 +310,63 @@ class Content_Processor_Whitespace_Url_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that a failed download from a line-broken src is reported once
+	 * with the URL a browser requests.
+	 */
+	public function test_line_broken_src_download_failure_is_not_malformed(): void {
+		// ARRANGE: A parsed tag points at a missing image across a line break.
+		$missing = self::SOURCE . '/missing.png';
+		$html    = '<img src="' . self::SOURCE . "/missing\n.png\">";
+
+		// ACT: Run the full pipeline against the strict HTTP mock.
+		$result = $this->processor->process_content( $html, self::SOURCE );
+
+		// ASSERT: The failed src retains its markup and line break.
+		$this->assertSame(
+			'<img src="' . get_site_url() . "/missing\n.png\">",
+			$result
+		);
+
+		// ASSERT: Only the rejoined download URL is reported.
+		$this->assertSame( array( $missing ), $this->requested );
+		$this->assertSame(
+			array( $missing ),
+			array_keys( $this->processor->get_failed_media() )
+		);
+		$this->assertSame(
+			'Import failed: 1 media file(s) could not be downloaded: ' . $missing,
+			$this->processor->get_failed_media_error_message()
+		);
+		$this->assertSame( array(), $this->processor->get_unprocessable_media() );
+		$this->assertNull( $this->processor->get_unprocessable_media_error_message() );
+	}
+
+	/**
+	 * Verifies that a parsed, failed src does not hide a separate malformed tag.
+	 */
+	public function test_line_broken_failure_preserves_malformed_report(): void {
+		// ARRANGE: One parsed src fails; another tag has an unclosed quote.
+		$missing   = self::SOURCE . '/missing.png';
+		$malformed = self::SOURCE . '/broken.jpg';
+		$html      = '<img src="' . self::SOURCE . "/missing\n.png\">"
+			. '<img src="' . $malformed;
+
+		// ACT: Run the full pipeline.
+		$this->processor->process_content( $html, self::SOURCE );
+
+		// ASSERT: Each distinct failure has its correct classification.
+		$this->assertSame( array( $missing ), $this->requested );
+		$this->assertSame(
+			array( $missing ),
+			array_keys( $this->processor->get_failed_media() )
+		);
+		$this->assertSame(
+			array( $malformed ),
+			array_keys( $this->processor->get_unprocessable_media() )
+		);
+	}
+
+	/**
 	 * Verifies that a non-ASCII space is left in place, since a browser keeps it
 	 * too and the source site serves a different path than the stripped form.
 	 */

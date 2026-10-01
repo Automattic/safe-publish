@@ -452,6 +452,26 @@ class Content_Media_Processor {
 			$content
 		) ?? $content;
 
+		// Remove media attributes from tags the HTML API parsed. The regex
+		// below should inspect only markup the processor could not reach.
+		$check_processor = new WP_HTML_Tag_Processor( $check_content );
+
+		while ( $check_processor->next_tag() ) {
+			if ( ! in_array(
+				$check_processor->get_tag(),
+				array( 'IMG', 'VIDEO', 'AUDIO', 'SOURCE', 'EMBED', 'OBJECT' ),
+				true
+			) ) {
+				continue;
+			}
+
+			foreach ( array( 'src', 'poster', 'srcset', 'data' ) as $attr ) {
+				$check_processor->remove_attribute( $attr );
+			}
+		}
+
+		$check_content = $check_processor->get_updated_html();
+
 		// Loose regex: Anchored to a media/embed tag, then looks for
 		// src/poster/srcset/data within the same tag. Uses [^<>]*? (stops at
 		// tag boundaries) so it can match inside malformed tags. Link
