@@ -460,16 +460,21 @@ class Source_Media_REST_Field {
 	 * @return array<string, array<string, string>> Source URL => metadata.
 	 */
 	private function resolve_media_metadata( string $content ): array {
-		$host = wp_parse_url( home_url(), PHP_URL_HOST );
+		$site_url = URL_Validator::normalize_site_url( home_url() );
+		$host     = wp_parse_url( $site_url, PHP_URL_HOST );
 
 		if ( ! is_string( $host ) || '' === $host || '' === $content ) {
 			return array();
 		}
 
-		$pattern = '#https?://' . preg_quote( $host, '#' ) . '/[^\s"\'<>()]+#i';
-		$count   = preg_match_all( $pattern, $content, $matches );
-		$urls    = is_int( $count ) && 0 < $count ? $matches[0] : array();
-		$urls    = array_merge(
+		$port      = wp_parse_url( $site_url, PHP_URL_PORT );
+		$authority = $host . ( is_int( $port ) ? ':' . $port : '' );
+		$pattern   = '#(?<![a-z0-9:/])(?:(?:https?:)?//'
+			. preg_quote( $authority, '#' )
+			. '/|/(?!/))[^\s"\'<>()]+#i';
+		$count     = preg_match_all( $pattern, $content, $matches );
+		$urls      = is_int( $count ) && 0 < $count ? $matches[0] : array();
+		$urls      = array_merge(
 			$urls,
 			$this->line_broken_attribute_urls( $content, $host ),
 			$this->line_broken_block_urls( $content, $host ),
@@ -486,7 +491,13 @@ class Source_Media_REST_Field {
 		foreach ( array_unique( $urls ) as $raw_url ) {
 			$url = strtok( $raw_url, '?' );
 
-			if ( false === $url || isset( $map[ $url ] ) ) {
+			if ( false === $url ) {
+				continue;
+			}
+
+			$url = URL_Validator::resolve_relative_url( $url, $site_url );
+
+			if ( isset( $map[ $url ] ) ) {
 				continue;
 			}
 

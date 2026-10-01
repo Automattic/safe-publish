@@ -224,6 +224,45 @@ class Source_Media_REST_Field_Test extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Verifies that scheme-less media resolves to its source library metadata.
+	 */
+	public function test_field_maps_scheme_less_urls_to_library_metadata(): void {
+		// ARRANGE: Two local attachments and an unrelated host reference.
+		$protocol     = $this->seed_attachment( '2025/01/protocol.jpg', 'Protocol' );
+		$root         = $this->seed_attachment( '2025/01/root.jpg', 'Root' );
+		$protocol_url = (string) preg_replace(
+			'#^https?:#',
+			'',
+			$protocol['url']
+		);
+		$root_url     = (string) wp_parse_url( $root['url'], PHP_URL_PATH );
+		$post_id      = self::factory()->post->create(
+			array(
+				'post_content' => '<img src="' . $protocol_url . '">'
+					. '<img src="' . $root_url . '">'
+					. '<img src="//unrelated.example.com' . $root_url . '">',
+			)
+		);
+		$this->force_hmac_authenticated( true );
+
+		// ACT: Read the source media map through the single-post REST field.
+		$response = $this->server->dispatch(
+			new WP_REST_Request( 'GET', '/wp/v2/posts/' . $post_id )
+		);
+
+		// ASSERT: Each local URL carries its complete library metadata.
+		$this->assertSame( 200, $response->get_status() );
+		$media = $response->get_data()['safe_publish_media'];
+		$this->assertSame( array( $protocol['url'], $root['url'] ), array_keys( $media ) );
+		$this->assertSame( 'Protocol alt', $media[ $protocol['url'] ]['alt'] );
+		$this->assertSame( 'Protocol title', $media[ $protocol['url'] ]['title'] );
+		$this->assertSame( 'Protocol caption', $media[ $protocol['url'] ]['caption'] );
+		$this->assertSame( 'Root alt', $media[ $root['url'] ]['alt'] );
+		$this->assertSame( 'Root title', $media[ $root['url'] ]['title'] );
+		$this->assertSame( 'Root caption', $media[ $root['url'] ]['caption'] );
+	}
+
+	/**
 	 * Verifies that line breaks and tabs inside image URLs preserve library
 	 * metadata and source parents under the URLs the importer will request.
 	 */
