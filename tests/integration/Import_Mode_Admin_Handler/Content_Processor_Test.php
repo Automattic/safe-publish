@@ -2737,6 +2737,68 @@ class Content_Processor_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that a failed absolute image URL is requested once per pass.
+	 */
+	public function test_failed_image_download_is_attempted_once_per_pass(): void {
+		// ARRANGE: The same absolute URL appears in attrs and serialized HTML.
+		$url     = 'https://source.example.com/gone.jpg';
+		$content = '<!-- wp:image {"url":"' . $url . '"} -->'
+			. '<figure class="wp-block-image"><img src="' . $url . '"/></figure>'
+			. '<!-- /wp:image -->';
+
+		// ACT: Process the same content twice with downloads failing.
+		$this->process_with_all_downloads_failing( $content );
+		$first_pass_requests  = $this->requested_urls;
+		$this->requested_urls = array();
+		$this->process_with_all_downloads_failing( $content );
+
+		// ASSERT: Each pass attempts the URL once and records its failure.
+		$this->assertSame( array( $url ), $first_pass_requests );
+		$this->assertSame( array( $url ), $this->requested_urls );
+		$this->assertSame(
+			array( $url => 'core/image' ),
+			$this->processor->get_failed_media()
+		);
+	}
+
+	/**
+	 * Verifies that a rejected sideload is attempted once and retried next pass.
+	 */
+	public function test_failed_image_sideload_is_attempted_once_per_pass(): void {
+		// ARRANGE: The same image URL appears in block attrs and HTML.
+		$url           = 'https://source.example.com/rejected.jpg';
+		$content       = '<!-- wp:image {"url":"' . $url . '"} -->'
+			. '<figure class="wp-block-image"><img src="' . $url . '"/></figure>'
+			. '<!-- /wp:image -->';
+		$fail_sideload = static function ( array $file ): array {
+			$file['error'] = 'Forced sideload rejection for test';
+			return $file;
+		};
+		add_filter( 'wp_handle_sideload_prefilter', $fail_sideload, 11, 1 );
+
+		// ACT: Reject the first pass, then allow the next pass to succeed.
+		try {
+			$this->processor->process_content( $content, 'https://source.example.com' );
+			$first_pass_requests  = $this->requested_urls;
+			$first_pass_failures  = $this->processor->get_failed_media();
+			$this->requested_urls = array();
+		} finally {
+			remove_filter( 'wp_handle_sideload_prefilter', $fail_sideload, 11 );
+		}
+		$processed = $this->processor->process_content(
+			$content,
+			'https://source.example.com'
+		);
+
+		// ASSERT: One download per pass; a later pass can create the attachment.
+		$this->assertSame( array( $url ), $first_pass_requests );
+		$this->assertSame( array( $url => 'core/image' ), $first_pass_failures );
+		$this->assertSame( array( $url ), $this->requested_urls );
+		$this->assertSame( array(), $this->processor->get_failed_media() );
+		$this->assertStringNotContainsString( $url, $processed );
+	}
+
+	/**
 	 * Processes content with every source-domain download forced to fail.
 	 *
 	 * @param string $content Block or classic content to process.

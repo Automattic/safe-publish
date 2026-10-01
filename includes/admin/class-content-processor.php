@@ -220,6 +220,7 @@ class Content_Processor {
 		$this->unprocessable_media = array();
 		$this->warnings            = array();
 		$this->media_importer->reset_newly_created_attachment_ids();
+		$this->media_importer->reset_failed_media();
 
 		$session_id_map = isset( $context['session_id_map'] )
 			&& is_array( $context['session_id_map'] )
@@ -322,6 +323,7 @@ class Content_Processor {
 		$this->content_media_processor->reset_failed_media();
 		$this->content_media_processor->reset_unprocessable_media();
 		$this->shortcode_media_rewriter->reset_failed_media();
+		$this->media_importer->reset_failed_media();
 
 		return $this->replace_source_urls( $processed_content, $source_site_url );
 	}

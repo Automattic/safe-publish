@@ -57,6 +57,13 @@ class Media_Importer {
 	private array $newly_created_attachment_ids = array();
 
 	/**
+	 * Terminal media failures during the current content-processing pass.
+	 *
+	 * @var array<array-key, true>
+	 */
+	private array $failed_media = array();
+
+	/**
 	 * Source URL => library metadata applied to the attachment sideloaded from
 	 * that URL, keyed by the query-stripped source URL.
 	 *
@@ -130,12 +137,17 @@ class Media_Importer {
 			return wp_get_attachment_url( $existing_attachment );
 		}
 
+		if ( isset( $this->failed_media[ $media_url ] ) ) {
+			return false;
+		}
+
 		$this->ensure_media_functions_loaded();
 
 		// Download file.
 		$temp_file = download_url( $media_url );
 
 		if ( is_wp_error( $temp_file ) ) {
+			$this->failed_media[ $media_url ] = true;
 			$this->logger->media_download_failed(
 				$media_url,
 				$source_site_url,
@@ -157,6 +169,7 @@ class Media_Importer {
 				return null;
 			}
 
+			$this->failed_media[ $media_url ] = true;
 			$this->logger->media_unsupported_file_type(
 				$media_url,
 				$source_site_url,
@@ -197,6 +210,7 @@ class Media_Importer {
 		}
 
 		if ( is_wp_error( $attachment_id ) ) {
+			$this->failed_media[ $media_url ] = true;
 			$this->logger->media_sideload_failed(
 				$media_url,
 				$source_site_url,
@@ -325,6 +339,10 @@ class Media_Importer {
 			return $existing_attachment;
 		}
 
+		if ( isset( $this->failed_media[ $media_url ] ) ) {
+			return false;
+		}
+
 		$this->ensure_media_functions_loaded();
 
 		// Temporarily enable WebP uploads during import.
@@ -373,6 +391,7 @@ class Media_Importer {
 		$temp_file = $this->http_client->download_file( $media_url );
 
 		if ( is_wp_error( $temp_file ) ) {
+			$this->failed_media[ $media_url ] = true;
 			$this->logger->media_download_failed(
 				$media_url,
 				$source_site_url,
@@ -395,6 +414,7 @@ class Media_Importer {
 				return null;
 			}
 
+			$this->failed_media[ $media_url ] = true;
 			$this->logger->media_unsupported_file_type(
 				$media_url,
 				$source_site_url,
@@ -450,6 +470,7 @@ class Media_Importer {
 		}
 
 		if ( is_wp_error( $attachment_id ) ) {
+			$this->failed_media[ $media_url ] = true;
 			$this->logger->media_sideload_failed(
 				$media_url,
 				$source_site_url,
@@ -461,6 +482,7 @@ class Media_Importer {
 
 		// Verify the attachment was actually created.
 		if ( ! $attachment_id || ! is_numeric( $attachment_id ) ) {
+			$this->failed_media[ $media_url ] = true;
 			$this->logger->invalid_attachment_id(
 				$media_url,
 				$source_site_url,
@@ -497,6 +519,13 @@ class Media_Importer {
 	 */
 	public function reset_newly_created_attachment_ids(): void {
 		$this->newly_created_attachment_ids = array();
+	}
+
+	/**
+	 * Resets media failures for a new content-processing pass.
+	 */
+	public function reset_failed_media(): void {
+		$this->failed_media = array();
 	}
 
 	/**
