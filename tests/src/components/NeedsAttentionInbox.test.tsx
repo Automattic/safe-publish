@@ -311,10 +311,16 @@ describe( 'NeedsAttentionInbox', () => {
 	} );
 
 	// The detail cell truncates in CSS, so the full text has to stay reachable.
-	it( "Verifies that a degradation's detail carries its full text as a title", async () => {
-		// ARRANGE: A degradation, and the message the inbox renders for it.
-		mockListResponse( [ DEGRADATION ] );
-		const message = renderIssueMessage( DEGRADATION );
+	it.each( [
+		[ 'failure', FAILURE, 'Timed out' ],
+		[ 'degradation', DEGRADATION, renderIssueMessage( DEGRADATION ) ],
+	] )( "Verifies that a %s's detail has the truncating class and a full-text title", async (
+		_kind,
+		row,
+		message
+	) => {
+		// ARRANGE: The inbox lists one row of that kind.
+		mockListResponse( [ row ] );
 
 		// ACT: Render the inbox.
 		render(
@@ -324,28 +330,11 @@ describe( 'NeedsAttentionInbox', () => {
 			/>
 		);
 
-		// ASSERT: The detail span titles itself with the message it renders.
+		// ASSERT: The detail span carries the truncating class and titles
+		// itself with the message it renders.
 		const detail = await screen.findByTitle( message );
 		expect( detail ).toHaveClass( 'safe-publish-inbox-detail' );
 		expect( detail.textContent ).toBe( message );
-	} );
-
-	it( "Verifies that a failure's detail carries its full text as a title", async () => {
-		// ARRANGE: A failure row carrying an error message.
-		mockListResponse( [ FAILURE ] );
-
-		// ACT: Render the inbox.
-		render(
-			<NeedsAttentionInbox
-				ajaxurl="https://example.com/wp-admin/admin-ajax.php"
-				nonce="test-nonce"
-			/>
-		);
-
-		// ASSERT: The detail span titles itself with the error it renders.
-		const detail = await screen.findByTitle( 'Timed out' );
-		expect( detail ).toHaveClass( 'safe-publish-inbox-detail' );
-		expect( detail.textContent ).toBe( 'Timed out' );
 	} );
 
 	it( 'Verifies that a linked content title carries its full text as a title', async () => {
