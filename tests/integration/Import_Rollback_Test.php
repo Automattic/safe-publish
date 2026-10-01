@@ -842,6 +842,90 @@ class Import_Rollback_Test extends Source_Posts_API_Test_Base {
 	}
 
 	/**
+	 * Verifies that an aborted update reports a term restore failure after a
+	 * taxonomy disappears between assignment and rollback.
+	 */
+	public function test_failed_term_restore_is_reported(): void {
+		register_taxonomy( 'sp_rollback_topic', 'post' );
+
+		// ARRANGE: The existing post has a term that the update will replace.
+		$post_id = self::factory()->post->create(
+			array( 'post_title' => 'Previous title' )
+		);
+		$before  = wp_insert_term( 'Previous topic', 'sp_rollback_topic' );
+		$after   = wp_insert_term( 'Imported topic', 'sp_rollback_topic' );
+		$this->assertIsArray( $before );
+		$this->assertIsArray( $after );
+		wp_set_object_terms(
+			$post_id,
+			array( (int) $before['term_id'] ),
+			'sp_rollback_topic'
+		);
+
+		$filter = static function () {
+			unregister_taxonomy( 'sp_rollback_topic' );
+			return new WP_Error(
+				'insert_term_failed',
+				'Simulated term insertion failure.'
+			);
+		};
+		add_filter( 'pre_insert_term', $filter );
+
+		// ACT: Replace the topic, then fail category insertion and rollback.
+		$result = $this->import_service->persist_updated_post(
+			array(
+				'ID'         => $post_id,
+				'post_title' => 'Imported title',
+			),
+			0,
+			'https://source.example.com/post',
+			array(),
+			array(
+				'sp_rollback_topic' => array(
+					array( 'term_id' => (int) $after['term_id'] ),
+				),
+				'category'          => array( 'Uncreatable category' ),
+			),
+			array(),
+			0
+		);
+
+		remove_filter( 'pre_insert_term', $filter );
+		register_taxonomy( 'sp_rollback_topic', 'post' );
+
+		// ASSERT: The incomplete rollback and original failure are both visible.
+		$this->assertInstanceOf( WP_Error::class, $result );
+		$this->assertSame( 'terms_restore_failed', $result->get_error_code() );
+		$this->assertStringContainsString(
+			'Simulated term insertion failure.',
+			$result->get_error_message()
+		);
+		$this->assertStringContainsString(
+			'Failed to restore the previous terms:',
+			$result->get_error_message()
+		);
+		$this->assertSame(
+			array(
+				'action'              => 'terms_restore_failed',
+				'original_error_code' => 'insert_term_failed',
+			),
+			$result->get_error_data()
+		);
+		$this->assertSame(
+			'Previous title',
+			get_post_field( 'post_title', $post_id )
+		);
+		$this->assertSame(
+			array( (int) $after['term_id'] ),
+			wp_get_object_terms(
+				$post_id,
+				'sp_rollback_topic',
+				array( 'fields' => 'ids' )
+			)
+		);
+	}
+
+	/**
 	 * Verifies that the new featured-image attachment is deleted when the bulk
 	 * update path rolls back due to a custom meta failure, while the original
 	 * thumbnail is preserved.

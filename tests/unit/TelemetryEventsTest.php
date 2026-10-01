@@ -45,6 +45,20 @@ class TelemetryEventsTest extends TestCase {
 	}
 
 	/**
+	 * Verifies that a failed term restoration keeps its telemetry error code.
+	 */
+	public function test_normalize_error_code_allows_terms_restore_failed(): void {
+		// ARRANGE: A rollback failure emitted by the post import service.
+		$code = 'terms_restore_failed';
+
+		// ACT: Normalize the failure action.
+		$result = Telemetry_Events::normalize_error_code( $code );
+
+		// ASSERT: Preserve the specific failure reason.
+		$this->assertSame( $code, $result );
+	}
+
+	/**
 	 * Verifies that an unknown code is replaced with the bounded fallback
 	 * so unbounded strings can't leak into Pendo.
 	 */
