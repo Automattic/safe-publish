@@ -1099,6 +1099,54 @@ class Content_Processor_Block_ID_Remap_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that a published target under a trashed ancestor is deferred.
+	 */
+	public function test_defers_target_under_trashed_ancestor(): void {
+		// ARRANGE: Pretty permalinks; a published child under a trashed parent.
+		$this->set_permalink_structure( '/%postname%/' );
+		$parent    = self::factory()->post->create(
+			array(
+				'post_type' => 'page',
+				'post_name' => 'parent',
+			)
+		);
+		$dest_post = self::factory()->post->create(
+			array(
+				'post_type'   => 'page',
+				'post_name'   => 'about',
+				'post_parent' => $parent,
+			)
+		);
+		wp_trash_post( $parent );
+		$source_id = 99036;
+		$content   = $this->nav_block_content(
+			array(
+				$this->post_link(
+					$source_id,
+					self::SOURCE_SITE_URL . '/about'
+				),
+			)
+		);
+
+		// ACT: Run process_content.
+		$result = $this->processor->process_content(
+			$content,
+			self::SOURCE_SITE_URL,
+			array( 'session_id_map' => array( $source_id => $dest_post ) )
+		);
+
+		// ASSERT: id remapped; url only host-swapped (deferred).
+		$this->assertStringContainsString(
+			'"id":' . $dest_post . ',',
+			(string) $result
+		);
+		$this->assertSame(
+			'http://example.org/about',
+			$this->first_nav_link_url( (string) $result )
+		);
+	}
+
+	/**
 	 * Verifies that a private target keeps re-deriving, its permalink already
 	 * being the address the post is served at.
 	 */

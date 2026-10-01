@@ -2801,14 +2801,13 @@ class Content_Processor {
 
 	/**
 	 * Whether any slug in a post's permalink path is still provisional. Core
-	 * defers unique-slug assignment in these statuses, so the slug can still
-	 * change on publish; an ancestor in that state moves the path too.
+	 * defers unique slugs for drafts and suffixes a trashed post's slug.
 	 *
 	 * @param int $post_id Destination post id.
 	 * @return bool True when the post or an ancestor holds a provisional slug.
 	 */
 	private function has_unsettled_path( int $post_id ): bool {
-		$unsettled = array( 'draft', 'pending', 'auto-draft' );
+		$unsettled = array( 'draft', 'pending', 'auto-draft', 'trash' );
 
 		if ( in_array( get_post_status( $post_id ), $unsettled, true ) ) {
 			return true;

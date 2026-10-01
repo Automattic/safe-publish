@@ -301,7 +301,7 @@ Links inside post body content are migrated by host swap only, preserving the pa
 
 #### Navigation links to draft targets or their children 404 or open the wrong page
 
-A navigation link or submenu whose target was a draft at import, or sat under a draft parent, keeps the host-swapped source path instead of being re-derived, so it can break under a slug collision or a different permalink structure. See [Navigation links to draft targets or their children may 404 or open the wrong page](concepts/import-process.md#navigation-links-to-draft-targets-or-their-children-may-404-or-open-the-wrong-page) for the fix.
+A navigation link or submenu whose target was a draft at import, or sat under a draft or trashed parent, keeps the host-swapped source path instead of being re-derived, so it can break under a slug collision or a different permalink structure. See [Navigation links to draft targets or their children may 404 or open the wrong page](concepts/import-process.md#navigation-links-to-draft-targets-or-their-children-may-404-or-open-the-wrong-page) for the fix.
 
 #### A navigation link to a term stays on the Needs attention tab
 

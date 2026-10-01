@@ -304,11 +304,11 @@ Internal links inside post body content (for example `<a href>` in paragraphs an
 
 A permalink stored in a custom or third-party block's attributes — for example a block that saves a post's own URL — is treated the same way: host-swapped, but not re-derived. Rewriting an arbitrary attribute that merely looks like a permalink could point it at the wrong content, so only blocks whose attributes carry an explicit, known entity reference are re-derived.
 
-Navigation links and submenus are the exception: they carry an explicit entity reference, so their URLs are re-derived to the destination permalink automatically — unless the target was a draft at import, or sat under one (see [below](#navigation-links-to-draft-targets-or-their-children-may-404-or-open-the-wrong-page)).
+Navigation links and submenus are the exception: they carry an explicit entity reference, so their URLs are re-derived to the destination permalink automatically — unless the target was a draft at import, or sat under a draft or trashed parent (see [below](#navigation-links-to-draft-targets-or-their-children-may-404-or-open-the-wrong-page)).
 
 ### Navigation links to draft targets or their children may 404 or open the wrong page
 
-WordPress settles a post's slug only when it leaves draft or pending, so a link to a target in either status keeps the host-swapped source path instead of a URL that would move later. The same applies when the target itself is published but a parent page it sits under is not, because the parent's slug forms part of the child's path.
+WordPress settles a post's slug only when it leaves draft or pending, so a link to a target in either status keeps the host-swapped source path instead of a URL that would move later. The same applies when a parent page the target sits under is a draft, pending, or in the trash (where its slug carries a temporary `__trashed` suffix), because the parent's slug forms part of the child's path.
 
 Such a link behaves like an [internal body link](#internal-body-links-may-404-or-open-the-wrong-page) — it can 404 or open the wrong page under a slug collision or a different permalink structure. Re-import the referring content after the target and its parents are published to re-derive the URL; the Retry action does not cover this case.
 
