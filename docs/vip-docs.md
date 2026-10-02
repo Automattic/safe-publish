@@ -37,6 +37,25 @@
   run reporting an aggregate outcome.
 -->
 
+<!--
+  Documentation update (2026-09-30): Brought the page up to v1.3.0 and in line
+  with the published docs.wpvip.com pages (last updated 2026-09-23).
+  - Bulk actions are limited to 50 posts, and the listing offers page sizes of
+    10, 20, and 50 (#464).
+  - A destination copy in the trash shows as Trashed in the listing, and
+    importing over it is refused (#555).
+  - A private destination post counts as live for the overwrite confirmation
+    (#446).
+  - An update that succeeds but whose rollback history cannot be saved warns
+    that it cannot be rolled back (#494).
+  - Added the Content and excerpt filtering section and the
+    safe_publish_manage_capability filter, and noted the removal of the
+    safe_publish_import_kses filters in 1.1 (#500, #499).
+  - Added troubleshooting entries for permissions errors, unlisted post types,
+    missing raw values, filtered content, refused rollbacks, and trashed
+    destinations, and expanded the custom post type requirements (#498, #500).
+-->
+
 # Safe Publish
 
 Safe Publish moves editorial content from a source WordPress site to a destination site over an authenticated connection, preserving the content's structure and format as closely as possible. It is built for teams that draft, stage, or review content on one environment and need to publish that content to another without exporting databases or copying files by hand.
@@ -140,7 +159,9 @@ The Local State control provides four views:
 - **Up to date** — the post has been imported and the source has not changed since.
 - **Outdated** — the post has been imported, but the source has changed since the last import. Re-import to bring the destination copy up to date.
 
-A failed live source comparison is labeled **Sync check failed** on the row; it is not a separate Local State.
+A failed live source comparison is labeled **Sync check failed** on the row; it is not a separate Local State. A row whose destination copy is in the trash shows **Trashed** in the destination status column.
+
+The listing offers page sizes of 10, 20, and 50 posts. Bulk actions handle up to 50 posts at a time.
 
 ## Importing content
 
@@ -149,18 +170,19 @@ Safe Publish supports importing a single post or many posts at once. Both paths 
 ### Import a single post
 
 1. On **Manage → Posts**, use the **Import** row action.
-2. The import starts right away. If the destination post is already published, confirm the overwrite first, because it changes the live site immediately.
+2. The import starts right away. If the destination post is already live — published or private — confirm the overwrite first, because it changes the live site immediately.
 
-If a post with the same source post ID already exists on the destination, Safe Publish updates that post rather than creating a duplicate. If no matching post exists, it creates a new one. If the only matching post is in the trash, the import is refused rather than creating a second linked copy; restore that post to update it, or delete it permanently to import a fresh copy.
+If a post with the same source post ID already exists on the destination, Safe Publish updates that post rather than creating a duplicate. If no matching post exists, it creates a new one. If the only matching post is in the trash, the import is refused rather than creating a second linked copy; restore that post to update it, or delete it permanently to import a fresh copy. The Manage listing shows **Trashed** for that row before the import is attempted.
 
 By default, importing a child post fails if its parent is not present on the destination, to avoid creating orphaned content. Developers can change this with the `safe_publish_import_allow_orphans` filter (see [Filters](#filters)).
 
 ### Import multiple posts (bulk import)
 
 1. On **Manage → Posts**, select the posts to import.
-2. Start the bulk import.
+2. Review the confirmation, which names the affected posts grouped by what each group receives: posts imported as new drafts, and posts updated with the latest source content. The grouping predicts what the import will do; the results reported after the run are authoritative.
+3. Start the bulk import.
 
-Safe Publish records the selected posts in one history session and reports each item's result independently. A failure does not roll back successful siblings. When the selection includes posts with parent–child relationships, the plugin orders the import so that parents are created before their children.
+A bulk import is limited to 50 posts at a time. Safe Publish records the selected posts in one history session and reports each item's result independently. A failure does not roll back successful siblings. When the selection includes posts with parent–child relationships, the plugin orders the import so that parents are created before their children.
 
 ## Reviewing and updating imported content
 
@@ -184,6 +206,8 @@ It's important to note that the roll-back rolls back the specific changes from t
 
 Multiple rows can be selected on the Posts tab and rolled back in a single action.
 
+If an update succeeds but Safe Publish cannot save its rollback history, the result warns that "This update cannot be rolled back from Safe Publish." The post keeps the imported content.
+
 Safe Publish normally stores a pre-update snapshot in the import record, so it can restore an updated post without contacting the source site. If an eligible updated row has no captured snapshot, rollback deletes the post instead.
 
 Note: Rolling back a newly created post deletes that post on the destination. Confirm the affected posts before rolling back, since the action is irreversible for newly created posts.
@@ -198,6 +222,14 @@ When a post is imported, Safe Publish processes its content so that it renders c
 - **Third-party media is left untouched.** Files hosted on domains other than the source site are not downloaded; their original URLs are preserved as written.
 
 Safe Publish records where imported content came from in post metadata — including the source post ID and source permalink — so that subsequent imports of the same post update the existing post rather than duplicating it, except when that post is in the trash.
+
+## Content and excerpt filtering
+
+Post content and excerpts are saved through WordPress' normal save-time filters for the user running the import, including `wp_kses` sanitization when the user lacks the `unfiltered_html` capability. This ensures unsafe content is not imported to production.
+
+After saving, Safe Publish compares the newly imported content and excerpt against the source site. If a filter changed something, the import fails with an error. The same comparison applies to restored content during a rollback.
+
+The usual cause is a user without `unfiltered_html` importing content that includes HTML, inline scripts, or event handlers that WordPress' save filters strip or change. Ask an administrator or a user who can save that content unfiltered to retry, or remove the unsupported markup at the source.
 
 ## Author attribution
 
@@ -217,7 +249,11 @@ Each event records a channel (such as authentication, content, export, import, o
 
 Safe Publish imports any registered post type, not only posts and pages. The source catalog can be filtered by post type, and custom post types are imported the same way as standard ones.
 
-Because a custom post type's REST API base can differ from its registered slug, Safe Publish resolves the correct REST base for each post type on the source site before fetching its content.
+For a post type to appear in the source catalog, it must be registered on the source with `show_in_rest` set to `true` and `public` set to `true`. Both values must be the boolean `true`: a truthy value such as `1` registers the REST route but excludes the type from the catalog. Safe Publish additionally allows `wp_navigation` and `wp_block`, which are not public but whose posts are content. Attachments are excluded because they are files rather than content posts.
+
+The catalog reports each type's REST API base, which can differ from its registered slug, and which of the title, content, and excerpt raw fields the type supports. Import and Compare require only the fields the source declares, so a type that does not support all three — a navigation post, which has no excerpt — imports without reporting a missing field.
+
+A post type registered with a custom `rest_controller_class` must expose a standard WordPress item schema, and each supported field must declare a `properties.raw` definition. A field absent from both the catalog metadata and the response is treated as unsupported.
 
 A custom post type must be registered with the same slug on the destination for its content to import cleanly. Safe Publish does not remap a source post type slug to a different slug on the destination; if the slugs differ, the import will not place the content under the destination's post type.
 
@@ -229,10 +265,13 @@ Safe Publish exposes the following filters for developers. Add them in a theme o
 | --- | --- | --- |
 | `safe_publish_import_allow_orphans` | `false` | Allow importing a child post when its parent is not present on the destination. |
 | `safe_publish_import_allow_author_fallback` | `false` | When the source author cannot be matched on the destination, attribute new posts to the importing user and keep the existing author on updates, instead of aborting the import. |
+| `safe_publish_manage_capability` | `manage_safe_publish` | Change the capability that grants access to the Safe Publish management screens. A value that is not a valid capability falls back to `manage_options`. |
 | `safe_publish_auth_max_time_diff` | `300` | Maximum allowed difference, in seconds, between a signed request's timestamp and the current time. |
 | `safe_publish_request_timeout` | `10` | Timeout, in seconds, for HTTP requests to the source site. |
 | `safe_publish_request_args` | — | Customize the arguments passed to the HTTP request made to the source site. |
 | `safe_publish_dev_ssl_verify` | `false` | Development only: skip SSL verification for requests to non-localhost hosts. Leave disabled in production. |
+
+The `safe_publish_import_kses` and `safe_publish_import_kses_allowed_html` filters were removed in version 1.1. Content filtering is no longer optional; see [Content and excerpt filtering](#content-and-excerpt-filtering).
 
 The `safe_publish_event_logged` action fires each time an audit event is recorded, receiving the channel, event type, and event data. Use it to forward audit events to external monitoring.
 
@@ -267,6 +306,10 @@ Safe Publish registers a "Safe Publish Authentication Configuration" test under 
 
 Cross-site requests are rejected when the source and destination clocks differ by more than the allowed window (300 seconds by default). Correct the system time on both servers. If a larger tolerance is genuinely required, raise it with the `safe_publish_auth_max_time_diff` filter.
 
+### "You do not have sufficient permissions to access this page"
+
+This appears when a user lacks the capability required for a Safe Publish screen. Management screens — Manage and Settings — require `manage_safe_publish`. The Audit Log requires only the narrower `view_safe_publish_audit_log`. Confirm which capability the user's role holds, and grant the one the screen requires. On multisite, capabilities are granted per network site.
+
 ### An import failed with a missing-parent error
 
 The post's parent was not present on the destination. Import the parent first, or enable `safe_publish_import_allow_orphans` to allow importing the child without its parent.
@@ -277,6 +320,37 @@ Safe Publish attributes each imported post to a destination user matched by the 
 
 - **The source author was not found on the destination.** No destination user has the source author's email. Create a user with that email on the destination and re-import, or enable the `safe_publish_import_allow_author_fallback` filter to attribute unmatched new posts to the importing user.
 - **The source author could not be determined.** The source post has no author, or its author was deleted on the source site. This is a source-side data issue and is not covered by the author-fallback filter. Restore or reassign the author on the source, then re-import.
+
+### An import was refused because the destination copy is in the trash
+
+The destination copy of the post is in the trash, so importing would create a second post claiming the same source item. Restore the trashed post and import again to update it, or delete it permanently to import a fresh copy.
+
+### The source site does not list a post type in its catalog
+
+Import or Compare reports that the source does not list the post type, sometimes for a post that imported successfully before. Confirm the following on the source site:
+
+- The post type is still registered with `show_in_rest` set to `true` and `public` set to `true`. Safe Publish also allows `wp_navigation` and `wp_block` despite `public` being `false`.
+- `show_in_rest` is the boolean `true`, not a truthy value such as `1`. A truthy value registers the REST route but excludes the type from the catalog.
+- Where the source registers the type conditionally, the registration also runs for REST requests.
+
+### An import reported a missing raw value
+
+The source's authenticated catalog response for the post type did not include a valid `raw_fields` list, or the source response did not include the raw values that list declares as supported.
+
+A `title.raw` value must always be present — it can be an empty string for an untitled post, but its absence, or a malformed `raw_fields` list, is rejected as invalid. `content.raw` and `excerpt.raw` may be absent only when the catalog metadata declares that field unsupported. If the post type uses a custom REST controller, its author must provide a standard WordPress item schema in which each supported field declares a `raw` property. If the catalog request itself failed rather than returning malformed data, the failure is temporary — retry the import.
+
+### An import or rollback failed because WordPress filtered the content
+
+Safe Publish compares the content and excerpt WordPress saved against what was requested, and fails the operation if there is a mismatch. This is usually because the user running the import lacks the `unfiltered_html` capability, and the content includes HTML, inline scripts, or event handlers that WordPress' save filters strip or change.
+
+Ask an administrator, or a user who can save the content unfiltered, to retry the import or rollback. Alternatively, remove the unsupported markup from the content at the source, then re-import. If this happens during a rollback, the history item is left active rather than marked rolled back.
+
+### A rollback was refused or could not be recorded
+
+Two rollback errors point at a listing that no longer matches the destination:
+
+- **"This import was already rolled back. Reload the list."** The import had been rolled back already, usually from another browser tab. Reload the listing; the row will no longer offer that rollback. Safe Publish refuses the request rather than replaying it, because replaying would write the stored snapshot over whatever the post holds now.
+- **"The rollback was applied, but it could not be recorded. Reload the list before rolling back again."** The content was reverted, but Safe Publish could not record that it happened. Reload the listing before taking any further action on that post. Do not retry the rollback immediately, because the unrecorded row is still offered and running it again would overwrite the restored content.
 
 ### Imported media did not transfer
 
