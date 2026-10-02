@@ -123,6 +123,7 @@ class Telemetry_Events {
 		'content_cleanup_failed',
 		'content_verification_failed',
 		'content_restore_failed',
+		'terms_restore_failed',
 		'meta_update_failed',
 		'terms_update_failed',
 		'concurrent_import_blocked',
