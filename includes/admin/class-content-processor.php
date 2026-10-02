@@ -832,31 +832,38 @@ class Content_Processor {
 		string $source_site_url,
 		array $session_id_map = array()
 	): string {
-		if ( empty( $content ) ) {
+		if ( '' === $content ) {
 			return $content;
 		}
 
 		$blocks = parse_blocks( $content );
 
-		if ( empty( $blocks ) ) {
+		if ( array() === $blocks ) {
 			return $content;
 		}
 
-		$needs_media_processing = $this->content_needs_processing( $content );
-		$needs_id_remap         = $this->content_has_id_reference_blocks( $blocks );
+		$needs_id_remap = $this->content_has_id_reference_blocks( $blocks );
 
-		if ( ! $needs_media_processing && ! $needs_id_remap ) {
+		$processed = array_map(
+			function ( $block ) use ( $source_site_url ) {
+				return $this->process_single_block( $block, $source_site_url );
+			},
+			$blocks
+		);
+
+		// Re-serializing rewrites attribute escapes, so return the original
+		// bytes when nothing changed and no ID remap is due. Content holding
+		// "http" is excluded: replace_source_urls() needs serialize_blocks() to
+		// unescape absolute URLs.
+		if (
+			! $needs_id_remap
+			&& false === strpos( $content, 'http' )
+			&& $processed === $blocks
+		) {
 			return $content;
 		}
 
-		if ( $needs_media_processing ) {
-			$blocks = array_map(
-				function ( $block ) use ( $source_site_url ) {
-					return $this->process_single_block( $block, $source_site_url );
-				},
-				$blocks
-			);
-		}
+		$blocks = $processed;
 
 		if ( $needs_id_remap ) {
 			$blocks = $this->process_block_id_references(
@@ -1696,18 +1703,6 @@ class Content_Processor {
 		}
 
 		return $attrs;
-	}
-
-	/**
-	 * Whether the content contains HTTP URLs, the trigger for the media/URL
-	 * transformation. Only that pass depends on this check; block-ID remapping
-	 * is gated separately by content_has_id_reference_blocks().
-	 *
-	 * @param string $content Content to check.
-	 * @return bool True when the content contains an HTTP URL.
-	 */
-	private function content_needs_processing( string $content ): bool {
-		return false !== strpos( $content, 'http' );
 	}
 
 	/**
