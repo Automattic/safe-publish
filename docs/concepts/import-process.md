@@ -249,9 +249,12 @@ Bulk imports process multiple posts sequentially:
 
 - **Trashed destination post**: Import is refused when the only destination post linked to the source post is in the trash, so a second linked copy is never created. Restore that post to update it, or delete it permanently to import a fresh copy.
 - **Inline media download failures**: Import is aborted; any attachments already created during the run are deleted.
-- **Featured image failures**: Import is aborted.
+- **Featured image failures**: Import is aborted; any attachments already created during the run are deleted.
+- **Post insert rejected**: Import is aborted; any attachments already created during the run are deleted.
 - **Meta/term failures**: Import is aborted; for new posts, the post and its attachments are deleted. For updates, the post is rolled back to its pre-update state.
 - **Network timeouts on API requests**: No automatic retry; on WordPress VIP, consecutive failures will temporarily block further requests for up to 20 seconds to protect performance.
+
+Cleanup deletes only the media the aborted run itself downloaded; a file an earlier import already brought in is left alone. An attachment the cleanup cannot remove is named in the reported error, except after an inline-media failure.
 
 ### Error Reporting
 
