@@ -423,7 +423,7 @@ export default function PostDiffModal( {
 		blockDiffs.some( ( block ) => block.status !== 'unchanged' ) ||
 		hasAnyNonContentDiff( nonContentDiffs );
 	const hasImages =
-		Boolean( nonContentDiffs?.featuredMedia ) ||
+		/<img\s/i.test( nonContentDiffs?.featuredMedia || '' ) ||
 		blockDiffs.some(
 			( block ) =>
 				/<img\s/i.test( block.current?.rendered || '' ) ||

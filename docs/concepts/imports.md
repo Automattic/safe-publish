@@ -49,7 +49,7 @@ View source opens the source post in a new browser tab. It is available when the
 
 Import, Trash, and Roll back support bulk selection. Compare is available for one outdated post at a time. An Up to date row does not offer Import or Compare unless the live source check finds a newer version.
 
-Rollback eligibility comes from the latest active import-history row. Only `success` and `updated` rows that have not already been rolled back are eligible. The server re-checks that rule on each request, so a listing loaded before an earlier rollback cannot re-apply it. Rolling back a successful new import deletes the destination post, along with the media that import created, except media another post still shows as its featured image, inline in its content, or by ID in a gallery or playlist shortcode. That holding post counts whatever its post type or status, trashed and otherwise hidden posts included. Media whose usage cannot be determined is retained and the omission recorded in the Audit Log. Rolling back an update restores the captured post fields, author, parent, post type, featured image, editor and tracking metadata, and previous assignments for taxonomies carried in the import payload. Restored content passes through WordPress' normal save filters for the acting user. If a filter changes the content or excerpt, rollback reports an error and does not mark the history item as rolled back; WordPress may already have persisted the filtered value. If a captured author, parent, post type, featured image, taxonomy, or term is no longer available, rollback retains the imported value for that field and records the omission in the Audit Log; a taxonomy's assignments are retained together if any part is unavailable. It does not restore or remove imported custom metadata, delete created term objects, or restore changes to shared term fields. When an update changes the post type, WordPress may add a default category or another taxonomy's default term outside the import payload; those assignments are not currently removed by rollback. An older update with no captured previous content is deleted instead.
+See [Rolling back imports](#rolling-back-imports) for what a rollback changes and when it is refused.
 
 ### Filtering and search
 
@@ -101,6 +101,27 @@ These actions support bulk selection where applicable. Degradations show **Resol
 Removing a failure affects only its history record. To recover, fix the cause and import the source post again from the Posts tab. Any later import attempt for the same source supersedes its previous failure. If the later attempt also fails, the new failure appears instead.
 
 Ignore is reversible with Un-ignore. A fresh failed attempt creates a new open failure, but re-detecting the same degradation keeps the existing issue ignored. Remove permanently deletes a failure record. Degradations do not offer Remove; they clear after a successful Retry or re-import.
+
+## Rolling back imports
+
+Rollback eligibility comes from a post's latest active import-history row, and only `success` and `updated` rows qualify.
+
+Rolling back a successful new import deletes the destination post and the media that import created. Media another post still shows is kept: as a featured image, inline in content, or by ID in a gallery or playlist shortcode. The holding post counts whatever its post type or status, trashed and hidden included. Media whose usage cannot be determined is kept too, with the omission recorded in the Audit Log.
+
+Rolling back an update restores the captured post fields, author, parent, post type, featured image, editor and tracking metadata, and previous assignments for the taxonomies the import payload carried. Restored content passes through WordPress' normal save filters for the acting user. If a filter changes the content or excerpt, rollback reports an error and does not mark the item rolled back, since WordPress may already have persisted the filtered value.
+
+When a captured author, parent, post type, featured image, taxonomy, or term is no longer available, rollback keeps the imported value for that field and records the omission in the Audit Log. A taxonomy's assignments are kept together if any part is unavailable.
+
+Rollback does not restore or remove imported custom metadata, delete created term objects, or restore changes to shared term fields. When an update changes the post type, WordPress may add a default category or another taxonomy's default term outside the import payload; rollback does not currently remove those.
+
+The server re-checks this on every request, so a listing loaded before an earlier rollback cannot re-apply it. A rollback is refused, leaving the post untouched, when:
+
+- The item was already rolled back, or a concurrent rollback claimed it first.
+- An update's destination post is in the trash.
+- An update was recorded without a restore point, so its pre-existing post has nothing to put back.
+- The destination post no longer exists, which also closes the import record, since that import can never be reverted.
+
+Claiming is what makes those checks binding: two rollbacks of one item in flight cannot both apply, and the loser is refused before it touches the post. If the revert then fails, the claim is released so the item stays retryable; if that release fails too, the Audit Log records the item as stuck.
 
 ## Post-import notice
 
