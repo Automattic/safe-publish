@@ -23,7 +23,9 @@ class Diff_Renderer_Filtered_Markup_Test extends Integration_Test_Case {
 
 	use Unfiltered_Html_Trait;
 
-	private const SOURCE         = 'https://example.com';
+	// Distinct from the example.com URLs the fixtures embed, so the import
+	// rewrite leaves them alone and each case turns on its markup.
+	private const SOURCE         = 'https://source.example.com';
 	private const SOURCE_POST_ID = 123;
 
 	/**

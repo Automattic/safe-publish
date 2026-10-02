@@ -40,7 +40,7 @@ Actions are shown only when they apply to the selected row:
 | Action | Description |
 | --- | --- |
 | Import | Creates a destination draft or re-imports changed source content. |
-| Compare | Compares the current destination post with fresh source content. |
+| Compare | Compares the current destination post with what a re-import would store. |
 | Edit | Opens the destination post in the WordPress editor. |
 | Trash | Moves the destination post to trash. |
 | Roll back | Reverses the latest eligible import. |

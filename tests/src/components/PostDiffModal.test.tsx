@@ -243,12 +243,66 @@ describe( 'PostDiffModal', () => {
 		expect( isolatedReason ).toHaveAttribute( 'dir', 'auto' );
 		expect( screen.getByRole( 'alert' ) ).toContainElement( isolatedReason );
 	} );
+
+	it( 'Verifies that a stale row reporting no differences still offers Update', async () => {
+		// ARRANGE: The preview reports nothing on a row the listing calls
+		// outdated, which only an update can clear.
+		mockApiFetch.mockResolvedValue( {
+			contentDiffHtml: '',
+			blockDiffs: [],
+		} );
+
+		// ACT: Render and wait for the empty state.
+		render(
+			<PostDiffModal
+				items={ [ ROW ] }
+				ajaxurl={ AJAX_URL }
+				nonce={ NONCE }
+				syncStatus="outdated"
+				onRefresh={ vi.fn() }
+			/>
+		);
+		expect(
+			await screen.findByText( 'No differences detected.' )
+		).toBeInTheDocument();
+
+		// ASSERT: Update is offered and submittable.
+		const update = screen.getByRole( 'button', { name: 'Update' } );
+		expect( update ).not.toHaveAttribute( 'aria-disabled', 'true' );
+	} );
+
+	it( 'Verifies that an up-to-date row is offered no Update', async () => {
+		// ARRANGE: The preview reports nothing on a row already in sync.
+		mockApiFetch.mockResolvedValue( {
+			contentDiffHtml: '',
+			blockDiffs: [],
+		} );
+
+		// ACT: Render and wait for the empty state.
+		render(
+			<PostDiffModal
+				items={ [ ROW ] }
+				ajaxurl={ AJAX_URL }
+				nonce={ NONCE }
+				syncStatus="up-to-date"
+				onRefresh={ vi.fn() }
+			/>
+		);
+		expect(
+			await screen.findByText( 'No differences detected.' )
+		).toBeInTheDocument();
+
+		// ASSERT: Nothing to apply, so no action is offered.
+		expect(
+			screen.queryByRole( 'button', { name: 'Update' } )
+		).not.toBeInTheDocument();
+	} );
 } );
 
 describe( 'PostDiffModal keyboard focus', () => {
 	it( 'Verifies that a completed update keeps its action focused after the diff clears', async () => {
 		// ARRANGE: The first preview reports changes and the post-update
-		// refetch reports none, which is what retires the Update button.
+		// refetch reports none, which is what spends the Update button.
 		mockApiFetch
 			.mockResolvedValueOnce( {
 				contentDiffHtml: '<ins>Incoming paragraph</ins>',
