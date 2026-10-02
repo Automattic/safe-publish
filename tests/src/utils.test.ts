@@ -25,6 +25,7 @@ import type {
 	HistoryWriteFailedWarning,
 	NavRefRewriteFailedWarning,
 	ParentOrphanedWarning,
+	ReservedMetaSkippedWarning,
 	UnmappedBlockReferenceWarning,
 	UnmappedGalleryReferenceWarning,
 	UnmappedShortcodeReferenceWarning,
@@ -542,6 +543,20 @@ describe( 'renderWarningMessage', () => {
 		expect( message ).toContain( 'Rename or remove that term' );
 	} );
 
+	it( 'should name the skipped keys for reserved_meta_skipped', () => {
+		// ARRANGE: A payload that carried two reserved meta keys.
+		const warning: ReservedMetaSkippedWarning = {
+			type: 'reserved_meta_skipped',
+			keys: [ 'safe_publish_source_post_id', '_thumbnail_id' ],
+		};
+		// ACT: Render the message.
+		const message = renderWarningMessage( warning );
+		// ASSERT: Both keys and the fact they were left out are named.
+		expect( message ).toContain( 'safe_publish_source_post_id' );
+		expect( message ).toContain( '_thumbnail_id' );
+		expect( message ).toContain( 'not imported' );
+	} );
+
 	it( 'should explain that a failed history write prevents rollback', () => {
 		// ARRANGE: An update completed without a rollback history row.
 		const warning: HistoryWriteFailedWarning = {
@@ -685,6 +700,17 @@ describe( 'renderWarningShortLabel', () => {
 		const label = renderWarningShortLabel( warning );
 		// ASSERT: The label identifies the missing rollback history.
 		expect( label ).toBe( 'rollback history unavailable' );
+	} );
+	it( 'should return the short label for reserved_meta_skipped', () => {
+		// ARRANGE: Any reserved_meta_skipped warning.
+		const warning: ReservedMetaSkippedWarning = {
+			type: 'reserved_meta_skipped',
+			keys: [ '_edit_lock' ],
+		};
+		// ACT: Render the short label.
+		const label = renderWarningShortLabel( warning );
+		// ASSERT: The short label is the one the bulk modal joins.
+		expect( label ).toBe( 'reserved fields skipped' );
 	} );
 } );
 
