@@ -64,9 +64,10 @@ export interface BulkRollbackResult {
 
 /**
  * Predicts whether rolling back an item restores its previous version (true)
- * or permanently deletes a newly created post (false). Mirrors the server's
- * Session_Rollback_Service: Only fresh creations (no captured previous
- * content) get deleted; every other eligible row restores.
+ * or permanently deletes a newly created post (false). Reads the flag the
+ * server derives from the same condition it dispatches on. An older update
+ * recorded without a restore point reads as a deletion here, but the server
+ * refuses it.
  *
  * @param {UnifiedPostRow} item Unified Posts listing row.
  *
