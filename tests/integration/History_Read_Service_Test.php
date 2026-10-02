@@ -78,9 +78,19 @@ class History_Read_Service_Test extends Integration_Test_Case {
 			$ids,
 			array_map( 'intval', array_column( $items, 'id' ) )
 		);
+		// Only the updated row can be restored from its snapshot, so only it
+		// advertises previous content.
+		$expected_flags = array(
+			'success' => '0',
+			'updated' => '1',
+			'error'   => '0',
+		);
 		foreach ( $items as $row ) {
 			$this->assertArrayNotHasKey( 'content_changes', $row );
-			$this->assertSame( '1', $row['has_previous_content'] );
+			$this->assertSame(
+				$expected_flags[ $row['status'] ],
+				$row['has_previous_content']
+			);
 		}
 		$this->assertSame(
 			$items,
@@ -186,7 +196,7 @@ class History_Read_Service_Test extends Integration_Test_Case {
 		$this->assertIsInt( $first );
 		$this->assertIsInt( $latest );
 		$this->assertIsInt( $rolled_back );
-		$repository->mark_item_rolled_back( $rolled_back );
+		$repository->claim_item_for_rollback( $rolled_back );
 		$other_item = $repository->log_import_action(
 			$other,
 			17,

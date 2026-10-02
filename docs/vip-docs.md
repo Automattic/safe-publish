@@ -66,7 +66,7 @@ The plugin uses a small set of terms consistently throughout its interface and t
 - **Catalog** — the list of posts available on the source site, served through a REST API endpoint and browsed from the destination.
 - **Import** — creating a destination draft or updating an existing imported post. A bulk run records several items in one history session.
 - **Compare** — a side-by-side comparison of fresh source content against the current destination post.
-- **Roll back** — reversing the latest eligible import for a selected post. Rolling back a created post deletes it. Rolling back an updated post restores the previous content when it was captured, or deletes the post when it was not.
+- **Roll back** — reversing the latest eligible import for a selected post. Rolling back a created post deletes it. Rolling back an updated post restores the previous content that was captured at import time; an update recorded without that snapshot is refused.
 
 ## Requirements
 
@@ -178,13 +178,13 @@ The Compare action on **Manage → Posts** fetches fresh source content and comp
 Rollback reverses a single import:
 
 - If the post was newly created by the import, the post is deleted, along with the media that import created. Media another post still shows — as its featured image, inline in its content, or by ID in a gallery or playlist shortcode — is kept, whatever that post's type or status, trashed and otherwise hidden posts included. Media whose usage cannot be determined is kept and the omission recorded in the Audit Log.
-- If the post was an update of an existing post, the captured post fields, author, parent, post type, featured image, editor and tracking metadata, and previous assignments for taxonomies carried in the import payload are restored. Restored content passes through WordPress' normal save filters for the acting user. If a filter changes the content or excerpt, rollback reports an error, leaves the history item active, and warns that WordPress may already have persisted the filtered value. If a captured author, parent, post type, featured image, taxonomy, or term is no longer available, rollback retains the imported value for that field and records the omission in the Audit Log; a taxonomy's assignments are retained together if any part is unavailable. Imported custom metadata is not restored or removed, and created terms and changes to shared term fields are retained. When an update changes the post type, WordPress may add a default category or another taxonomy's default term outside the import payload; those assignments are not currently removed by rollback. If no previous content was captured, the post is deleted.
+- If the post was an update of an existing post, the captured post fields, author, parent, post type, featured image, editor and tracking metadata, and previous assignments for taxonomies carried in the import payload are restored. Restored content passes through WordPress' normal save filters for the acting user. If a filter changes the content or excerpt, rollback reports an error, reopens the history item so it stays retryable, and warns that WordPress may already have persisted the filtered value. If a captured author, parent, post type, featured image, taxonomy, or term is no longer available, rollback retains the imported value for that field and records the omission in the Audit Log; a taxonomy's assignments are retained together if any part is unavailable. Imported custom metadata is not restored or removed, and created terms and changes to shared term fields are retained. When an update changes the post type, WordPress may add a default category or another taxonomy's default term outside the import payload; those assignments are not currently removed by rollback.
 
 It's important to note that the roll-back rolls back the specific changes from that single import. If a post has gone through a series of changes, each change can be rolled back sequentially.
 
 Multiple rows can be selected on the Posts tab and rolled back in a single action.
 
-Safe Publish normally stores a pre-update snapshot in the import record, so it can restore an updated post without contacting the source site. If an eligible updated row has no captured snapshot, rollback deletes the post instead.
+Safe Publish normally stores a pre-update snapshot in the import record, so it can restore an updated post without contacting the source site. An eligible updated row with no captured snapshot is refused, since the post it updated pre-dates the import. Rolling back an update whose post is in the trash is refused as well — restore the post first. A rollback whose post has already been deleted is refused and closes the import record.
 
 Note: Rolling back a newly created post deletes that post on the destination. Confirm the affected posts before rolling back, since the action is irreversible for newly created posts.
 
