@@ -455,26 +455,52 @@ class Content_Processor_Test extends Integration_Test_Case {
 
 	/**
 	 * Verifies that a source sharing the destination's host on another port is
-	 * treated as a separate site, so its URLs are still replaced.
+	 * treated as a separate site, so its URLs are replaced and the
+	 * destination's own URLs are left alone.
+	 *
+	 * @dataProvider shared_host_sites_provider
+	 * @param string $source_suffix      Source port after the shared host.
+	 * @param string $destination_suffix Destination port or path after it.
 	 */
-	public function test_replace_source_urls_separates_sites_by_port(): void {
-		// ARRANGE: A source on the destination's own host, but another port.
+	public function test_replace_source_urls_separates_sites_by_port(
+		string $source_suffix,
+		string $destination_suffix
+	): void {
+		// ARRANGE: A source on the destination's host but another port, and an
+		// image the media import already pointed at the destination.
+		$host = (string) wp_parse_url( get_site_url(), PHP_URL_HOST );
+		add_filter(
+			'option_siteurl',
+			static fn (): string => 'http://' . $host . $destination_suffix
+		);
 		$current_url     = get_site_url();
-		$host            = (string) wp_parse_url( $current_url, PHP_URL_HOST );
-		$source_site_url = 'http://' . $host . ':8889';
-		$content         = '<a href="http://' . $host . ':8889/page">L</a>';
+		$source_site_url = 'http://' . $host . $source_suffix;
+		$image           = '<img src="' . $current_url . '/a.jpg">';
+		$link            = '<a href="' . $source_site_url . '/p">L</a>';
 
 		// ACT: Call replace_source_urls() directly.
 		$processed = $this->processor->replace_source_urls(
-			$content,
+			$image . $link,
 			$source_site_url
 		);
 
-		// ASSERT: The shared host did not make the content look local.
+		// ASSERT: Only the source link moved to the destination.
 		$this->assertSame(
-			'<a href="' . $current_url . '/page">L</a>',
+			$image . '<a href="' . $current_url . '/p">L</a>',
 			$processed,
 			'A different port on the same host is a different site'
+		);
+	}
+
+	/**
+	 * Provides source and destination sites that share a host.
+	 *
+	 * @return array<string, array{string, string}>
+	 */
+	public static function shared_host_sites_provider(): array {
+		return array(
+			'destination on a port'         => array( '', ':8888' ),
+			'destination in a subdirectory' => array( ':8889', '/sub' ),
 		);
 	}
 

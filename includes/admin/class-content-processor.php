@@ -833,12 +833,13 @@ class Content_Processor {
 		// Match both http and https variants of the source URL so that legacy
 		// http:// references are also replaced. The lookahead prevents partial
 		// domain matches (e.g., "source.example.com" must not match inside
-		// "source.example.company.com"). The source's own port is optional, so
-		// a URL carrying it has the port consumed instead of left behind the
-		// replacement URL's port.
-		$pattern = '/https?:\/\/' . preg_quote( $source_host, '/' )
-			. ( is_int( $source_port ) ? '(?::' . $source_port . ')?' : '' )
-			. '(?=[^a-zA-Z0-9.]|$)/';
+		// "source.example.company.com"). A source served on a port matches only
+		// with that port, and the lookahead rejects any other. The same host on
+		// another port is another site, such as the destination itself when
+		// both share a host.
+		$authority = preg_quote( $source_host, '/' )
+			. ( is_int( $source_port ) ? ':' . $source_port : '' );
+		$pattern   = '/https?:\/\/' . $authority . '(?=[^a-zA-Z0-9.:]|$)/';
 
 		$result = preg_replace( $pattern, $current_site_url, $content );
 
