@@ -11,7 +11,9 @@ namespace Safe_Publish\Admin;
 
 use Safe_Publish\Content\Shortcode_ID_Rewriter;
 use Safe_Publish\Utils\Options;
+use Throwable;
 use WP_Error;
+use WP_Post;
 
 // Prevent direct access.
 if ( ! defined( 'ABSPATH' ) ) {
@@ -29,6 +31,12 @@ final class Session_Rollback_Service {
 	 * Posts read per page when scanning content for media references.
 	 */
 	private const SCAN_PAGE_SIZE = 500;
+
+	/**
+	 * Error data key marking a rollback that declined without touching the
+	 * post, rather than failing partway.
+	 */
+	private const REFUSED = 'refused';
 
 	/**
 	 * History repository instance.
@@ -51,16 +59,93 @@ final class Session_Rollback_Service {
 	 *
 	 * @param int $item_id Item ID to roll back.
 	 * @return array{action: string, post_id: int, post_title: string, omissions: array}|WP_Error Rollback result or error.
+	 * @throws Throwable When a hook throws during the revert.
 	 */
 	public function rollback_item( int $item_id ): array|WP_Error {
 		$item = $this->repository->get_item( $item_id );
 
-		if ( ! $item ) {
-			return new WP_Error(
-				'item_not_found',
-				__( 'Import item not found', 'safe-publish' )
+		if ( ! is_array( $item ) ) {
+			return $this->refused(
+				new WP_Error(
+					'item_not_found',
+					__( 'Import item not found', 'safe-publish' )
+				)
 			);
 		}
+
+		$refusal = $this->refuse_rollback( $item );
+
+		if ( $refusal instanceof WP_Error ) {
+			return $this->refused( $refusal );
+		}
+
+		// Claim before applying, so a losing request never writes to the post.
+		$claimed = $this->repository->claim_item_for_rollback( $item_id );
+
+		if ( $claimed instanceof WP_Error ) {
+			// A claim that could not be written is a failure; one lost to a
+			// rival request is a refusal.
+			return 'rollback_not_started' === $claimed->get_error_code()
+				? $claimed
+				: $this->refused( $claimed );
+		}
+
+		try {
+			$result = $this->rollback_item_row( $item );
+		} catch ( Throwable $error ) {
+			// A hook that throws mid-revert must not leave the item claimed.
+			$this->repository->release_rollback_claim( $item_id );
+			throw $error;
+		}
+
+		if ( is_wp_error( $result ) ) {
+			return $this->release_claim( $item_id, $result );
+		}
+
+		$this->repository->record_item_rolled_back( $item_id, $result['omissions'] );
+
+		return $result;
+	}
+
+	/**
+	 * Reports whether an error is a refusal.
+	 *
+	 * @param WP_Error $error Error a rollback returned.
+	 * @return bool True when the post was left untouched.
+	 */
+	public static function is_refusal( WP_Error $error ): bool {
+		$data = $error->get_error_data();
+
+		return is_array( $data ) && true === ( $data[ self::REFUSED ] ?? false );
+	}
+
+	/**
+	 * Marks an error as a refusal.
+	 *
+	 * @param WP_Error $refusal Error to mark.
+	 * @return WP_Error The marked error.
+	 */
+	private function refused( WP_Error $refusal ): WP_Error {
+		return new WP_Error(
+			$refusal->get_error_code(),
+			$refusal->get_error_message(),
+			array( self::REFUSED => true )
+		);
+	}
+
+	/**
+	 * Runs the rollback pre-flight checks in order, returning the first
+	 * refusal.
+	 *
+	 * Destination checks run before snapshot checks so an item whose post is
+	 * gone is closed whatever else the row holds.
+	 *
+	 * @param array $item Item row.
+	 * @return WP_Error|null Refusal, or null when the rollback may proceed.
+	 */
+	private function refuse_rollback( array $item ): ?WP_Error {
+		$item_id = (int) $item['id'];
+		$status  = (string) $item['status'];
 
 		// Replaying would write this row's snapshot over newer content.
 		if ( 1 === (int) $item['rolled_back'] ) {
@@ -73,38 +158,17 @@ final class Session_Rollback_Service {
 			);
 		}
 
-		$result = $this->rollback_item_row( $item );
-
-		if ( is_wp_error( $result ) ) {
-			return $result;
-		}
-
-		// A failed flag write leaves the revert unrecorded; don't claim success.
-		if ( ! $this->repository->mark_item_rolled_back( $item_id, $result['omissions'] ) ) {
+		if ( 'success' !== $status && 'updated' !== $status ) {
 			return new WP_Error(
-				'rollback_not_recorded',
+				'unsupported_status',
 				__(
-					'The rollback was applied, but it could not be recorded. Reload the list before rolling back again.',
+					'Cannot roll back this item because it was not imported successfully',
 					'safe-publish'
 				)
 			);
 		}
 
-		return $result;
-	}
-
-	/**
-	 * Rolls back a single item row (internal helper).
-	 *
-	 * @param array $item Item row.
-	 * @return array{action: string, post_id: int, post_title: string, omissions: array}|WP_Error Rollback result or error.
-	 */
-	private function rollback_item_row( array $item ): array|WP_Error {
 		$post_id = isset( $item['post_id'] ) ? (int) $item['post_id'] : 0;
-		$status  = (string) $item['status'];
-		$changes = History_Repository::decode_item_changes(
-			$item['content_changes']
-		);
 
 		if ( $post_id <= 0 ) {
 			return new WP_Error(
@@ -114,30 +178,146 @@ final class Session_Rollback_Service {
 		}
 
 		$post = get_post( $post_id );
-		if ( ! $post ) {
+
+		if ( ! $post instanceof WP_Post ) {
+			return $this->close_item_for_missing_post( $item_id );
+		}
+
+		if ( 'updated' !== $status ) {
+			return null;
+		}
+
+		// Restoring into the trash changes nothing anyone can see. A created
+		// post's rollback deletes it either way.
+		if ( 'trash' === $post->post_status ) {
 			return new WP_Error(
-				'post_not_found',
-				__( 'The post no longer exists', 'safe-publish' )
+				'post_in_trash',
+				__(
+					'The post is in the trash. Restore it before rolling back.',
+					'safe-publish'
+				)
 			);
 		}
 
-		if ( 'success' === $status ) {
-			return $this->delete_new_post( $post_id, $post->post_title );
+		if ( null === $this->restorable_snapshot( $item ) ) {
+			return $this->missing_snapshot_error();
 		}
 
-		if ( 'updated' === $status && is_array( $changes ) && isset( $changes['previous_content'] ) ) {
-			return $this->restore_previous_version( $post_id, $post->post_title, $changes );
+		return null;
+	}
+
+	/**
+	 * Closes an item whose destination post is gone and reports why.
+	 *
+	 * @param int $item_id Item ID.
+	 * @return WP_Error Refusal describing the missing post.
+	 */
+	private function close_item_for_missing_post( int $item_id ): WP_Error {
+		if ( true === $this->repository->claim_item_for_rollback( $item_id ) ) {
+			$this->repository->record_item_closed_post_missing( $item_id );
 		}
 
-		if ( 'updated' === $status ) {
-			// No previous content stored: Just delete the post.
-			return $this->delete_new_post( $post_id, $post->post_title );
+		return $this->post_missing_error();
+	}
+
+	/**
+	 * Returns the shared missing-destination-post error.
+	 *
+	 * @return WP_Error Missing post error.
+	 */
+	private function post_missing_error(): WP_Error {
+		return new WP_Error(
+			'post_not_found',
+			__(
+				'The post no longer exists, so there is nothing to roll back.',
+				'safe-publish'
+			)
+		);
+	}
+
+	/**
+	 * Reopens an item whose revert failed, so it stays retryable.
+	 *
+	 * @param int      $item_id Item holding the claim.
+	 * @param WP_Error $failure Failure the revert reported.
+	 * @return WP_Error The failure, or a combined error when the item could
+	 *                  not be reopened.
+	 */
+	private function release_claim( int $item_id, WP_Error $failure ): WP_Error {
+		if ( $this->repository->release_rollback_claim( $item_id ) ) {
+			return $failure;
 		}
 
 		return new WP_Error(
-			'unsupported_status',
+			'rollback_claim_stuck',
+			sprintf(
+				/* translators: %s: error message */
+				__(
+					'The rollback failed (%s) and the import record could not be reopened. Check the Audit Log.',
+					'safe-publish'
+				),
+				$failure->get_error_message()
+			)
+		);
+	}
+
+	/**
+	 * Returns the snapshot an updated row can be restored from.
+	 *
+	 * @param array $item Item row.
+	 * @return array|null Decoded snapshot, or null when the row holds none.
+	 */
+	private function restorable_snapshot( array $item ): ?array {
+		$changes = History_Repository::decode_item_changes(
+			$item['content_changes']
+		);
+
+		return is_array( $changes ) && isset( $changes['previous_content'] )
+			? $changes
+			: null;
+	}
+
+	/**
+	 * Applies the revert the item row describes.
+	 *
+	 * @param array $item Item row that cleared the pre-flight checks.
+	 * @return array{action: string, post_id: int, post_title: string, omissions: array}|WP_Error Rollback result or error.
+	 */
+	private function rollback_item_row( array $item ): array|WP_Error {
+		$post_id = (int) $item['post_id'];
+		$post    = get_post( $post_id );
+
+		if ( ! $post instanceof WP_Post ) {
+			return $this->post_missing_error();
+		}
+
+		if ( 'success' === (string) $item['status'] ) {
+			return $this->delete_new_post( $post_id, $post->post_title );
+		}
+
+		$changes = $this->restorable_snapshot( $item );
+
+		if ( null === $changes ) {
+			return $this->missing_snapshot_error();
+		}
+
+		return $this->restore_previous_version(
+			$post_id,
+			$post->post_title,
+			$changes
+		);
+	}
+
+	/**
+	 * Returns the shared no-restore-point error.
+	 *
+	 * @return WP_Error Missing snapshot error.
+	 */
+	private function missing_snapshot_error(): WP_Error {
+		return new WP_Error(
+			'missing_rollback_snapshot',
 			__(
-				'Cannot roll back this item because it was not imported successfully',
+				'This update has no saved previous content to restore. Edit or trash the post directly.',
 				'safe-publish'
 			)
 		);

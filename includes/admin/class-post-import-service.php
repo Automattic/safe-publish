@@ -2865,7 +2865,7 @@ class Post_Import_Service {
 	 *
 	 * @param int   $post_id  Post ID.
 	 * @param array $snapshot Snapshot from capture_pre_update_state().
-	 * @return WP_Error|null Error when the post fields were not fully restored.
+	 * @return WP_Error|null Error when post or terms could not be restored.
 	 */
 	private function restore_pre_update_state(
 		int $post_id,
@@ -2915,7 +2915,33 @@ class Post_Import_Service {
 			}
 		}
 
-		Term_Assignment_State::restore( $post_id, $snapshot['terms'] );
+		$terms_restored = Term_Assignment_State::restore(
+			$post_id,
+			$snapshot['terms']
+		);
+
+		if ( is_wp_error( $terms_restored ) ) {
+			$terms_error = new WP_Error(
+				'terms_restore_failed',
+				sprintf(
+					/* translators: %s: WordPress error message. */
+					__( 'Failed to restore the previous terms: %s', 'safe-publish' ),
+					$terms_restored->get_error_message()
+				),
+				array( 'action' => 'terms_restore_failed' )
+			);
+
+			if ( null === $content_error ) {
+				return $terms_error;
+			}
+
+			return new WP_Error(
+				$content_error->get_error_code(),
+				$content_error->get_error_message() . ' '
+					. $terms_error->get_error_message(),
+				array( 'action' => 'terms_restore_failed' )
+			);
+		}
 
 		return $content_error;
 	}
@@ -2926,7 +2952,7 @@ class Post_Import_Service {
 	 *
 	 * @param int   $post_id  Post ID.
 	 * @param array $snapshot Snapshot from capture_pre_update_state().
-	 * @return WP_Error|null Error when the post fields were not fully restored.
+	 * @return WP_Error|null Error when post or terms could not be restored.
 	 */
 	private function rollback_failed_update(
 		int $post_id,
@@ -2973,12 +2999,12 @@ class Post_Import_Service {
 		}
 
 		return new WP_Error(
-			'content_restore_failed',
+			$restore_error->get_error_code(),
 			$restore_error->get_error_message() . ' ' . $cleanup_message,
 			array(
-				'action'              => 'content_restore_failed',
-				'original_error_code' => $restore_error->get_error_code(),
-				'media_ids'           => $media_ids,
+				'action'    => $restore_error->get_error_data()['action']
+					?? $restore_error->get_error_code(),
+				'media_ids' => $media_ids,
 			)
 		);
 	}
