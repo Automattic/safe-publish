@@ -251,7 +251,7 @@ class ConnectionServiceTest extends TestCase {
 			'error_code' => 'upstream_gate',
 			'message'    => 'Previously translated message',
 		);
-		set_site_transient( Connection_Service::AUTH_STATUS_TRANSIENT, $cached );
+		set_transient( Connection_Service::AUTH_STATUS_TRANSIENT, $cached );
 		$service = new Connection_Service(
 			new Source_Posts_API(),
 			new Telemetry_Service()
@@ -271,10 +271,10 @@ class ConnectionServiceTest extends TestCase {
 			$this->assertSame( $expected, $result );
 			$this->assertSame(
 				$cached,
-				get_site_transient( Connection_Service::AUTH_STATUS_TRANSIENT )
+				get_transient( Connection_Service::AUTH_STATUS_TRANSIENT )
 			);
 		} finally {
-			unset( $GLOBALS['_test_site_transients'] );
+			unset( $GLOBALS['_test_transients'] );
 		}
 	}
 }

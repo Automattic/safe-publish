@@ -2,9 +2,9 @@
  * Tests for the useAuthStatus hook.
  *
  * The hook funnels the source-site auth probe used by both DataView pages, so
- * each terminal state (authorized, unauthorized, network error) earns
- * dedicated coverage to guard against silent regressions in the banner the
- * admin sees before any user action.
+ * each terminal state (authorized, unauthorized, unreachable, failed probe)
+ * earns dedicated coverage to guard against silent regressions in the banner
+ * the admin sees before any user action.
  */
 import {
 	describe,
@@ -64,19 +64,19 @@ describe( 'useAuthStatus', () => {
 		await waitFor( () => expect( result.current ).toBe( 'unauthorized' ) );
 	} );
 
-	it( 'falls back to "unreachable" when the network request rejects', async () => {
+	it( 'reports a failed probe when the network request rejects', async () => {
 		// ARRANGE: Simulate a transient network failure.
 		vi.mocked( fetch ).mockRejectedValue( new Error( 'network' ) );
 
 		// ACT: Mount the hook.
 		const { result } = renderHook( () => useAuthStatus() );
 
-		// ASSERT: The hook reports unreachable so callers don't lock the page
-		// over a blip.
-		await waitFor( () => expect( result.current ).toBe( 'unreachable' ) );
+		// ASSERT: The failure is reported as its own state, never as a verdict
+		// about the source site.
+		await waitFor( () => expect( result.current ).toBe( 'probe_failed' ) );
 	} );
 
-	it( 'treats success:false as unreachable rather than authorized', async () => {
+	it( 'reports a failed probe for success:false rather than authorized', async () => {
 		// ARRANGE: Server returns a structured failure envelope.
 		vi.mocked( fetch ).mockResolvedValue(
 			new Response(
@@ -88,7 +88,27 @@ describe( 'useAuthStatus', () => {
 		// ACT: Mount the hook.
 		const { result } = renderHook( () => useAuthStatus() );
 
-		// ASSERT: Coerces to 'unreachable'; we never silently report authorized.
+		// ASSERT: An envelope failure never reads as authorized, and never as
+		// a claim that the source site was unreachable.
+		await waitFor( () => expect( result.current ).toBe( 'probe_failed' ) );
+	} );
+
+	it( 'reports unreachable only when the server says so', async () => {
+		// ARRANGE: Server probed the source and found it unreachable.
+		vi.mocked( fetch ).mockResolvedValue(
+			new Response(
+				JSON.stringify( {
+					success: true,
+					data: { status: 'unreachable' },
+				} ),
+				{ status: 200 }
+			)
+		);
+
+		// ACT: Mount the hook.
+		const { result } = renderHook( () => useAuthStatus() );
+
+		// ASSERT: The server's own verdict passes through unchanged.
 		await waitFor( () => expect( result.current ).toBe( 'unreachable' ) );
 	} );
 } );

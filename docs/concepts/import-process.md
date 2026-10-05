@@ -94,6 +94,7 @@ An inline `<img>` carries two attachment-ID references alongside its URL — the
 - Uploaded to media library regardless of serving host — unlike content media (step 3), an off-domain featured image is still downloaded because it belongs to the source.
 - The source library metadata (alt text, title, caption, description) is applied to the destination attachment, fetched in edit context for the raw values.
 - Set as post thumbnail via `set_post_thumbnail()`.
+- A re-import reuses the destination attachment already recorded against the source media ID and origin site, falling back to one sideloaded from the same URL. **Compare** resolves the incoming image the same way, so an unchanged featured image reports no difference, while a repointed or not-yet-imported one still does. A source that dropped its featured image is reported with a note, since the import sets a thumbnail but never clears one. When the source's media record cannot be read, the comparison previews the copy the import would reuse; with no copy, it marks the image unavailable with a note, since the import needs that same record. The failure goes to the audit log.
 
 ### URL Replacement
 
@@ -116,7 +117,7 @@ Post content and excerpts pass through WordPress' normal save filters for the ac
 - Post data set:
   - **Title**: From source post title
   - **Content**: Transformed content with updated URLs
-  - **Slug**: From source post slug (WordPress appends `-2`, `-3`, etc. if the slug already exists)
+  - **Slug**: From source post slug, kept as-is even when the destination already uses it. WordPress resolves a collision by appending `-2`, `-3`, and so on only once the post leaves draft or pending, for example when it is published or scheduled in the editor, so the slug is not final at import.
   - **Status**: Always `draft`
   - **Post type**: Same as source post
   - **Post Meta**: meta available via REST is transferred, see below for more details.
@@ -250,9 +251,12 @@ Bulk imports process multiple posts sequentially:
 
 - **Trashed destination post**: Import is refused when the only destination post linked to the source post is in the trash, so a second linked copy is never created. Restore that post to update it, or delete it permanently to import a fresh copy.
 - **Inline media download failures**: Import is aborted; any attachments already created during the run are deleted.
-- **Featured image failures**: Import is aborted.
+- **Featured image failures**: Import is aborted; any attachments already created during the run are deleted.
+- **Post insert rejected**: Import is aborted; any attachments already created during the run are deleted.
 - **Meta/term failures**: Import is aborted; for new posts, the post and its attachments are deleted. For updates, the post is rolled back to its pre-update state.
 - **Network timeouts on API requests**: No automatic retry; on WordPress VIP, consecutive failures will temporarily block further requests for up to 20 seconds to protect performance.
+
+Cleanup deletes only the media the aborted run itself downloaded; a file an earlier import already brought in is left alone. An attachment the cleanup cannot remove is named in the reported error, except after an inline-media failure.
 
 ### Error Reporting
 
@@ -306,11 +310,15 @@ Internal links inside post body content (for example `<a href>` in paragraphs an
 
 A permalink stored in a custom or third-party block's attributes — for example a block that saves a post's own URL — is treated the same way: host-swapped, but not re-derived. Rewriting an arbitrary attribute that merely looks like a permalink could point it at the wrong content, so only blocks whose attributes carry an explicit, known entity reference are re-derived.
 
-Navigation links and submenus are the exception: they carry an explicit entity reference, so their URLs are re-derived to the destination permalink automatically — unless the target was a draft at import (see [below](#navigation-links-to-draft-targets-may-404-or-open-the-wrong-page)).
+Navigation links and submenus are the exception: they carry an explicit entity reference, so their URLs are re-derived to the destination permalink automatically — unless the target was a draft at import, or sat under a draft or trashed parent (see [below](#navigation-links-to-draft-targets-or-their-children-may-404-or-open-the-wrong-page)).
 
-### Navigation links to draft targets may 404 or open the wrong page
+### Navigation links to draft targets or their children may 404 or open the wrong page
 
-Navigation links and submenus are re-derived only when their target was already published at import. If the target was a draft, its slug isn't final, so the link keeps the host-swapped source path and behaves like an [internal body link](#internal-body-links-may-404-or-open-the-wrong-page) — it can 404 or open the wrong page under a slug collision or a different permalink structure. Re-import the referring content after the target is published to re-derive the URL; the Retry action does not cover this case.
+WordPress settles a post's slug only when it leaves draft or pending, so a link to a target in either status keeps the host-swapped source path instead of a URL that would move later. The same applies when a parent page the target sits under is a draft, pending, or in the trash (where its slug carries a temporary `__trashed` suffix), because the parent's slug forms part of the child's path. Under plain permalinks, a page's URL uses its ID instead of a path, so its parents don't matter.
+
+Such a link behaves like an [internal body link](#internal-body-links-may-404-or-open-the-wrong-page) — it can 404 or open the wrong page under a slug collision or a different permalink structure. Re-import the referring content after the target and its parents are published to re-derive the URL; the Retry action does not cover this case.
+
+Scheduled targets, and targets in a non-public custom status, are re-derived normally — their slug is already settled, so the link gets the address the target will be served at.
 
 ### Navigation links to a term in another taxonomy are left unrepointed
 

@@ -196,7 +196,7 @@ class Posts_Listing_Scoping_Ajax_Test extends WP_Ajax_UnitTestCase {
 		);
 		$this->assertIsInt( $initial );
 		$this->assertIsInt( $update );
-		$this->history->mark_item_rolled_back( $update );
+		$this->history->claim_item_for_rollback( $update );
 
 		// ACT: Request the catalog-backed All listing used by the Manage screen.
 		$response = $this->list_posts( 'all' );

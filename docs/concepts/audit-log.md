@@ -28,7 +28,7 @@ Every event belongs to one channel — the producer subsystem that logged it —
 | Channel | What it logs |
 | --- | --- |
 | `auth` | Inbound HMAC request authentication and REST permission handling. |
-| `content` | Fetching source post content over REST. |
+| `content` | Fetching source post content over REST, and the featured image's media record during **Compare**. |
 | `dispatch` | Non-export REST calls (list, preview, probe) that errored or returned a bad status. |
 | `export` | Content served to destination sites via REST. |
 | `import` | Import session lifecycle, per-item failures and rollbacks, and history deletions. |
@@ -38,9 +38,11 @@ Every event belongs to one channel — the producer subsystem that logged it —
 
 The exact event codes for each channel are defined in `Log_Events` (the contract the per-channel loggers enforce); the Event column renders each code as a human-readable label, and the Event filter matches any substring.
 
+On the `auth` channel, failures raised before a request authenticates are recorded once per failure type per five-minute window, since their volume is set by the caller rather than by operator activity. Each window keeps its first occurrence and drops the rest, so these rows sample pre-authentication traffic rather than record all of it. Any caller reaching the REST API can be the occurrence a window keeps, so neither the absence of a row nor the contents of one describes the connected site. Diagnose a connection from the destination instead: its **Test connection** button reports the current result, and its own probe failures are recorded independently of this window.
+
 ## Privacy
 
-Audit log rows may contain destination URLs and post IDs. They do not contain post content. Rows are append-only — there is no UI for deleting them — so this surface is suitable as the system of record.
+Audit log rows may contain destination URLs and post IDs. They do not contain post content. Rows are append-only — there is no UI for deleting them — so this surface is suitable as the system of record, with the pre-authentication sampling noted above as the one exception.
 
 ## Next Steps
 

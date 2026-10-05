@@ -14,11 +14,13 @@ Safe Publish provides WordPress actions and filters at key extension points.
 
 Fires after any event is recorded to the audit log (e.g. import, export, auth, content, media, or dispatch channels).
 
+Authentication failures raised before a request authenticates are recorded once per failure type per five-minute window, bounding audit log growth on a surface whose volume is set by the caller. Only the first occurrence of a type in a window fires this action; later ones are dropped whatever their payload, so a subscriber sees a sample of pre-authentication failures rather than all of them. Their payload strings are stored capped at 256 bytes.
+
 **Parameters:**
 
 - `string $channel` — event channel (e.g. `'import'`, `'export'`, `'auth'`, `'content'`, `'media'`, `'dispatch'`)
 - `string $event` — event type identifier (e.g. `'CONTENT_EXPORTED'`, `'SIGNATURE_INVALID'`)
-- `array $data` — event payload. Always includes `timestamp` (GMT mysql), `site_url` (local site, from `get_site_url()`), `user_agent`, `request_uri`, `actor_user_id` (int), `actor_display_name` (string snapshot), and `actor_source` (one of `cli`, `cron`, `hmac`, `xmlrpc`, `ajax`, `rest`, `admin`, `front`, `unknown`). Unauthenticated contexts (e.g. webhook callbacks) record `actor_user_id` of `0` and an empty display name; `actor_source` then disambiguates the origin. Channel-specific fields are merged in alongside these reserved keys, which cannot be overridden by callers.
+- `array $data` — event payload. Always includes `timestamp` (GMT mysql), `site_url` (local site, from `get_site_url()`), `user_agent`, `request_uri`, `actor_user_id` (int), `actor_display_name` (string snapshot), and `actor_source` (one of `cli`, `cron`, `hmac`, `xmlrpc`, `ajax`, `rest`, `admin`, `front`, `unknown`). Unauthenticated contexts (e.g. webhook callbacks) record `actor_user_id` of `0` and an empty display name; `actor_source` then disambiguates the origin. `user_agent` and `request_uri` are stored capped at 512 bytes. Channel-specific fields are merged in alongside these reserved keys, which cannot be overridden by callers.
 
 **Example:**
 
