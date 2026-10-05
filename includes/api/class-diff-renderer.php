@@ -469,9 +469,8 @@ final class Diff_Renderer {
 		// Taxonomies diff.
 		$diffs['taxonomies'] = $this->generate_terms_diff( $current, $incoming );
 
-		// Meta diff, over the keys of the incoming meta object the import
-		// writes: It skips the keys its key policy reserves, and deletes none,
-		// so a key only the destination holds is not a pending change.
+		// Meta diff over the keys the import writes. It deletes none, so a
+		// key only the destination holds is not a pending change.
 		$meta_keys          = Meta_Terms_Manager::importable_meta_keys(
 			$incoming['meta'] ?? array()
 		);
@@ -1733,9 +1732,8 @@ final class Diff_Renderer {
 	/**
 	 * Builds text representation of meta for diff comparison.
 	 *
-	 * Both sides are walked in the comparable key order so that a key stored in
-	 * a different position on the destination does not read as a removal and an
-	 * addition of the same line.
+	 * Walks both sides in the same key order, so a reordered key does not read
+	 * as a removal plus an addition.
 	 *
 	 * @param array    $meta_array      Post meta array.
 	 * @param string[] $comparable_keys Keys to compare, sanitized the way the

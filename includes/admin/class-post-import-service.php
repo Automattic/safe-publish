@@ -1905,10 +1905,6 @@ class Post_Import_Service {
 	/**
 	 * Records one warning naming the meta keys the import key policy refused.
 	 *
-	 * Read from the same policy the write path applies, so the operator is
-	 * told exactly which of the source's keys were left out. Shared by the
-	 * single and bulk paths, which both write meta through update_meta().
-	 *
 	 * @param array $fields Post fields; mutated to append a warning.
 	 */
 	private function add_reserved_meta_warning( array &$fields ): void {
@@ -2907,8 +2903,7 @@ class Post_Import_Service {
 			'terms'          => array(),
 		);
 
-		// Only the keys the write path touches: The policy skips the rest, so
-		// snapshotting them would restore values no rollback overwrote.
+		// Only the keys the write touches; the policy skips the rest.
 		foreach ( Meta_Terms_Manager::importable_meta_keys( $meta ) as $key ) {
 			$snapshot['custom_meta'][ $key ] = get_post_meta(
 				$post_id,

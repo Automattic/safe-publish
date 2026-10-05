@@ -38,10 +38,8 @@ final class Meta_Terms_Manager {
 	/**
 	 * Meta key prefixes reserved for this plugin's own import state.
 	 *
-	 * The destination writes these itself, and the source post id paired with
-	 * the source site url is what identifies an imported post. A source value
-	 * under one of them would repoint that identity, so no filter re-enables
-	 * them.
+	 * A source value under one would repoint an imported post's identity, so
+	 * no filter re-enables them.
 	 *
 	 * @var string[]
 	 */
@@ -52,14 +50,7 @@ final class Meta_Terms_Manager {
 
 	/**
 	 * Core-owned post meta keys that hold destination state or point at source
-	 * ids and paths. Writing a source value to one of them corrupts the
-	 * destination instead of migrating content, so the import skips them
-	 * unless a site opts a key back in.
-	 *
-	 * Only keys core itself owns are listed. Protected keys in general stay
-	 * importable: is_protected_meta() means hidden from the custom-fields UI,
-	 * not unsafe to migrate, and third parties can change what it reports, so
-	 * gating on it would vary the import by destination site.
+	 * IDs and paths. The import skips them unless a site opts a key back in.
 	 *
 	 * @var string[]
 	 */
@@ -106,9 +97,7 @@ final class Meta_Terms_Manager {
 	 * Updates post meta based on provided input.
 	 *
 	 * Accepts array or object; keys are meta keys, values are meta values.
-	 * Keys the import key policy reserves are skipped instead of written;
-	 * refused_meta_keys() reports the same set, so a caller can tell the
-	 * operator what was left out.
+	 * Skips reserved keys; refused_meta_keys() lists them.
 	 *
 	 * Returns true on success, or a WP_Error listing any keys that could not
 	 * be written due to a database error.
@@ -127,9 +116,7 @@ final class Meta_Terms_Manager {
 			foreach ( $meta_array as $meta_key => $meta_value ) {
 				$key = sanitize_text_field( (string) $meta_key );
 
-				// Skipped, never failed: A WP_Error from here rolls back the
-				// update or hard-deletes the new post, so a reserved key the
-				// source happens to send must not destroy the import.
+				// Skipped, not failed: A WP_Error here aborts the whole import.
 				if ( ! self::is_importable_key( $key, $allowed_keys ) ) {
 					continue;
 				}
@@ -228,9 +215,8 @@ final class Meta_Terms_Manager {
 	/**
 	 * Returns whether the import may write a meta key.
 	 *
-	 * Tested against the sanitized key, which is the key update_meta() writes:
-	 * A raw key that only becomes a reserved one once sanitized must not slip
-	 * past the policy.
+	 * Takes the sanitized key, the one update_meta() writes, so a raw key
+	 * cannot slip past by sanitizing into a reserved one.
 	 *
 	 * @param string   $key          Sanitized meta key.
 	 * @param string[] $allowed_keys Reserved core keys a site opted back in.
@@ -262,11 +248,8 @@ final class Meta_Terms_Manager {
 		/**
 		 * Filters the reserved core meta keys an import may write.
 		 *
-		 * Safe Publish refuses core-owned keys that hold destination state or
-		 * point at source ids and paths. Return the subset this site wants
-		 * imported anyway; return the second argument to accept all of them.
-		 * Keys outside the reserved list are unaffected, and the plugin's own
-		 * safe_publish_ namespace is never re-enabled.
+		 * Return the subset to import anyway, or the second argument for all.
+		 * Other keys are unaffected, and the plugin's own keys stay refused.
 		 *
 		 * @param string[] $allowed_keys  Reserved keys the import may write.
 		 * @param string[] $reserved_keys Every core key the policy reserves.

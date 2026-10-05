@@ -374,16 +374,6 @@ export interface TermFieldConflictWarning {
 }
 
 /**
- * Surfaced when an update succeeds but its rollback history cannot be saved.
- */
-export interface HistoryWriteFailedWarning {
-	type: 'history_write_failed';
-}
-
-/**
- * Discriminated union of all import warning types.
- */
-/**
  * Surfaced when the source payload carries meta keys Safe Publish reserves —
  * its own tracking keys, or core keys that hold destination state. The post
  * imports with the rest of its meta; the named keys are not written.
@@ -393,6 +383,16 @@ export interface ReservedMetaSkippedWarning {
 	keys: string[];
 }
 
+/**
+ * Surfaced when an update succeeds but its rollback history cannot be saved.
+ */
+export interface HistoryWriteFailedWarning {
+	type: 'history_write_failed';
+}
+
+/**
+ * Discriminated union of all import warning types.
+ */
 export type Warning =
 	| AuthorFallbackWarning
 	| ParentOrphanedWarning

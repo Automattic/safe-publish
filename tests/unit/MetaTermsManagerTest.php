@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace Safe_Publish\Tests;
 
 use PHPUnit\Framework\TestCase;
+use ReflectionClass;
 use Safe_Publish\API\Meta_Terms_Manager;
 
 /**
@@ -18,7 +19,7 @@ use Safe_Publish\API\Meta_Terms_Manager;
 class MetaTermsManagerTest extends TestCase {
 
 	/**
-	 * Every core key the policy reserves, as the docs and the PR describe it.
+	 * Every core key the policy reserves, as the docs list it.
 	 *
 	 * Kept here rather than read from the class so a key added to the constant
 	 * without a documentation change fails a test.
@@ -161,6 +162,13 @@ class MetaTermsManagerTest extends TestCase {
 		// written.
 		$this->assertSame( self::DOCUMENTED_RESERVED_CORE_KEYS, $refused );
 		$this->assertSame( array( 'custom_field' ), $importable );
+
+		// ASSERT: The class reserves exactly the documented core keys.
+		$this->assertSame(
+			self::DOCUMENTED_RESERVED_CORE_KEYS,
+			( new ReflectionClass( Meta_Terms_Manager::class ) )
+				->getConstant( 'RESERVED_CORE_KEYS' )
+		);
 	}
 
 	/**
