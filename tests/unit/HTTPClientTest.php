@@ -48,6 +48,7 @@ class HTTPClientTest extends TestCase {
 	#[\Override]
 	protected function tearDown(): void {
 		reset_test_http_response();
+		reset_test_environment_type();
 		parent::tearDown();
 	}
 
@@ -309,29 +310,89 @@ class HTTPClientTest extends TestCase {
 	}
 
 	/**
-	 * Verifies that should_verify_ssl returns false for localhost.
+	 * Verifies that local and development relax verification for local hosts.
 	 */
-	public function test_should_verify_ssl_returns_false_for_localhost(): void {
-		$url    = 'http://localhost';
-		$result = $this->http_client->should_verify_ssl( $url );
+	public function test_should_verify_ssl_relaxes_for_local_hosts(): void {
+		// ARRANGE: Local hosts, including an IPv6 literal and mixed case.
+		$local_urls = array(
+			'http://localhost',
+			'http://127.0.0.1',
+			'http://[::1]:8080',
+			'http://example.test',
+			'http://EXAMPLE.Test',
+			'http://example.local',
+			'http://example.localhost',
+		);
 
-		$this->assertFalse( $result );
+		foreach ( array( 'local', 'development' ) as $environment ) {
+			set_test_environment_type( $environment );
+
+			foreach ( $local_urls as $url ) {
+				// ACT: Ask whether the certificate must verify.
+				$result = $this->http_client->should_verify_ssl( $url );
+
+				// ASSERT: Verification is relaxed for a self-signed local cert.
+				$this->assertFalse( $result, "Failed for $environment: $url" );
+			}
+		}
 	}
 
 	/**
-	 * Verifies that should_verify_ssl returns false for local domains.
+	 * Verifies that development keeps verification for public domains.
 	 */
-	public function test_should_verify_ssl_returns_false_for_local_domains(): void {
-		$test_urls = array(
-			'http://example.local',
-			'http://example.test',
-			'http://example.dev',
-			'http://127.0.0.1',
+	public function test_should_verify_ssl_keeps_verification_for_public_domains(): void {
+		// ARRANGE: A development environment and hosts anyone can register.
+		set_test_environment_type( 'development' );
+		$public_urls = array(
+			'https://example.dev',
+			'https://staging.example.dev',
+			'https://example.com',
+			'https://notlocalhost.example.com',
 		);
 
-		foreach ( $test_urls as $url ) {
+		foreach ( $public_urls as $url ) {
+			// ACT: Ask whether the certificate must verify.
 			$result = $this->http_client->should_verify_ssl( $url );
-			$this->assertFalse( $result, "Failed for URL: $url" );
+
+			// ASSERT: A reserved-TLD rule must never cover a public domain.
+			$this->assertTrue( $result, "Failed for URL: $url" );
+		}
+	}
+
+	/**
+	 * Verifies that development keeps verification for loopback lookalikes.
+	 */
+	public function test_should_verify_ssl_keeps_verification_for_lookalike_hosts(): void {
+		// ARRANGE: A development environment and near-miss loopback hosts.
+		set_test_environment_type( 'development' );
+		$lookalike_urls = array( 'http://notlocalhost', 'http://1127.0.0.1' );
+
+		foreach ( $lookalike_urls as $url ) {
+			// ACT: Ask whether the certificate must verify.
+			$result = $this->http_client->should_verify_ssl( $url );
+
+			// ASSERT: Only an exact loopback name relaxes verification.
+			$this->assertTrue( $result, "Failed for URL: $url" );
+		}
+	}
+
+	/**
+	 * Verifies that staging and production keep verification for local hosts.
+	 */
+	public function test_should_verify_ssl_always_verifies_in_staging_and_production(): void {
+		// ARRANGE: Hosts that a development environment would relax.
+		$local_urls = array( 'http://localhost', 'http://example.test' );
+
+		foreach ( array( 'staging', 'production' ) as $environment ) {
+			set_test_environment_type( $environment );
+
+			foreach ( $local_urls as $url ) {
+				// ACT: Ask whether the certificate must verify.
+				$result = $this->http_client->should_verify_ssl( $url );
+
+				// ASSERT: Only local and development relax verification.
+				$this->assertTrue( $result, "Failed for $environment: $url" );
+			}
 		}
 	}
 
