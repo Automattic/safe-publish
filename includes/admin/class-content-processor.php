@@ -759,31 +759,38 @@ class Content_Processor {
 		string $source_site_url,
 		array $session_id_map = array()
 	): string {
-		if ( empty( $content ) ) {
+		if ( '' === $content ) {
 			return $content;
 		}
 
 		$blocks = parse_blocks( $content );
 
-		if ( empty( $blocks ) ) {
+		if ( array() === $blocks ) {
 			return $content;
 		}
 
-		$needs_media_processing = $this->content_needs_processing( $content );
-		$needs_id_remap         = $this->content_has_id_reference_blocks( $blocks );
+		$needs_id_remap = $this->content_has_id_reference_blocks( $blocks );
 
-		if ( ! $needs_media_processing && ! $needs_id_remap ) {
+		$processed = array_map(
+			function ( $block ) use ( $source_site_url ) {
+				return $this->process_single_block( $block, $source_site_url );
+			},
+			$blocks
+		);
+
+		// Re-serializing rewrites attribute escapes, so return the original
+		// bytes when nothing changed and no ID remap is due. Content holding
+		// "http" is excluded: replace_source_urls() needs serialize_blocks() to
+		// unescape absolute URLs.
+		if (
+			! $needs_id_remap
+			&& false === strpos( $content, 'http' )
+			&& $processed === $blocks
+		) {
 			return $content;
 		}
 
-		if ( $needs_media_processing ) {
-			$blocks = array_map(
-				function ( $block ) use ( $source_site_url ) {
-					return $this->process_single_block( $block, $source_site_url );
-				},
-				$blocks
-			);
-		}
+		$blocks = $processed;
 
 		if ( $needs_id_remap ) {
 			$blocks = $this->process_block_id_references(
@@ -1663,18 +1670,6 @@ class Content_Processor {
 		}
 
 		return $attrs;
-	}
-
-	/**
-	 * Whether the content contains HTTP URLs, the trigger for the media/URL
-	 * transformation. Only that pass depends on this check; block-ID remapping
-	 * is gated separately by content_has_id_reference_blocks().
-	 *
-	 * @param string $content Content to check.
-	 * @return bool True when the content contains an HTTP URL.
-	 */
-	private function content_needs_processing( string $content ): bool {
-		return false !== strpos( $content, 'http' );
 	}
 
 	/**
@@ -2792,9 +2787,9 @@ class Content_Processor {
 	 *
 	 * The source url's query is carried over with post/term identity vars
 	 * removed (so a plain-permalink source's stale id cannot override the new
-	 * path) and its fragment preserved. Draft, pending, and auto-draft post
-	 * targets are left alone: Their slug is not final, so re-deriving would
-	 * store a temporary url.
+	 * path) and its fragment preserved. A post target whose path still holds an
+	 * unsettled slug is left alone, since re-deriving would store a temporary
+	 * url.
 	 *
 	 * @param array<string, mixed> $attrs    Block attrs.
 	 * @param string               $url_attr Attr holding the link url.
@@ -2813,15 +2808,15 @@ class Content_Processor {
 			return $attrs;
 		}
 
-		if ( 'term' !== $kind && $this->is_unpublished_post( $dest_id ) ) {
+		if ( 'term' !== $kind && $this->has_unsettled_path( $dest_id ) ) {
 			return $attrs;
 		}
 
 		$permalink = 'term' === $kind
 			? get_term_link( $dest_id )
-			: get_permalink( $dest_id );
+			: $this->viewable_permalink( $dest_id );
 
-		if ( ! is_string( $permalink ) ) {
+		if ( ! is_string( $permalink ) || '' === $permalink ) {
 			return $attrs;
 		}
 
@@ -2844,17 +2839,71 @@ class Content_Processor {
 	}
 
 	/**
-	 * Whether a post target is unpublished, so its permalink is not yet final.
+	 * Whether any slug in a post's permalink path is still provisional. Core
+	 * defers unique slugs for drafts and suffixes a trashed post's slug.
 	 *
 	 * @param int $post_id Destination post id.
-	 * @return bool True for draft, pending, or auto-draft posts.
+	 * @return bool True when the post or an ancestor holds a provisional slug.
 	 */
-	private function is_unpublished_post( int $post_id ): bool {
-		return in_array(
-			get_post_status( $post_id ),
-			array( 'draft', 'pending', 'auto-draft' ),
-			true
-		);
+	private function has_unsettled_path( int $post_id ): bool {
+		$unsettled = array( 'draft', 'pending', 'auto-draft', 'trash' );
+
+		if ( in_array( get_post_status( $post_id ), $unsettled, true ) ) {
+			return true;
+		}
+
+		if ( ! $this->has_ancestor_path( $post_id ) ) {
+			return false;
+		}
+
+		foreach ( get_post_ancestors( $post_id ) as $ancestor_id ) {
+			if ( in_array( get_post_status( $ancestor_id ), $unsettled, true ) ) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * Whether ancestor slugs form part of a post's permalink: Only hierarchical
+	 * types nest them, and a plain structure only through a query var.
+	 *
+	 * @param int $post_id Destination post id.
+	 * @return bool True when an ancestor's slug can move the permalink.
+	 */
+	private function has_ancestor_path( int $post_id ): bool {
+		$type = get_post_type_object( (string) get_post_type( $post_id ) );
+		if ( ! ( $type instanceof WP_Post_Type ) || ! $type->hierarchical ) {
+			return false;
+		}
+
+		return '' !== get_option( 'permalink_structure' )
+			|| is_string( $type->query_var );
+	}
+
+	/**
+	 * Returns the permalink a post will have once it is publicly viewable.
+	 * get_permalink() yields the plain ?p= form for statuses WordPress hides, so
+	 * the lookup runs against a copy marked published, as get_sample_permalink()
+	 * does. The clone keeps the 'raw' filter, without which get_post() refetches
+	 * and discards it.
+	 *
+	 * @param int $post_id Destination post id.
+	 * @return string Permalink, or '' when it cannot be derived.
+	 */
+	private function viewable_permalink( int $post_id ): string {
+		$post = get_post( $post_id );
+		if ( ! ( $post instanceof WP_Post ) ) {
+			return '';
+		}
+
+		$viewable              = clone $post;
+		$viewable->post_status = 'publish';
+
+		$permalink = get_permalink( $viewable );
+
+		return is_string( $permalink ) ? $permalink : '';
 	}
 
 	/**
