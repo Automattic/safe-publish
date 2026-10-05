@@ -2596,6 +2596,94 @@ class Content_Processor_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that a malformed query variant does not duplicate a failed
+	 * download already reported by block attributes.
+	 */
+	public function test_failed_query_variant_is_not_also_unprocessable(): void {
+		// ARRANGE: The block attr fails while malformed markup repeats its URL.
+		$url     = 'https://source.example.com/gone-malformed.jpg';
+		$content = '<!-- wp:image {"url":"' . $url . '?v=1"} -->'
+			. '<img src="' . $url . '?v=2'
+			. '<!-- /wp:image -->';
+
+		// ACT: The one download fails.
+		$this->process_with_all_downloads_failing( $content );
+
+		// ASSERT: Query variants share one failed URL and no duplicate report.
+		$this->assert_failed_query_variants( $url, 'core/image' );
+	}
+
+	/**
+	 * Verifies that a shared failed URL keeps its first originating block label.
+	 */
+	public function test_shared_failed_url_keeps_first_block_label(): void {
+		// ARRANGE: Two block types refer to one unavailable media file.
+		$url     = 'https://source.example.com/shared-missing.jpg';
+		$content = '<!-- wp:image {"url":"' . $url . '?v=1"} /-->'
+			. '<!-- wp:cover {"url":"' . $url . '?v=2"} /-->';
+
+		// ACT: Both paths report the same failed download.
+		$this->process_with_all_downloads_failing( $content );
+
+		// ASSERT: The first block's label wins, consistent with map merging.
+		$this->assert_failed_query_variants( $url, 'core/image' );
+	}
+
+	/**
+	 * Verifies that every block media path deduplicates query variants by the
+	 * URL actually requested.
+	 *
+	 * @dataProvider failed_query_block_cases
+	 * @param string $block_name Block under test.
+	 * @param string $url_attr   Block attribute that holds the media URL.
+	 */
+	public function test_failed_query_variants_in_other_blocks(
+		string $block_name,
+		string $url_attr
+	): void {
+		// ARRANGE: Two references with distinct queries share a download URL.
+		$url     = 'https://source.example.com/gone-' . str_replace( '/', '-', $block_name ) . '.jpg';
+		$content = '';
+		foreach ( array( '?v=1', '?v=2' ) as $query ) {
+			$variant  = $url . $query;
+			$attrs    = 'core/media-text' === $block_name
+				? array( 'mediaType' => 'image' )
+				: array( $url_attr => $variant );
+			$inner    = 'core/media-text' === $block_name
+				? '<figure class="wp-block-media-text__media"><img src="'
+					. $variant . '"></figure>'
+				: '';
+			$name     = str_starts_with( $block_name, 'core/' )
+				? substr( $block_name, 5 )
+				: $block_name;
+			$content .= '<!-- wp:' . $name . ' ' . wp_json_encode( $attrs ) . ' -->'
+				. $inner . '<!-- /wp:' . $name . ' -->';
+		}
+
+		// ACT: Fail the shared download.
+		$this->process_with_all_downloads_failing( $content );
+
+		// ASSERT: One request and one report retain the block name.
+		$this->assert_failed_query_variants( $url, $block_name );
+	}
+
+	/**
+	 * Supplies the block media paths that use dedicated or generic attrs.
+	 *
+	 * @return array<string, array{string, string}> Block name and URL attribute.
+	 */
+	public static function failed_query_block_cases(): array {
+		return array(
+			'video'      => array( 'core/video', 'src' ),
+			'audio'      => array( 'core/audio', 'src' ),
+			'cover'      => array( 'core/cover', 'url' ),
+			'file'       => array( 'core/file', 'href' ),
+			'media-text' => array( 'core/media-text', '' ),
+			'custom'     => array( 'acme/hero', 'backgroundUrl' ),
+		);
+	}
+
+	/**
 	 * Verifies that query variants in inline image attrs share one report key.
 	 */
 	public function test_failed_inline_query_variants_name_one_request_url(): void {

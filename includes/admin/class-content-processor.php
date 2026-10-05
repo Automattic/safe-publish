@@ -970,8 +970,8 @@ class Content_Processor {
 		string $source_site_url,
 		string $block_name
 	): void {
-		$download_url                        = Media_Importer::get_download_url( $url, $source_site_url );
-		$this->failed_media[ $download_url ] = $block_name;
+		$download_url                          = Media_Importer::get_download_url( $url, $source_site_url );
+		$this->failed_media[ $download_url ] ??= $block_name;
 	}
 
 	/**
