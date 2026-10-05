@@ -703,7 +703,7 @@ function BlockDiffHeader( {
 			) }
 			{ unmarked && (
 				<span className="safe-publish-badge safe-publish-badge--neutral">
-					{ __( 'changed (no inline marker)', 'safe-publish' ) }
+					{ __( 'changed — see Source Diff', 'safe-publish' ) }
 				</span>
 			) }
 		</div>

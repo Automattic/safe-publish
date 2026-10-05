@@ -55,7 +55,7 @@ const markerCount = ( column: HTMLElement ): number =>
 	column.querySelectorAll( MARKER_SELECTOR ).length;
 
 const badge = (): HTMLElement | null =>
-	screen.queryByText( /changed \(no inline marker\)/i );
+	screen.queryByText( /changed — see Source Diff/i );
 
 describe( 'BlockDiffViewer', () => {
 	it( 'omits unchanged blocks by default and shows an empty-state line', () => {
