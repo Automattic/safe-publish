@@ -559,9 +559,10 @@ function highlightHtml( original: string, changed: string ): InlineDiff {
 		);
 		html = container.innerHTML;
 	} catch {
-		// Both the walk and the serializer recurse as deeply as the markup
-		// nests. Markup deep enough to exhaust the stack is reported rather
-		// than dropped.
+		// The walk and the serializer both recurse, so pathological nesting
+		// can exhaust the stack. Any failure falls back to the unmarked
+		// incoming markup, which the card reports, rather than breaking the
+		// modal: nothing here renders an error boundary.
 		return { html: changed, unmarked: true, attrChanged: false };
 	}
 
