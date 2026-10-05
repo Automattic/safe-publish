@@ -315,10 +315,12 @@ class Content_Processor {
 		$this->unprocessable_media = self::normalize_media_map_keys( $this->unprocessable_media );
 
 		// The per-block markup pass can't see block-level download failures.
-		$this->unprocessable_media = array_diff_key(
-			$this->unprocessable_media,
-			$this->failed_media
-		);
+		foreach ( $this->unprocessable_media as $url => $_ ) {
+			$download_url = Media_Importer::get_download_url( $url, $source_site_url );
+			if ( array_key_exists( $download_url, $this->failed_media ) ) {
+				unset( $this->unprocessable_media[ $url ] );
+			}
+		}
 
 		$this->content_media_processor->reset_failed_media();
 		$this->content_media_processor->reset_unprocessable_media();
@@ -964,6 +966,22 @@ class Content_Processor {
 	}
 
 	/**
+	 * Records a failed download URL with its originating block.
+	 *
+	 * @param string $url             Source media URL.
+	 * @param string $source_site_url Source site URL.
+	 * @param string $block_name      Originating block name.
+	 */
+	private function record_failed_media(
+		string $url,
+		string $source_site_url,
+		string $block_name
+	): void {
+		$download_url                          = Media_Importer::get_download_url( $url, $source_site_url );
+		$this->failed_media[ $download_url ] ??= $block_name;
+	}
+
+	/**
 	 * Formats a media map as a comma-separated list. Each URL is followed by its
 	 * originating block name in parentheses, or left bare when the name is empty.
 	 *
@@ -1164,14 +1182,22 @@ class Content_Processor {
 		}
 
 		if ( false === $attachment_id ) {
-			$this->failed_media[ $original_url ] = $block['blockName'];
+			$this->record_failed_media(
+				$original_url,
+				$source_site_url,
+				$block['blockName']
+			);
 			return $this->process_block_inner_html( $block, $source_site_url );
 		}
 
 		$new_url = wp_get_attachment_url( $attachment_id );
 
 		if ( false === $new_url ) {
-			$this->failed_media[ $original_url ] = $block['blockName'];
+			$this->record_failed_media(
+				$original_url,
+				$source_site_url,
+				$block['blockName']
+			);
 			return $this->process_block_inner_html( $block, $source_site_url );
 		}
 
@@ -1297,14 +1323,22 @@ class Content_Processor {
 		}
 
 		if ( false === $attachment_id ) {
-			$this->failed_media[ $media_url ] = $block['blockName'];
+			$this->record_failed_media(
+				$media_url,
+				$source_site_url,
+				$block['blockName']
+			);
 			return $this->process_block_inner_html( $block, $source_site_url );
 		}
 
 		$new_url = wp_get_attachment_url( $attachment_id );
 
 		if ( false === $new_url ) {
-			$this->failed_media[ $media_url ] = $block['blockName'];
+			$this->record_failed_media(
+				$media_url,
+				$source_site_url,
+				$block['blockName']
+			);
 			return $this->process_block_inner_html( $block, $source_site_url );
 		}
 
@@ -1588,14 +1622,22 @@ class Content_Processor {
 				}
 
 				if ( false === $attachment_id ) {
-					$this->failed_media[ $value ] = $block['blockName'];
+					$this->record_failed_media(
+						$value,
+						$source_site_url,
+						$block['blockName']
+					);
 					continue;
 				}
 
 				$new_url = wp_get_attachment_url( $attachment_id );
 
 				if ( false === $new_url ) {
-					$this->failed_media[ $value ] = $block['blockName'];
+					$this->record_failed_media(
+						$value,
+						$source_site_url,
+						$block['blockName']
+					);
 					continue;
 				}
 
