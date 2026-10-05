@@ -45,10 +45,14 @@ const columns = ( container: HTMLElement ): HTMLElement[] =>
 const incomingColumn = ( container: HTMLElement ): HTMLElement =>
 	columns( container )[ 1 ];
 
+const ADDED_CLASS = 'safe-publish-inline-added';
+const REMOVED_CLASS = 'safe-publish-inline-removed';
+const ATTRS_CLASS = 'safe-publish-inline-attr-changed';
+
 const MARKER_SELECTOR = [
-	'.safe-publish-inline-added',
-	'.safe-publish-inline-removed',
-	'.safe-publish-inline-attr-changed',
+	`.${ ADDED_CLASS }`,
+	`.${ REMOVED_CLASS }`,
+	`.${ ATTRS_CLASS }`,
 ].join( ', ' );
 
 const markerCount = ( column: HTMLElement ): number =>
@@ -628,6 +632,76 @@ describe( 'BlockDiffViewer', () => {
 			container.querySelector( '.safe-publish-block-diff__added' )
 		).toHaveTextContent( 'Fresh.' );
 	} );
+
+	it.each( [
+		[ 'text edit', '<p>Old body.</p>', '<p>New body.</p>' ],
+		[
+			'attribute edit',
+			'<p class="a"><a href="https://example.com/old">read</a></p>',
+			'<p class="b"><a href="https://example.com/new">read</a></p>',
+		],
+		[
+			'list item removed',
+			'<ul><li>First</li><li>Second</li></ul>',
+			'<ul><li>First</li></ul>',
+		],
+		[
+			'list item added',
+			'<ul><li>First</li></ul>',
+			'<ul><li>First</li><li>Second</li></ul>',
+		],
+		[
+			'table row removed',
+			'<table><tbody><tr><td>a</td></tr><tr><td>b</td></tr></tbody></table>',
+			'<table><tbody><tr><td>a</td></tr></tbody></table>',
+		],
+		[
+			'nested inline edit',
+			'<p>Lead <strong>bold <em>old</em></strong> tail</p>',
+			'<p>Lead <strong>bold <em>new</em></strong> tail</p>',
+		],
+		[
+			'block replaced',
+			'<p>Paragraph</p>',
+			'<h2 class="x">Heading</h2><p>Paragraph</p>',
+		],
+	] )(
+		'rebuilds the incoming markup exactly for a %s',
+		( _label, current, incoming ) => {
+			// ARRANGE: A modified block whose incoming side is known markup.
+			const { container } = renderModified( current, incoming );
+
+			// ACT: Strip every marker the diff added from the incoming column.
+			const stripped = document.createElement( 'div' );
+			stripped.innerHTML = incomingColumn( container ).innerHTML;
+			stripped
+				.querySelectorAll( `.${ REMOVED_CLASS }` )
+				.forEach( ( element ) => element.remove() );
+			stripped
+				.querySelectorAll( `span.${ ADDED_CLASS }` )
+				.forEach( ( element ) => {
+					if ( element.getAttribute( 'class' ) === ADDED_CLASS ) {
+						element.replaceWith( ...element.childNodes );
+					}
+				} );
+			stripped
+				.querySelectorAll( `.${ ADDED_CLASS }, .${ ATTRS_CLASS }` )
+				.forEach( ( element ) => {
+					element.classList.remove( ADDED_CLASS, ATTRS_CLASS );
+					if ( element.getAttribute( 'class' ) === '' ) {
+						element.removeAttribute( 'class' );
+					}
+				} );
+			stripped.normalize();
+
+			// ASSERT: What is left is the incoming markup, so the preview can
+			// only ever show what the import would write.
+			const expected = document.createElement( 'div' );
+			expected.innerHTML = incoming;
+			expected.normalize();
+			expect( stripped.innerHTML ).toBe( expected.innerHTML );
+		}
+	);
 
 	it( 'notes that a modified block with identical previews cannot be previewed', () => {
 		// ARRANGE: A modified block whose previews match because the change
