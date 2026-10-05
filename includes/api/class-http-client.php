@@ -326,8 +326,7 @@ final class HTTP_Client {
 	/**
 	 * Determines whether to verify SSL certificates based on environment and URL.
 	 *
-	 * Verification is relaxed only outside production, and only for hosts that
-	 * cannot resolve anywhere but the local machine.
+	 * Relaxes verification only outside production, and only for local hosts.
 	 *
 	 * @param string $url URL being requested.
 	 * @return bool Whether to verify SSL certificates.
@@ -338,7 +337,6 @@ final class HTTP_Client {
 			return true;
 		}
 
-		// Only a non-production environment may relax verification.
 		if ( 'production' === wp_get_environment_type() ) {
 			return true;
 		}
@@ -353,11 +351,7 @@ final class HTTP_Client {
 	}
 
 	/**
-	 * Checks whether a host can only ever resolve to the local machine.
-	 *
-	 * Covers the loopback literals and the TLDs reserved for local use. A
-	 * publicly registrable TLD must never be treated as local, however
-	 * development-flavored its name reads.
+	 * Checks whether a host is loopback or uses a reserved, non-public TLD.
 	 *
 	 * @param string $host Lowercased host from the request URL.
 	 * @return bool True when the host is loopback or uses a reserved TLD.
@@ -373,7 +367,7 @@ final class HTTP_Client {
 			return true;
 		}
 
-		// Reserved by RFC 6761 and RFC 8375 for local resolution.
+		// Special-use TLDs (RFC 6761, RFC 6762).
 		foreach ( array( '.test', '.local', '.localhost' ) as $reserved_tld ) {
 			if ( str_ends_with( $host, $reserved_tld ) ) {
 				return true;

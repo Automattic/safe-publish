@@ -310,8 +310,7 @@ class HTTPClientTest extends TestCase {
 	}
 
 	/**
-	 * Verifies that a development environment relaxes verification for hosts
-	 * that can only ever resolve locally.
+	 * Verifies that development relaxes verification for local hosts.
 	 */
 	public function test_should_verify_ssl_relaxes_for_development_hosts(): void {
 		// ARRANGE: A non-production environment and locally-resolving hosts.
@@ -334,8 +333,7 @@ class HTTPClientTest extends TestCase {
 	}
 
 	/**
-	 * Verifies that a publicly registrable domain keeps certificate
-	 * verification even in a development environment.
+	 * Verifies that development keeps verification for public domains.
 	 */
 	public function test_should_verify_ssl_keeps_verification_for_public_domains(): void {
 		// ARRANGE: A development environment and hosts anyone can register.
@@ -357,8 +355,7 @@ class HTTPClientTest extends TestCase {
 	}
 
 	/**
-	 * Verifies that a production environment verifies every host, including
-	 * ones a development environment would relax.
+	 * Verifies that production keeps verification for local hosts.
 	 */
 	public function test_should_verify_ssl_always_verifies_in_production(): void {
 		// ARRANGE: A production environment and otherwise-local hosts.

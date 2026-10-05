@@ -194,7 +194,7 @@ add_filter( 'safe_publish_import_allow_orphans', '__return_true' );
 
 Filter SSL certificate verification. Primarily useful in local development environments with self-signed certificates.
 
-The filter only runs outside a production environment (`wp_get_environment_type()`), and only for hosts that cannot resolve anywhere but the local machine: the loopback literals, and the `.test`, `.local` and `.localhost` TLDs reserved for local resolution. Every other host verifies its certificate regardless of this filter.
+The filter runs only when `wp_get_environment_type()` is not `production`, and only for loopback hosts and the reserved `.test`, `.local`, and `.localhost` TLDs. Other requests verify certificates regardless of this filter.
 
 **Parameters:**
 
