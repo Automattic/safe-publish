@@ -532,27 +532,6 @@ describe( 'BlockDiffViewer', () => {
 		expect( badge() ).toBeInTheDocument();
 	} );
 
-	it( 'exercises the table-scope guard against a misplaced marker', () => {
-		// ARRANGE: Text held directly by a table. This covers the table-scope
-		// guard: happy-dom keeps the text inside the table, where a browser
-		// parser moves it out, and a marker placed there would be relocated
-		// when the preview markup is parsed again.
-		const { container } = renderModified(
-			'<table>old stray<tbody><tr><td>Cell</td></tr></tbody></table>',
-			'<table>new stray<tbody><tr><td>Cell</td></tr></tbody></table>',
-			'core/table'
-		);
-
-		// ACT: Read the incoming column.
-		const column = incomingColumn( container );
-
-		// ASSERT: The incoming text is kept whole, no marker was placed where
-		// the parser would move it, and the card reports the change.
-		expect( column.textContent ).toContain( 'new stray' );
-		expect( column.querySelector( 'span' ) ).toBeNull();
-		expect( badge() ).toBeInTheDocument();
-	} );
-
 	it( 'renders added and removed blocks from the side that carries them', () => {
 		// ARRANGE: One block dropped by the incoming content and one added.
 		const blocks: BlockDiff[] = [

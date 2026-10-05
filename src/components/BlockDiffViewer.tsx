@@ -36,37 +36,6 @@ const REMOVED_CLASS = 'safe-publish-inline-removed';
 const ATTRS_CLASS = 'safe-publish-inline-attr-changed';
 
 /**
- * Elements whose children the HTML parser restricts to table content. It
- * moves anything else out of the table, so a marker only goes inside one
- * of these when the marker is table content itself.
- */
-const TABLE_SCOPE = new Set( [
-	'COLGROUP',
-	'TABLE',
-	'TBODY',
-	'TFOOT',
-	'THEAD',
-	'TR',
-] );
-
-/** Elements the HTML parser keeps inside a table-scope element. */
-const TABLE_CONTENT = new Set( [
-	'CAPTION',
-	'COL',
-	'COLGROUP',
-	'SCRIPT',
-	'STYLE',
-	'TABLE',
-	'TBODY',
-	'TD',
-	'TEMPLATE',
-	'TFOOT',
-	'TH',
-	'THEAD',
-	'TR',
-] );
-
-/**
  * Elements whose children are raw text or an inert fragment, so a marker inside
  * one would read as content. Block HTML passes wp_kses_post, which drops all
  * but textarea and title; the rest cover unfiltered callers.
@@ -218,24 +187,6 @@ function attributesDiffer( original: Element, changed: Element ): boolean {
 }
 
 /**
- * Reports whether a parent keeps a given tag where we put it.
- *
- * @param {Node}   parent  Parent the marker would go into.
- * @param {string} tagName Uppercase tag name of the marker.
- *
- * @return {boolean} True when the parser leaves the tag in place.
- */
-function canHost( parent: Node, tagName: string ): boolean {
-	if ( parent.nodeType !== ELEMENT_NODE ) {
-		return true;
-	}
-	if ( ! TABLE_SCOPE.has( parent.nodeName ) ) {
-		return true;
-	}
-	return TABLE_CONTENT.has( tagName );
-}
-
-/**
  * Marks a copied element, or reports it as unmarked.
  *
  * An element with no visible rendering cannot show a marker class, so the
@@ -262,9 +213,6 @@ function markElement(
 /**
  * Appends text wrapped in a marker span.
  *
- * A parent that would not keep the span gets the plain text instead, which
- * keeps the serialized markup stable when it is parsed again.
- *
  * @param {string}    value     Text to append.
  * @param {string}    className Marker class to apply.
  * @param {Document}  doc       Document that owns the output.
@@ -278,14 +226,6 @@ function appendMarkedText(
 	parent: Node,
 	state: DiffState
 ): void {
-	if ( ! canHost( parent, 'SPAN' ) ) {
-		if ( className === ADDED_CLASS ) {
-			parent.appendChild( doc.createTextNode( value ) );
-		}
-		state.unmarked = true;
-		return;
-	}
-
 	const span = doc.createElement( 'span' );
 	span.className = className;
 	span.appendChild( doc.createTextNode( value ) );
@@ -358,11 +298,7 @@ function appendRemoved(
 		return;
 	}
 
-	if (
-		node.nodeType !== ELEMENT_NODE ||
-		OPAQUE_TAGS.has( node.nodeName ) ||
-		! canHost( parent, node.nodeName )
-	) {
+	if ( node.nodeType !== ELEMENT_NODE || OPAQUE_TAGS.has( node.nodeName ) ) {
 		state.unmarked = true;
 		return;
 	}
