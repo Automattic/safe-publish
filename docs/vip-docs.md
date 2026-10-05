@@ -362,6 +362,18 @@ These rollback errors point at a listing that no longer matches the destination:
 - **"The post is in the trash. Restore it before rolling back."** The post was moved to the trash after the listing loaded. Restore it, reload the listing, and roll back again.
 - **"The post no longer exists, so there is nothing to roll back."** The post was permanently deleted after the listing loaded.
 
+### A rollback kept some imported values
+
+The notice "Post restored with some values retained. Review the Audit Log for details." means Safe Publish restored the post, but a saved author, parent, post type, featured image, taxonomy, or term no longer exists on the destination, so the imported value stays for that field.
+
+Open the Audit Log and find the warning for the rollback. It names each value that was kept. Recreate the missing item on the destination and change the field in the editor, or accept the imported value.
+
+### An update cannot be rolled back from Safe Publish
+
+The warning "The post was updated, but its rollback history could not be saved. This update cannot be rolled back from Safe Publish." appears after a single import or a Compare **Update**. Bulk import results show only "rollback history unavailable" for the affected item. Either way, the import succeeded and the post holds the imported content, but no history record exists for it, so the row offers no rollback.
+
+Contact VIP Support if the warning appears repeatedly.
+
 ### Imported media did not transfer
 
 For media referenced in content, confirm it is hosted on the source site's domain — such third-party media is intentionally left in place and not downloaded. Featured images are downloaded regardless of host, so this does not apply to them. Media download and sideload failures are recorded in the audit log's media channel, which can be reviewed to identify the specific files that failed.
