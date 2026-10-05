@@ -194,7 +194,7 @@ The **Manage** page has two tabs:
 
 ### Previewing changes with Compare
 
-The Compare action on **Manage → Posts** fetches fresh source content and compares it with the current destination post, covering the title, content, excerpt, featured image, metadata, and taxonomy terms, including each term's parent and description. It is shown side by side, and block-editor content is compared block by block so editors can see which blocks were added, removed, or changed. The featured image is matched to the destination copy the import already made of it, so an image the source has not changed reports no difference, and an image the source removed is noted as one the import leaves in place. An image this site has no copy of is marked unavailable when the source cannot return its details, and updating the post fails until the source can. Terms the source sends to preserve the hierarchy appear in a separate **Related hierarchy terms** block. A taxonomy this site registers and the source does not send is not reported as a removal, since the import does not touch it. Any difference shown that the import would not apply is noted under the comparison: a term difference names the term and the field it affects, and a taxonomy this site does not register names the taxonomy. The modal also offers an **Update** button that re-imports the post from the source.
+The Compare action on **Manage → Posts** fetches fresh source content and compares it with the current destination post, covering the title, content, excerpt, featured image, metadata, and taxonomy terms, including each term's parent and description. It is shown side by side, and block-editor content is compared block by block so editors can see which blocks were added, removed, or changed. The featured image is matched to the destination copy the import already made of it, so an image the source has not changed reports no difference, and an image the source removed is noted as one the import leaves in place. In the rare event that the source site doesn't communicate details about the featured image, the update fails. Terms the source sends to preserve the hierarchy appear in a separate **Related hierarchy terms** block. A taxonomy this site registers and the source does not send is not reported as a removal, since the import does not touch it. Any difference shown that the import would not apply is noted under the comparison: a term difference names the term and the field it affects, and a taxonomy this site does not register names the taxonomy. The modal also offers an **Update** button that re-imports the post from the source.
 
 ### Rolling back imports
 
@@ -209,7 +209,7 @@ Multiple rows can be selected on the Posts tab and rolled back in a single actio
 
 If an update succeeds but Safe Publish cannot save its rollback history, a single import or a Compare **Update** warns that "This update cannot be rolled back from Safe Publish." Bulk import results show only "rollback history unavailable" for the affected item. In both cases the post keeps the imported content.
 
-Safe Publish normally stores a pre-update snapshot in the import record, so it can restore an updated post without contacting the source site. An eligible updated row with no captured snapshot is refused, since the post it updated pre-dates the import. Rolling back an update whose post is in the trash is refused as well — restore the post first. A rollback whose post has already been deleted is refused and closes the import record.
+Safe Publish normally stores a pre-update snapshot in the import record, so it can restore an updated post without contacting the source site. An update with no saved previous content is refused; edit or trash the post directly. Rollback is also refused when the post is in the trash or has already been deleted. Restoring the post will allow you to rollback.
 
 Note: Rolling back a newly created post deletes that post on the destination. Confirm the affected posts before rolling back, since the action is irreversible for newly created posts.
 
@@ -266,11 +266,11 @@ Safe Publish exposes the following filters for developers. Add them in a theme o
 | --- | --- | --- |
 | `safe_publish_import_allow_orphans` | `false` | Allow importing a child post when its parent is not present on the destination. |
 | `safe_publish_import_allow_author_fallback` | `false` | When the source author cannot be matched on the destination, attribute new posts to the importing user and keep the existing author on updates, instead of aborting the import. |
-| `safe_publish_manage_capability` | `manage_safe_publish` | Change the capability that grants access to the Safe Publish management screens. An empty or non-string value falls back to `manage_safe_publish`. A capability name that does not exist is used as-is and locks out users who do not hold it. |
+| `safe_publish_manage_capability` | `manage_safe_publish` | Change the capability that grants access to the Safe Publish management screens. An empty or non-string value falls back to `manage_safe_publish`. The name is not validated, so a typo or a capability that does not exist means no users can access Safe Publish. |
 | `safe_publish_auth_max_time_diff` | `300` | Maximum allowed difference, in seconds, between a signed request's timestamp and the current time. |
 | `safe_publish_request_timeout` | `10` | Timeout, in seconds, for HTTP requests to the source site. |
 | `safe_publish_request_args` | — | Customize the arguments passed to the HTTP request made to the source site. |
-| `safe_publish_dev_ssl_verify` | `false` | Development only: whether to verify SSL certificates for loopback and `.test`, `.local`, and `.localhost` hosts in `local` and `development` environments. Ignored elsewhere. |
+| `safe_publish_dev_ssl_verify` | `false` | Development only: whether to verify SSL certificates for requests to loopback, `.test`, `.local`, and `.localhost` hosts in `local` and `development` environments. The default `false` skips verification. Certificates are always verified elsewhere. |
 
 The `safe_publish_import_kses` and `safe_publish_import_kses_allowed_html` filters were removed in version 1.1. Content filtering is no longer optional; see [Content and excerpt filtering](#content-and-excerpt-filtering).
 
@@ -359,7 +359,7 @@ These rollback errors point at a listing that no longer matches the destination:
 
 - **"This import was already rolled back. Reload the list."** The import had been rolled back already, usually from another browser tab. Reload the listing; the row will no longer offer that rollback. Safe Publish refuses the request rather than replaying it, because replaying would write the stored snapshot over whatever the post holds now.
 - **"The post is in the trash. Restore it before rolling back."** The post was moved to the trash after the listing loaded. Restore it, reload the listing, and roll back again.
-- **"The post no longer exists, so there is nothing to roll back."** The post was permanently deleted after the listing loaded. Safe Publish closes the import record, since that import can no longer be reverted.
+- **"The post no longer exists, so there is nothing to roll back."** The post was permanently deleted after the listing loaded.
 
 ### Imported media did not transfer
 
