@@ -52,8 +52,9 @@
     safe_publish_manage_capability filter, and noted the removal of the
     safe_publish_import_kses filters in 1.1 (#500, #499).
   - Added troubleshooting entries for permissions errors, unlisted post types,
-    missing raw values, filtered content, refused rollbacks, and trashed
-    destinations, and expanded the custom post type requirements (#498, #500).
+    missing raw values, filtered content, refused or unrecorded rollbacks, and
+    trashed destinations, and expanded the custom post type requirements (#498,
+    #500, #438, #443, #555).
 -->
 
 # Safe Publish
@@ -159,7 +160,7 @@ The Local State control provides four views:
 - **Up to date** — the post has been imported and the source has not changed since.
 - **Outdated** — the post has been imported, but the source has changed since the last import. Re-import to bring the destination copy up to date.
 
-A failed live source comparison is labeled **Sync check failed** on the row; it is not a separate Local State. A row whose destination copy is in the trash shows **Trashed** in the destination status column.
+A failed live source comparison is labeled **Sync check failed** on the row; it is not a separate Local State. A row whose destination copy is in the trash shows **Trashed** in the Local Status column.
 
 The listing offers page sizes of 10, 20, and 50 posts. Bulk actions handle up to 50 posts at a time.
 
@@ -206,7 +207,7 @@ It's important to note that the roll-back rolls back the specific changes from t
 
 Multiple rows can be selected on the Posts tab and rolled back in a single action.
 
-If an update succeeds but Safe Publish cannot save its rollback history, the result warns that "This update cannot be rolled back from Safe Publish." The post keeps the imported content.
+If an update succeeds but Safe Publish cannot save its rollback history, a single import or a Compare **Update** warns that "This update cannot be rolled back from Safe Publish." Bulk import results show only "rollback history unavailable" for the affected item. In both cases the post keeps the imported content.
 
 Safe Publish normally stores a pre-update snapshot in the import record, so it can restore an updated post without contacting the source site. An eligible updated row with no captured snapshot is refused, since the post it updated pre-dates the import. Rolling back an update whose post is in the trash is refused as well — restore the post first. A rollback whose post has already been deleted is refused and closes the import record.
 
@@ -225,11 +226,11 @@ Safe Publish records where imported content came from in post metadata — inclu
 
 ## Content and excerpt filtering
 
-Post content and excerpts are saved through WordPress' normal save-time filters for the user running the import, including `wp_kses` sanitization when the user lacks the `unfiltered_html` capability. This ensures unsafe content is not imported to production.
+Post content and excerpts are saved through WordPress' normal save-time filters for the user running the import, including `wp_kses` sanitization when the user lacks the `unfiltered_html` capability. Users who hold `unfiltered_html` import content unchanged, including scripts, so the capability should be granted deliberately.
 
-After saving, Safe Publish compares the newly imported content and excerpt against the source site. If a filter changed something, the import fails with an error. The same comparison applies to restored content during a rollback.
+After saving, Safe Publish compares the saved content and excerpt with the values it asked WordPress to save, after URL and ID rewriting, rather than with the source site. If a filter changed something, the import fails with an error. The same comparison applies to restored content during a rollback.
 
-The usual cause is a user without `unfiltered_html` importing content that includes HTML, inline scripts, or event handlers that WordPress' save filters strip or change. Ask an administrator or a user who can save that content unfiltered to retry, or remove the unsupported markup at the source.
+The usual cause is a user without `unfiltered_html` importing content that includes HTML, inline scripts, or event handlers that WordPress' save filters strip or change. Ask a user who can save that content unfiltered to retry, or remove the unsupported markup at the source. On multisite, only super administrators can hold `unfiltered_html`, and no user can when `DISALLOW_UNFILTERED_HTML` is set, so removing the markup at the source is the only option there.
 
 ## Author attribution
 
@@ -247,13 +248,13 @@ Each event records a channel (such as authentication, content, export, import, o
 
 ## Custom post types
 
-Safe Publish imports any registered post type, not only posts and pages. The source catalog can be filtered by post type, and custom post types are imported the same way as standard ones.
+Safe Publish imports custom post types that the source catalog lists, not only posts and pages. The source catalog can be filtered by post type, and custom post types are imported the same way as standard ones.
 
 For a post type to appear in the source catalog, it must be registered on the source with `show_in_rest` set to `true` and `public` set to `true`. Both values must be the boolean `true`: a truthy value such as `1` registers the REST route but excludes the type from the catalog. Safe Publish additionally allows `wp_navigation` and `wp_block`, which are not public but whose posts are content. Attachments are excluded because they are files rather than content posts.
 
-The catalog reports each type's REST API base, which can differ from its registered slug, and which of the title, content, and excerpt raw fields the type supports. Import and Compare require only the fields the source declares, so a type that does not support all three — a navigation post, which has no excerpt — imports without reporting a missing field.
+The catalog reports each type's REST API base, which can differ from its registered slug, and which of the title, content, and excerpt raw fields the type supports. The title is always required, whatever the catalog declares. Import and Compare require the other fields only when the source declares them, so a type that does not support all three — a navigation post, which has no excerpt — imports without reporting a missing field. A type that does not support `title` is listed but fails on import with a missing raw value for `title`.
 
-A post type registered with a custom `rest_controller_class` must expose a standard WordPress item schema, and each supported field must declare a `properties.raw` definition. A field absent from both the catalog metadata and the response is treated as unsupported.
+A post type registered with a custom `rest_controller_class` must expose a standard WordPress item schema, and each supported field must declare a `properties.raw` definition. A field absent from both the catalog metadata and the response is treated as unsupported. A field that is in the response without a `raw` value fails even when the catalog does not declare it.
 
 A custom post type must be registered with the same slug on the destination for its content to import cleanly. Safe Publish does not remap a source post type slug to a different slug on the destination; if the slugs differ, the import will not place the content under the destination's post type.
 
@@ -265,7 +266,7 @@ Safe Publish exposes the following filters for developers. Add them in a theme o
 | --- | --- | --- |
 | `safe_publish_import_allow_orphans` | `false` | Allow importing a child post when its parent is not present on the destination. |
 | `safe_publish_import_allow_author_fallback` | `false` | When the source author cannot be matched on the destination, attribute new posts to the importing user and keep the existing author on updates, instead of aborting the import. |
-| `safe_publish_manage_capability` | `manage_safe_publish` | Change the capability that grants access to the Safe Publish management screens. A value that is not a valid capability falls back to `manage_options`. |
+| `safe_publish_manage_capability` | `manage_safe_publish` | Change the capability that grants access to the Safe Publish management screens. An empty or non-string value falls back to `manage_safe_publish`. A capability name that does not exist is used as-is and locks out users who do not hold it. |
 | `safe_publish_auth_max_time_diff` | `300` | Maximum allowed difference, in seconds, between a signed request's timestamp and the current time. |
 | `safe_publish_request_timeout` | `10` | Timeout, in seconds, for HTTP requests to the source site. |
 | `safe_publish_request_args` | — | Customize the arguments passed to the HTTP request made to the source site. |
@@ -306,9 +307,9 @@ Safe Publish registers a "Safe Publish Authentication Configuration" test under 
 
 Cross-site requests are rejected when the source and destination clocks differ by more than the allowed window (300 seconds by default). Correct the system time on both servers. If a larger tolerance is genuinely required, raise it with the `safe_publish_auth_max_time_diff` filter.
 
-### "You do not have sufficient permissions to access this page"
+### "Sorry, you are not allowed to access this page."
 
-This appears when a user lacks the capability required for a Safe Publish screen. Management screens — Manage and Settings — require `manage_safe_publish`. The Audit Log requires only the narrower `view_safe_publish_audit_log`. Confirm which capability the user's role holds, and grant the one the screen requires. On multisite, capabilities are granted per network site.
+WordPress shows this message, with an HTTP 403 status, when a user lacks the capability required for a Safe Publish screen. Management screens — Manage and Settings — require `manage_safe_publish`. The Audit Log requires only the narrower `view_safe_publish_audit_log`. Confirm which capability the user's role holds, and grant the one the screen requires. On multisite, capabilities are granted per network site.
 
 ### An import failed with a missing-parent error
 
@@ -332,18 +333,25 @@ Import or Compare reports that the source does not list the post type, sometimes
 - The post type is still registered with `show_in_rest` set to `true` and `public` set to `true`. Safe Publish also allows `wp_navigation` and `wp_block` despite `public` being `false`.
 - `show_in_rest` is the boolean `true`, not a truthy value such as `1`. A truthy value registers the REST route but excludes the type from the catalog.
 - Where the source registers the type conditionally, the registration also runs for REST requests.
+- The type's REST controller does not throw an error. When it does, the source leaves the type out of the catalog and records the failure in its Audit Log.
 
 ### An import reported a missing raw value
 
-The source's authenticated catalog response for the post type did not include a valid `raw_fields` list, or the source response did not include the raw values that list declares as supported.
+The source's response for the post did not include the raw values that the catalog declares as supported. The error reads "The source response is missing required raw values for supported fields", followed by the field names.
 
-A `title.raw` value must always be present — it can be an empty string for an untitled post, but its absence, or a malformed `raw_fields` list, is rejected as invalid. `content.raw` and `excerpt.raw` may be absent only when the catalog metadata declares that field unsupported. If the post type uses a custom REST controller, its author must provide a standard WordPress item schema in which each supported field declares a `raw` property. If the catalog request itself failed rather than returning malformed data, the failure is temporary — retry the import.
+A `title.raw` value must always be present — it can be an empty string for an untitled post, but its absence is rejected, even for a post type that does not declare title support. `content.raw` and `excerpt.raw` may be absent only when the catalog metadata declares that field unsupported and the field key is also absent from the response. If the post type uses a custom REST controller, its author must provide a standard WordPress item schema in which each supported field declares a `raw` property.
+
+Other catalog problems report different errors:
+
+- **"The source site is running an incompatible version of Safe Publish. Update it and try again."** The catalog response has no `raw_fields` list. Update Safe Publish on the source.
+- **"The source site returned invalid post type field metadata."** The `raw_fields` list is malformed. Check the source's post type registration and any custom REST controller.
+- **"The source post type catalog could not be retrieved. Try again."** The catalog request failed. Retry the import. If it keeps failing, check the connection with **Test Connection**, because an authentication failure (HTTP 401) reports the same error.
 
 ### An import or rollback failed because WordPress filtered the content
 
 Safe Publish compares the content and excerpt WordPress saved against what was requested, and fails the operation if there is a mismatch. This is usually because the user running the import lacks the `unfiltered_html` capability, and the content includes HTML, inline scripts, or event handlers that WordPress' save filters strip or change.
 
-Ask an administrator, or a user who can save the content unfiltered, to retry the import or rollback. Alternatively, remove the unsupported markup from the content at the source, then re-import. If this happens during a rollback, the history item is reopened so it stays retryable.
+Ask a user who can save the content unfiltered to retry the import or rollback. On multisite, only super administrators can hold `unfiltered_html`, and no user can when `DISALLOW_UNFILTERED_HTML` is set. Alternatively, remove the unsupported markup from the content at the source, then re-import. If this happens during a rollback, the history item is reopened so it stays retryable.
 
 ### A rollback was refused
 
