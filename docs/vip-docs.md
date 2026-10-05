@@ -343,14 +343,15 @@ A `title.raw` value must always be present — it can be an empty string for an 
 
 Safe Publish compares the content and excerpt WordPress saved against what was requested, and fails the operation if there is a mismatch. This is usually because the user running the import lacks the `unfiltered_html` capability, and the content includes HTML, inline scripts, or event handlers that WordPress' save filters strip or change.
 
-Ask an administrator, or a user who can save the content unfiltered, to retry the import or rollback. Alternatively, remove the unsupported markup from the content at the source, then re-import. If this happens during a rollback, the history item is left active rather than marked rolled back.
+Ask an administrator, or a user who can save the content unfiltered, to retry the import or rollback. Alternatively, remove the unsupported markup from the content at the source, then re-import. If this happens during a rollback, the history item is reopened so it stays retryable.
 
-### A rollback was refused or could not be recorded
+### A rollback was refused
 
-Two rollback errors point at a listing that no longer matches the destination:
+These rollback errors point at a listing that no longer matches the destination:
 
 - **"This import was already rolled back. Reload the list."** The import had been rolled back already, usually from another browser tab. Reload the listing; the row will no longer offer that rollback. Safe Publish refuses the request rather than replaying it, because replaying would write the stored snapshot over whatever the post holds now.
-- **"The rollback was applied, but it could not be recorded. Reload the list before rolling back again."** The content was reverted, but Safe Publish could not record that it happened. Reload the listing before taking any further action on that post. Do not retry the rollback immediately, because the unrecorded row is still offered and running it again would overwrite the restored content.
+- **"The post is in the trash. Restore it before rolling back."** The post was moved to the trash after the listing loaded. Restore it, reload the listing, and roll back again.
+- **"The post no longer exists, so there is nothing to roll back."** The post was permanently deleted after the listing loaded. Safe Publish closes the import record, since that import can no longer be reverted.
 
 ### Imported media did not transfer
 
