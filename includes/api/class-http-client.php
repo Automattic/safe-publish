@@ -326,7 +326,8 @@ final class HTTP_Client {
 	/**
 	 * Determines whether to verify SSL certificates based on environment and URL.
 	 *
-	 * Relaxes verification only outside production, and only for local hosts.
+	 * Relaxes verification only in local and development environments, and only
+	 * for local hosts.
 	 *
 	 * @param string $url URL being requested.
 	 * @return bool Whether to verify SSL certificates.
@@ -337,17 +338,22 @@ final class HTTP_Client {
 			return true;
 		}
 
-		if ( 'production' === wp_get_environment_type() ) {
+		$environment = wp_get_environment_type();
+		if ( 'local' !== $environment && 'development' !== $environment ) {
 			return true;
 		}
 
-		$host = strtolower( (string) ( wp_parse_url( $url, PHP_URL_HOST ) ?? '' ) );
+		$host = strtolower( (string) wp_parse_url( $url, PHP_URL_HOST ) );
 		if ( ! self::is_local_only_host( $host ) ) {
 			return true;
 		}
 
 		// Allow filtering for specific development needs.
-		return (bool) apply_filters( 'safe_publish_dev_ssl_verify', false, $url );
+		return (bool) apply_filters(
+			'safe_publish_dev_ssl_verify',
+			false,
+			$url
+		);
 	}
 
 	/**
@@ -357,12 +363,8 @@ final class HTTP_Client {
 	 * @return bool True when the host is loopback or uses a reserved TLD.
 	 */
 	private static function is_local_only_host( string $host ): bool {
-		if ( '' === $host ) {
-			return false;
-		}
-
 		// wp_parse_url keeps the brackets around an IPv6 literal.
-		$loopback = array( 'localhost', '127.0.0.1', '::1', '[::1]' );
+		$loopback = array( 'localhost', '127.0.0.1', '[::1]' );
 		if ( in_array( $host, $loopback, true ) ) {
 			return true;
 		}
