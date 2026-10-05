@@ -41,6 +41,9 @@ const ATTRS_CLASS = 'safe-publish-inline-attr-changed';
  * but textarea and title; the rest cover unfiltered callers.
  */
 const OPAQUE_TAGS = new Set( [
+	'IFRAME',
+	'NOEMBED',
+	'NOFRAMES',
 	'NOSCRIPT',
 	'SCRIPT',
 	'STYLE',

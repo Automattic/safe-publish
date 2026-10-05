@@ -532,6 +532,24 @@ describe( 'BlockDiffViewer', () => {
 		expect( badge() ).toBeInTheDocument();
 	} );
 
+	it( 'copies a raw-text element whole instead of marking inside it', () => {
+		// ARRANGE: One modified block whose only change is inside an iframe.
+		// Its children are raw text, so a marker there would render as markup.
+		const { container } = renderModified(
+			'<div><iframe>old</iframe><p>Body copy.</p></div>',
+			'<div><iframe>new</iframe><p>Body copy.</p></div>',
+			'core/html'
+		);
+
+		// ACT: Read the element the incoming column renders.
+		const frame = incomingColumn( container ).querySelector( 'iframe' );
+
+		// ASSERT: The content is exactly the incoming one and the card reports
+		// the change it could not mark.
+		expect( frame?.innerHTML ).toBe( 'new' );
+		expect( badge() ).toBeInTheDocument();
+	} );
+
 	it( 'renders added and removed blocks from the side that carries them', () => {
 		// ARRANGE: One block dropped by the incoming content and one added.
 		const blocks: BlockDiff[] = [
