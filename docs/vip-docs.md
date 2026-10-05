@@ -232,7 +232,7 @@ Safe Publish exposes the following filters for developers. Add them in a theme o
 | `safe_publish_auth_max_time_diff` | `300` | Maximum allowed difference, in seconds, between a signed request's timestamp and the current time. |
 | `safe_publish_request_timeout` | `10` | Timeout, in seconds, for HTTP requests to the source site. |
 | `safe_publish_request_args` | — | Customize the arguments passed to the HTTP request made to the source site. |
-| `safe_publish_dev_ssl_verify` | `false` | Development only: skip SSL verification for requests to non-localhost hosts. Leave disabled in production. |
+| `safe_publish_dev_ssl_verify` | `false` | Development only: whether to verify SSL certificates for loopback and `.test`, `.local`, and `.localhost` hosts in `local` and `development` environments. Ignored elsewhere. |
 
 The `safe_publish_event_logged` action fires each time an audit event is recorded, receiving the channel, event type, and event data. Use it to forward audit events to external monitoring.
 
