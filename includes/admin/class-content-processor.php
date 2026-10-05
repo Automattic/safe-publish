@@ -216,11 +216,14 @@ class Content_Processor {
 		string $source_site_url,
 		array $context = array()
 	): string|WP_Error {
-		return $this->run_content_passes(
-			$content,
-			$source_site_url,
-			$context,
-			true
+		return $this->replace_source_urls(
+			$this->run_content_passes(
+				$content,
+				$source_site_url,
+				$context,
+				true
+			),
+			$source_site_url
 		);
 	}
 
@@ -257,20 +260,21 @@ class Content_Processor {
 		$this->unprocessable_media = array();
 		$this->warnings            = array();
 
-		if ( is_wp_error( $preview ) ) {
-			return $preview;
-		}
+		// Hold media this site has no file for out of the URL swap, so it
+		// keeps its source URL and a local copy at the same path keeps its own.
+		$placeholders = array_map(
+			static fn ( int $i ): string => "\0" . $i . "\0",
+			array_flip( $this->media_importer->take_unresolved_urls() )
+		);
 
-		// Undo the URL swap for media this site has no file for.
-		foreach ( $this->media_importer->take_unresolved_urls() as $url ) {
-			$swapped = $this->replace_source_urls( $url, $source_site_url );
+		$preview = $this->replace_source_urls(
+			strtr( $preview, $placeholders ),
+			$source_site_url
+		);
 
-			if ( is_string( $swapped ) ) {
-				$preview = str_replace( $swapped, $url, $preview );
-			}
-		}
-
-		return $preview;
+		return is_string( $preview )
+			? strtr( $preview, array_flip( $placeholders ) )
+			: $preview;
 	}
 
 	/**
@@ -281,14 +285,14 @@ class Content_Processor {
 	 * @param array<string, mixed> $context           process_content() context.
 	 * @param bool                 $import_media_sets Import the cross-post and
 	 *                                                attached media sets.
-	 * @return string|WP_Error Processed content, or WP_Error on failure.
+	 * @return string Processed content, before the source URL swap.
 	 */
 	private function run_content_passes(
 		string $content,
 		string $source_site_url,
 		array $context,
 		bool $import_media_sets
-	): string|WP_Error {
+	): string {
 		$this->failed_media        = array();
 		$this->unprocessable_media = array();
 		$this->warnings            = array();
@@ -400,7 +404,7 @@ class Content_Processor {
 		$this->shortcode_media_rewriter->reset_failed_media();
 		$this->media_importer->reset_failed_media();
 
-		return $this->replace_source_urls( $processed_content, $source_site_url );
+		return $processed_content;
 	}
 
 	/**

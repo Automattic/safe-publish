@@ -302,6 +302,34 @@ class Diff_Renderer_Import_Preview_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that imported media keeps its local URL beside an unimported
+	 * source file at the same path as its copy here.
+	 */
+	public function test_imported_media_keeps_its_url_at_shared_path(): void {
+		// ARRANGE: Import an image, then add a source file at its copy's path.
+		$imported  = $this->import_with_media(
+			$this->image_block( self::IMAGE_URL )
+		);
+		$copy_url  = (string) wp_get_attachment_url(
+			$this->imported_attachment_id( self::IMAGE_URL )
+		);
+		$new_image = str_replace( get_site_url(), self::SOURCE, $copy_url );
+
+		// ACT: Preview both images.
+		$preview = $this->preview(
+			$this->image_block( self::IMAGE_URL ) . "\n\n"
+				. $this->image_block( $new_image )
+		);
+
+		// ASSERT: The imported image previews as stored, the new one as on
+		// the source.
+		$this->assertSame(
+			$imported . "\n\n" . $this->image_block( $new_image ),
+			$preview
+		);
+	}
+
+	/**
 	 * Verifies that the preview reproduces the import's output exactly once
 	 * the media and references it needs are already imported, so the two
 	 * cannot drift apart.
