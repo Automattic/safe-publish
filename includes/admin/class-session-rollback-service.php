@@ -12,6 +12,7 @@ namespace Safe_Publish\Admin;
 use Safe_Publish\Content\Shortcode_ID_Rewriter;
 use Safe_Publish\Utils\Options;
 use WP_Error;
+use WP_Post;
 
 // Prevent direct access.
 if ( ! defined( 'ABSPATH' ) ) {
@@ -161,39 +162,141 @@ final class Session_Rollback_Service {
 			);
 		}
 
-		$omissions  = array();
-		$referenced = $this->referenced_attachment_ids( $imported_media_ids );
+		return array(
+			'action'     => 'deleted',
+			'post_id'    => $post_id,
+			'post_title' => $post_title,
+			'omissions'  => $this->delete_imported_media( $imported_media_ids ),
+		);
+	}
 
-		foreach ( $imported_media_ids as $attachment_id ) {
-			// A check that could not answer withholds every deletion, since one
-			// failed scan covered the whole batch.
-			if ( null === $referenced ) {
-				$omissions[] = array(
+	/**
+	 * Deletes the imported attachments no surviving post still shows.
+	 *
+	 * An attachment can hold another as its poster, and keeps it only while
+	 * surviving itself. Holders go first, so one WordPress fails to delete
+	 * still keeps its poster.
+	 *
+	 * @param int[] $attachment_ids Owned, import-created attachment IDs.
+	 * @return array[] An omission per attachment a failure retained.
+	 */
+	private function delete_imported_media( array $attachment_ids ): array {
+		if ( array() === $attachment_ids ) {
+			return array();
+		}
+
+		$referenced = $this->referenced_attachment_ids( $attachment_ids );
+		$posters    = $this->poster_holders_in_batch( $attachment_ids );
+
+		// A check that could not answer withholds every deletion, since one
+		// failed scan covered the whole batch.
+		if ( null === $referenced || null === $posters ) {
+			return array_map(
+				static fn ( int $attachment_id ): array => array(
 					'field'         => 'media',
 					'reason'        => 'usage_check_failed',
 					'attachment_id' => $attachment_id,
-				);
-				continue;
-			}
+				),
+				$attachment_ids
+			);
+		}
 
+		$kept      = $this->with_held_posters(
+			array_fill_keys( $referenced, true ),
+			$posters
+		);
+		$ordered   = $this->holders_first( $attachment_ids, $posters );
+		$omissions = array();
+
+		foreach ( $ordered as $attachment_id ) {
 			// A surviving post may still show media parented here, since import
 			// deduplicates by source URL; skip those and delete only what this
 			// post solely owns.
-			if ( in_array( $attachment_id, $referenced, true ) ) {
+			if ( isset( $kept[ $attachment_id ] ) ) {
 				continue;
 			}
 
 			// Defer to the site's MEDIA_TRASH setting rather than forcing, so
 			// a wrong deletion stays recoverable where media trash is on.
-			wp_delete_attachment( $attachment_id, false );
+			$deleted = wp_delete_attachment( $attachment_id, false );
+
+			if ( $deleted instanceof WP_Post ) {
+				continue;
+			}
+
+			$kept[ $attachment_id ] = true;
+			$omissions[]            = array(
+				'field'         => 'media',
+				'reason'        => 'delete_failed',
+				'attachment_id' => $attachment_id,
+			);
+
+			$kept = $this->with_held_posters( $kept, $posters );
 		}
 
-		return array(
-			'action'     => 'deleted',
-			'post_id'    => $post_id,
-			'post_title' => $post_title,
-			'omissions'  => $omissions,
-		);
+		return $omissions;
+	}
+
+	/**
+	 * Adds the posters kept attachments hold, and any those posters hold.
+	 *
+	 * @param array<int, true>  $kept    Kept attachment IDs as keys.
+	 * @param array<int, int[]> $posters Held attachment IDs keyed by their holder.
+	 * @return array<int, true> Kept attachment IDs as keys, posters included.
+	 */
+	private function with_held_posters( array $kept, array $posters ): array {
+		// Repeated because a poster can itself hold one.
+		do {
+			$before = count( $kept );
+
+			foreach ( $posters as $holder_id => $held_ids ) {
+				if ( ! isset( $kept[ $holder_id ] ) ) {
+					continue;
+				}
+
+				foreach ( $held_ids as $held_id ) {
+					$kept[ $held_id ] = true;
+				}
+			}
+
+			$after = count( $kept );
+		} while ( $after > $before );
+
+		return $kept;
+	}
+
+	/**
+	 * Orders attachments so each holder comes before the posters it holds.
+	 *
+	 * @param int[]             $attachment_ids Attachment IDs.
+	 * @param array<int, int[]> $posters        Held attachment IDs keyed by their holder.
+	 * @return int[] Attachment IDs, holders first.
+	 */
+	private function holders_first(
+		array $attachment_ids,
+		array $posters
+	): array {
+		$ordered   = array();
+		$remaining = array_fill_keys( $attachment_ids, true );
+
+		while ( array() !== $remaining ) {
+			$holders = array_intersect_key( $posters, $remaining );
+			$next    = $remaining;
+
+			foreach ( $holders as $held_ids ) {
+				$next = array_diff_key( $next, array_flip( $held_ids ) );
+			}
+
+			// Posters holding each other in a loop have no first holder.
+			if ( array() === $next ) {
+				$next = $remaining;
+			}
+
+			$ordered   = array_merge( $ordered, array_keys( $next ) );
+			$remaining = array_diff_key( $remaining, $next );
+		}
+
+		return $ordered;
 	}
 
 	/**
@@ -243,57 +346,28 @@ final class Session_Rollback_Service {
 	 * batch, since per-attachment queries would scan the posts table once per
 	 * attachment. One that cannot answer withholds every deletion.
 	 *
-	 * An attachment can hold another as its poster, so a featured-image holder
-	 * inside the batch counts only once it is itself kept: A video keeps its
-	 * poster only while the video survives.
-	 *
 	 * @param int[] $attachment_ids Attachments considered for deletion.
 	 * @return int[]|null Referenced attachment IDs, null when a check could not
 	 *                    answer.
 	 */
 	private function referenced_attachment_ids( array $attachment_ids ): ?array {
-		if ( array() === $attachment_ids ) {
-			return array();
-		}
-
 		$featured = $this->featured_image_attachment_ids( $attachment_ids );
-		$posters  = $this->poster_holders_in_batch( $attachment_ids );
 		$inlined  = $this->inlined_attachment_ids( $attachment_ids );
 		$listed   = $this->shortcode_attachment_ids();
 
-		if ( null === $featured || null === $posters
-			|| null === $inlined || null === $listed
-		) {
+		if ( null === $featured || null === $inlined || null === $listed ) {
 			return null;
 		}
 
-		$kept = array_fill_keys(
-			array_merge(
-				$featured,
-				$inlined,
-				array_intersect( $listed, $attachment_ids )
-			),
-			true
+		return array_values(
+			array_unique(
+				array_merge(
+					$featured,
+					$inlined,
+					array_intersect( $listed, $attachment_ids )
+				)
+			)
 		);
-
-		// Repeated because a poster can itself hold one.
-		do {
-			$before = count( $kept );
-
-			foreach ( $posters as $holder_id => $held_ids ) {
-				if ( ! isset( $kept[ $holder_id ] ) ) {
-					continue;
-				}
-
-				foreach ( $held_ids as $held_id ) {
-					$kept[ $held_id ] = true;
-				}
-			}
-
-			$after = count( $kept );
-		} while ( $after > $before );
-
-		return array_keys( $kept );
 	}
 
 	/**

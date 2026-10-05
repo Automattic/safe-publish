@@ -17,6 +17,7 @@ use Safe_Publish\Utils\Import_Items_Table;
 use Safe_Publish\Utils\Imports_Table;
 use Safe_Publish\Utils\Options;
 use WP_Error;
+use WP_Post;
 
 /**
  * Session Rollback Test Class.
@@ -707,15 +708,117 @@ class Session_Rollback_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that a video WordPress fails to delete keeps the poster it
+	 * holds, and that the rollback reports the video as retained.
+	 */
+	public function test_rollback_keeps_the_poster_of_a_video_it_fails_to_delete(): void {
+		// ARRANGE: A owns a video holding X, listing after X so deleting in
+		// listing order would remove X first. The video's deletion is refused.
+		$seed  = $this->seed_video_holding_poster();
+		$video = $seed['video_id'];
+		$this->list_last( $video );
+		$this->refuse_deleting( $video );
+
+		// ACT: Roll back A.
+		$result = $this->rollback_service->rollback_item( $seed['item_id'] );
+
+		// ASSERT: A is gone; the video survives holding X and is reported.
+		$this->assertIsArray( $result );
+		$this->assertNull( get_post( $seed['post_id'] ) );
+		$this->assertNotNull( get_post( $seed['attachment_id'] ) );
+		$this->assertSame(
+			$seed['attachment_id'],
+			get_post_thumbnail_id( $video )
+		);
+		$this->assertSame(
+			array(
+				array(
+					'field'         => 'media',
+					'reason'        => 'delete_failed',
+					'attachment_id' => $video,
+				),
+			),
+			$result['omissions']
+		);
+	}
+
+	/**
+	 * Verifies that a poster WordPress fails to delete keeps the poster it
+	 * holds in turn, even when that one lists first.
+	 */
+	public function test_rollback_keeps_the_poster_of_a_poster_it_fails_to_delete(): void {
+		// ARRANGE: A owns video -> X -> Y, with X listing after Y. X's deletion
+		// is refused.
+		$seed  = $this->seed_video_holding_poster();
+		$inner = $this->seed_imported_attachment( $seed['post_id'] );
+		set_post_thumbnail( $seed['attachment_id'], $inner );
+		$this->list_last( $seed['attachment_id'] );
+		$this->refuse_deleting( $seed['attachment_id'] );
+
+		// ACT: Roll back A.
+		$result = $this->rollback_service->rollback_item( $seed['item_id'] );
+
+		// ASSERT: The video is gone; X survives holding Y and is reported.
+		$this->assertIsArray( $result );
+		$this->assertNull( get_post( $seed['video_id'] ) );
+		$this->assertNotNull( get_post( $inner ) );
+		$this->assertSame(
+			$inner,
+			get_post_thumbnail_id( $seed['attachment_id'] )
+		);
+		$this->assertSame(
+			array(
+				array(
+					'field'         => 'media',
+					'reason'        => 'delete_failed',
+					'attachment_id' => $seed['attachment_id'],
+				),
+			),
+			$result['omissions']
+		);
+	}
+
+	/**
+	 * Verifies that rolling back deletes attachments holding each other as
+	 * posters, a loop with no first holder to delete.
+	 */
+	public function test_rollback_deletes_attachments_holding_each_other(): void {
+		// ARRANGE: A owns X and Y, each holding the other as its poster.
+		$seed  = $this->create_shared_media_item();
+		$other = $this->seed_imported_attachment( $seed['post_id'] );
+		set_post_thumbnail( $seed['attachment_id'], $other );
+		set_post_thumbnail( $other, $seed['attachment_id'] );
+		$this->assertSame(
+			$other,
+			get_post_thumbnail_id( $seed['attachment_id'] )
+		);
+		$this->assertSame(
+			$seed['attachment_id'],
+			get_post_thumbnail_id( $other )
+		);
+
+		// ACT: Roll back A.
+		$result = $this->rollback_service->rollback_item( $seed['item_id'] );
+
+		// ASSERT: A, X and Y are all gone, with nothing omitted.
+		$this->assertIsArray( $result );
+		$this->assertSame( array(), $result['omissions'] );
+		$this->assertNull( get_post( $seed['post_id'] ) );
+		$this->assertNull( get_post( $seed['attachment_id'] ) );
+		$this->assertNull( get_post( $other ) );
+	}
+
+	/**
 	 * Provides an SQL fingerprint identifying each usage check's query.
 	 *
 	 * @return array<string, array{string}> Fingerprint per check.
 	 */
 	public function usage_check_query_provider(): array {
 		return array(
-			'featured image'  => array( "meta.meta_key = '_thumbnail_id'" ),
-			'post content'    => array( '2026/08/' ),
-			'media shortcode' => array( '[gallery' ),
+			'featured image'    => array( 'meta.post_id NOT IN' ),
+			'attachment poster' => array( 'meta.post_id IN' ),
+			'post content'      => array( '2026/08/' ),
+			'media shortcode'   => array( '[gallery' ),
 		);
 	}
 
@@ -1295,6 +1398,37 @@ class Session_Rollback_Test extends Integration_Test_Case {
 		);
 
 		return $seed;
+	}
+
+	/**
+	 * Backdates an attachment so it lists after the other owned media, which
+	 * lists newest first.
+	 *
+	 * @param int $attachment_id Attachment to backdate.
+	 */
+	private function list_last( int $attachment_id ): void {
+		wp_update_post(
+			array(
+				'ID'        => $attachment_id,
+				'post_date' => '2000-01-01 00:00:00',
+			)
+		);
+	}
+
+	/**
+	 * Makes WordPress refuse to delete an attachment.
+	 *
+	 * @param int $attachment_id Attachment whose deletion fails.
+	 */
+	private function refuse_deleting( int $attachment_id ): void {
+		add_filter(
+			'pre_delete_attachment',
+			static fn ( $check, WP_Post $post ) => $attachment_id === $post->ID
+				? false
+				: $check,
+			10,
+			2
+		);
 	}
 
 	/**
