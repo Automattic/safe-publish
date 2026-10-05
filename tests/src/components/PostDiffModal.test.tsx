@@ -408,3 +408,54 @@ describe( 'PostDiffModal filtered-markup changes', () => {
 		expect( screen.getByText( 'core/html' ) ).toBeInTheDocument();
 	} );
 } );
+
+describe( 'PostDiffModal image-size toggle', () => {
+	/**
+	 * Renders the compare modal over a diff whose only change is the featured
+	 * image section, and waits for that section.
+	 *
+	 * @param {string} featuredMedia Featured image section markup.
+	 */
+	async function renderWithFeaturedMedia(
+		featuredMedia: string
+	): Promise< void > {
+		mockApiFetch.mockResolvedValue( {
+			contentDiffHtml: '',
+			blockDiffs: [],
+			nonContentDiffs: { featuredMedia },
+		} );
+		render(
+			<PostDiffModal
+				items={ [ ROW ] }
+				ajaxurl={ AJAX_URL }
+				nonce={ NONCE }
+				syncStatus="outdated"
+				onRefresh={ vi.fn() }
+			/>
+		);
+		await screen.findByRole( 'heading', { name: 'Featured Image' } );
+	}
+
+	it( 'Verifies that a featured image section with an image offers the toggle', async () => {
+		// ARRANGE: A section that shows an image.
+		const markup =
+			'<div><img alt="Incoming featured image" src="https://example.com/a.jpg" /></div>';
+
+		// ACT: Render the modal over it.
+		await renderWithFeaturedMedia( markup );
+
+		// ASSERT: The toggle is offered.
+		expect( screen.getByLabelText( 'Larger images' ) ).toBeInTheDocument();
+	} );
+
+	it( 'Verifies that a featured image section without images omits the toggle', async () => {
+		// ARRANGE: A section that shows placeholders only.
+		const markup = '<div><em>None</em></div><div><em>Unavailable</em></div>';
+
+		// ACT: Render the modal over it.
+		await renderWithFeaturedMedia( markup );
+
+		// ASSERT: The toggle has nothing to enlarge, so it is not offered.
+		expect( screen.queryByLabelText( 'Larger images' ) ).toBeNull();
+	} );
+} );
