@@ -97,7 +97,9 @@ class URL_Validator {
 	 *
 	 * A URL carrying a scheme is already absolute and keeps its path, which
 	 * covers non-ASCII paths and opaque schemes such as data: URIs. A
-	 * scheme-relative URL adopts the base URL's scheme.
+	 * scheme-relative URL adopts the base URL's scheme. A root-relative URL
+	 * resolves against the base URL's origin, as a browser does on the source
+	 * site; any other relative URL resolves against the base URL in full.
 	 *
 	 * @param string $url      URL to resolve.
 	 * @param string $base_url Base site URL to resolve against.
@@ -120,6 +122,14 @@ class URL_Validator {
 			$scheme = wp_parse_url( $base_url, PHP_URL_SCHEME );
 
 			return ( is_string( $scheme ) ? $scheme : 'https' ) . ':' . $url;
+		}
+
+		if ( 0 === strpos( $url, '/' ) ) {
+			$origin = self::normalize_site_url( $base_url );
+
+			if ( '' !== $origin ) {
+				return $origin . $url;
+			}
 		}
 
 		return rtrim( $base_url, '/' ) . '/' . ltrim( $url, '/' );

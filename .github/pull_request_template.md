@@ -10,8 +10,12 @@
 
 <!-- The behavior this pull request introduces. -->
 
+## Testing
+
+<!-- List the commands reviewers should run. Keep manual verification below. -->
+
 ## Human testing steps
 
-<!-- The simplest steps a reviewer can follow to verify the change. -->
+<!-- Give manual setup, actions, expected observations, and cleanup when needed. Automated test commands alone do not count as human testing. -->
 
 <!-- For UI changes, add a Screenshots section with Before and After subsections. -->
