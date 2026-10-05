@@ -56,25 +56,29 @@ const OPAQUE_TAGS = new Set( [
 /**
  * Result of an inline diff pass.
  *
- * @property {string}  html     Incoming HTML carrying the diff markers.
- * @property {boolean} unmarked True when a change could not be marked.
+ * @property {string}  html        Incoming HTML carrying the diff markers.
+ * @property {boolean} unmarked    True when a change could not be marked.
+ * @property {boolean} attrChanged True when an element's attributes changed.
  */
 interface InlineDiff {
 	html: string;
 	unmarked: boolean;
+	attrChanged: boolean;
 }
 
 /**
  * Running state of one inline diff pass.
  *
- * @property {boolean}              marked   True once a marker has been placed.
- * @property {boolean}              unmarked True once a change was left unmarked.
- * @property {Map<string, string>}  shapes   Subtree shape to its shared identity.
- * @property {WeakMap<Node,string>} keys     Node to its subtree identity.
+ * @property {boolean}              marked      True once a marker has been placed.
+ * @property {boolean}              unmarked    True once a change was left unmarked.
+ * @property {boolean}              attrChanged True once an attribute change was marked.
+ * @property {Map<string, string>}  shapes      Subtree shape to its shared identity.
+ * @property {WeakMap<Node,string>} keys        Node to its subtree identity.
  */
 interface DiffState {
 	marked: boolean;
 	unmarked: boolean;
+	attrChanged: boolean;
 	shapes: Map< string, string >;
 	keys: WeakMap< Node, string >;
 }
@@ -211,6 +215,11 @@ function markElement(
 
 	element.classList.add( className );
 	state.marked = true;
+	if ( className === ATTRS_CLASS ) {
+		// The outline is the only cue for an attribute change, so the card
+		// carries a text equivalent for anyone who cannot see it.
+		state.attrChanged = true;
+	}
 }
 
 /**
@@ -524,7 +533,7 @@ function appendChildDiff(
  */
 function highlightHtml( original: string, changed: string ): InlineDiff {
 	if ( original === changed || typeof DOMParser === 'undefined' ) {
-		return { html: changed, unmarked: false };
+		return { html: changed, unmarked: false, attrChanged: false };
 	}
 
 	const parser = new DOMParser();
@@ -534,6 +543,7 @@ function highlightHtml( original: string, changed: string ): InlineDiff {
 	const state: DiffState = {
 		marked: false,
 		unmarked: false,
+		attrChanged: false,
 		shapes: new Map(),
 		keys: new WeakMap(),
 	};
@@ -552,7 +562,7 @@ function highlightHtml( original: string, changed: string ): InlineDiff {
 		// Both the walk and the serializer recurse as deeply as the markup
 		// nests. Markup deep enough to exhaust the stack is reported rather
 		// than dropped.
-		return { html: changed, unmarked: true };
+		return { html: changed, unmarked: true, attrChanged: false };
 	}
 
 	// Nothing marked, yet the two sides differ by more than layout: say so
@@ -561,7 +571,11 @@ function highlightHtml( original: string, changed: string ): InlineDiff {
 		state.marked !== true &&
 		stripWhitespace( original ) !== stripWhitespace( changed );
 
-	return { html, unmarked: state.unmarked || missedChange };
+	return {
+		html,
+		unmarked: state.unmarked || missedChange,
+		attrChanged: state.attrChanged,
+	};
 }
 
 /**
@@ -653,6 +667,7 @@ export function isPreviewUnavailable( block: BlockDiff ): boolean {
  * @property {boolean}             previewUnavailable Whether neither preview can show the change.
  * @property {boolean}             showLabels         When false, omit name and status.
  * @property {boolean}             unmarked           Whether a change has no inline marker.
+ * @property {boolean}             attrChanged        Whether an element's attributes changed.
  */
 interface HeaderProps {
 	title: string;
@@ -661,6 +676,7 @@ interface HeaderProps {
 	previewUnavailable: boolean;
 	showLabels: boolean;
 	unmarked: boolean;
+	attrChanged: boolean;
 }
 
 /**
@@ -680,8 +696,9 @@ function BlockDiffHeader( {
 	previewUnavailable,
 	showLabels,
 	unmarked,
+	attrChanged,
 }: HeaderProps ): JSX.Element | null {
-	if ( ! showLabels && ! unmarked ) {
+	if ( ! showLabels && ! unmarked && ! attrChanged ) {
 		return null;
 	}
 
@@ -704,6 +721,11 @@ function BlockDiffHeader( {
 			{ unmarked && (
 				<span className="safe-publish-badge safe-publish-badge--neutral">
 					{ __( 'changed — see Source Diff', 'safe-publish' ) }
+				</span>
+			) }
+			{ attrChanged && (
+				<span className="safe-publish-sr-only">
+					{ __( 'Attributes changed', 'safe-publish' ) }
 				</span>
 			) }
 		</div>
@@ -802,7 +824,7 @@ function BlockDiffCard( { block, highlight, showLabels }: CardProps ): JSX.Eleme
 	const inlineDiff: InlineDiff =
 		highlight && status === 'modified' && ! hasImage && ! previewUnavailable
 			? highlightHtml( rawCurrentHtml, rawIncomingHtml )
-			: { html: rawIncomingHtml, unmarked: false };
+			: { html: rawIncomingHtml, unmarked: false, attrChanged: false };
 
 	return (
 		<div className="safe-publish-block-diff">
@@ -813,6 +835,7 @@ function BlockDiffCard( { block, highlight, showLabels }: CardProps ): JSX.Eleme
 				previewUnavailable={ previewUnavailable }
 				showLabels={ showLabels }
 				unmarked={ inlineDiff.unmarked }
+				attrChanged={ inlineDiff.attrChanged }
 			/>
 			<BlockDiffBody
 				block={ block }

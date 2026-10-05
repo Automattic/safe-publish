@@ -547,6 +547,19 @@ html:has(body.toplevel_page_safe-publish) {
 		outline: 1px dashed var(--safe-publish-primary);
 	}
 
+	// Text equivalent of the outline above, announced but not shown.
+	.safe-publish-sr-only {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		margin: -1px;
+		padding: 0;
+		border: 0;
+		overflow: hidden;
+		clip-path: inset(50%);
+		white-space: nowrap;
+	}
+
 	.safe-publish-block-diff__col img,
 	.safe-publish-block-diff__added img,
 	.safe-publish-block-diff__removed img,

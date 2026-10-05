@@ -54,6 +54,9 @@ const MARKER_SELECTOR = [
 const markerCount = ( column: HTMLElement ): number =>
 	column.querySelectorAll( MARKER_SELECTOR ).length;
 
+const srOnly = ( container: HTMLElement ): HTMLElement | null =>
+	container.querySelector< HTMLElement >( '.safe-publish-sr-only' );
+
 const badge = (): HTMLElement | null =>
 	screen.queryByText( /changed — see Source Diff/i );
 
@@ -530,6 +533,53 @@ describe( 'BlockDiffViewer', () => {
 		expect( column.querySelector( 'textarea' ) ).toBeNull();
 		expect( column.innerHTML ).toBe( '<div><p>Body copy.</p></div>' );
 		expect( badge() ).toBeInTheDocument();
+	} );
+
+	it( 'announces an attribute change that only an outline would show', () => {
+		// ARRANGE: One modified block whose only change is an attribute, which
+		// is marked with an outline and nothing else.
+		const { container } = renderModified(
+			'<p class="has-text-align-left">Body copy.</p>',
+			'<p class="has-text-align-right">Body copy.</p>'
+		);
+
+		// ACT: Read the card's text equivalent.
+		const note = srOnly( container );
+
+		// ASSERT: The change is announced, so it does not depend on sight.
+		expect( note ).toHaveTextContent( 'Attributes changed' );
+	} );
+
+	it( 'announces an attribute change even when labels are turned off', () => {
+		// ARRANGE: The same attribute-only change with labels off, where the
+		// header is otherwise empty.
+		const { container } = renderModified(
+			'<p class="has-text-align-left">Body copy.</p>',
+			'<p class="has-text-align-right">Body copy.</p>',
+			'core/paragraph',
+			false
+		);
+
+		// ACT: Read the card's text equivalent.
+		const note = srOnly( container );
+
+		// ASSERT: Hiding the labels does not take the announcement with them.
+		expect( note ).toHaveTextContent( 'Attributes changed' );
+		expect( screen.queryByText( 'core/paragraph' ) ).toBeNull();
+	} );
+
+	it( 'leaves a text-only edit without an attribute announcement', () => {
+		// ARRANGE: One modified block whose attributes are identical.
+		const { container } = renderModified(
+			'<p>Old body.</p>',
+			'<p>New body.</p>'
+		);
+
+		// ACT: Look for a text equivalent.
+		const note = srOnly( container );
+
+		// ASSERT: Nothing is announced, so the cue tracks real attribute edits.
+		expect( note ).toBeNull();
 	} );
 
 	it( 'copies a raw-text element whole instead of marking inside it', () => {
