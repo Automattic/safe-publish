@@ -28,6 +28,7 @@ This guide helps you resolve common issues with Safe Publish. See the [Debugging
 4. **Check the URL and TLS certificate**:
    - Use HTTPS outside local development. Safe Publish accepts HTTP URLs, but HTTP does not encrypt traffic.
    - Verify SSL certificates are valid.
+   - Self-signed certificates are accepted only for loopback, `.test`, `.local`, and `.localhost` hosts, and only when the site making the request sets `WP_ENVIRONMENT_TYPE` to `local` or `development`. **Test Connection** and media file downloads still require a valid certificate.
    - Test site URL in browser.
 
 #### "Connection timeout" error
