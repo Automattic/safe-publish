@@ -296,6 +296,7 @@ Safe Publish is scoped to publishing content between two paired sites. The follo
 - **Plugin, theme, or configuration transfer.** Only content — posts, pages, custom post types, their media, and their taxonomy terms — is imported.
 - **Third-party media import.** Media referenced in post content and hosted off the source domain is left as-is; its URLs are not rewritten or localized. Featured images are an exception — they are downloaded regardless of serving host.
 - **Importing children of missing parents.** By default, importing a child post whose parent is absent on the destination fails, unless `safe_publish_import_allow_orphans` is enabled.
+- **Bulk actions over 50 posts.** Bulk import and bulk trash handle up to 50 posts at a time.
 
 ## Troubleshooting
 
