@@ -225,7 +225,7 @@ class Import_History_Test extends Integration_Test_Case {
 		$this->assertIsInt( $kept_id );
 		$this->assertIsInt( $rolled_back_id );
 
-		$this->repository->mark_item_rolled_back( $rolled_back_id );
+		$this->repository->claim_item_for_rollback( $rolled_back_id );
 
 		// ACT: Read the session row.
 		$session = $this->repository->get_session( $session_id );

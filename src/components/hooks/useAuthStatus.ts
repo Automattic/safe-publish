@@ -11,15 +11,15 @@
 
 import { useEffect, useState } from '@wordpress/element';
 
-import type { ApiResponse, AuthStatus, AuthStatusData } from '../../types';
+import type { ApiResponse, AuthStatusData, AuthStatusView } from '../../types';
 
 /**
  * Probes the auth status once and returns the latest verdict.
  *
- * @return {AuthStatus|null} The probe result, or null while in flight.
+ * @return {AuthStatusView|null} The probe result, or null while in flight.
  */
-export function useAuthStatus(): AuthStatus | null {
-	const [ status, setStatus ] = useState< AuthStatus | null >( null );
+export function useAuthStatus(): AuthStatusView | null {
+	const [ status, setStatus ] = useState< AuthStatusView | null >( null );
 
 	useEffect( () => {
 		const controller = new AbortController();
@@ -41,13 +41,15 @@ export function useAuthStatus(): AuthStatus | null {
 				if ( controller.signal.aborted ) {
 					return;
 				}
-				setStatus( result.success ? result.data.status : 'unreachable' );
+				// Only the server can report unreachable; a failed request says
+				// nothing about the source site.
+				setStatus( result.success ? result.data.status : 'probe_failed' );
 			} )
 			.catch( () => {
 				if ( controller.signal.aborted ) {
 					return;
 				}
-				setStatus( 'unreachable' );
+				setStatus( 'probe_failed' );
 			} );
 
 		return () => {
