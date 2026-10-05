@@ -21,6 +21,8 @@ use WP_REST_Request;
  */
 class Diff_Renderer_Filtered_Markup_Test extends Integration_Test_Case {
 
+	use Unfiltered_Html_Trait;
+
 	private const SOURCE         = 'https://example.com';
 	private const SOURCE_POST_ID = 123;
 
@@ -37,6 +39,8 @@ class Diff_Renderer_Filtered_Markup_Test extends Integration_Test_Case {
 	#[\Override]
 	protected function setUp(): void {
 		parent::setUp();
+
+		$this->grant_current_user_unfiltered_html();
 
 		Source_Post_Type_Resolver::reset_cache();
 
