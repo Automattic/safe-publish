@@ -141,8 +141,7 @@ describe( 'BlockDiffViewer', () => {
 	} );
 
 	it( 'keeps an anchor href intact when the link target changes', () => {
-		// ARRANGE: One modified block whose only change is the link target,
-		// the case that used to splice a span inside the href value.
+		// ARRANGE: One modified block whose only change is the link target.
 		const { container } = renderModified(
 			'<p><a href="https://example.com/old">Read this</a></p>',
 			'<p><a href="https://example.com/new">Read this</a></p>'

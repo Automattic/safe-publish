@@ -67,11 +67,9 @@ const TABLE_CONTENT = new Set( [
 ] );
 
 /**
- * Elements whose children are raw text or an inert fragment. A marker put
- * inside one of them would read as content, not as markup. Rendered block
- * HTML reaches this component through wp_kses_post, which keeps textarea
- * and title and drops the rest; the rest stay listed so a caller that
- * passes unfiltered HTML is handled the same way.
+ * Elements whose children are raw text or an inert fragment, so a marker inside
+ * one would read as content. Block HTML passes wp_kses_post, which drops all
+ * but textarea and title; the rest cover unfiltered callers.
  */
 const OPAQUE_TAGS = new Set( [
 	'NOSCRIPT',
@@ -123,10 +121,8 @@ function isBlank( value: string ): boolean {
 /**
  * Removes every whitespace character from a string.
  *
- * Used to compare two sides for a difference that is more than layout.
- * Whitespace between tags and around words does not survive rendering,
- * and diffWords does not mark it, so it is not a change the preview can
- * show either way.
+ * Used to compare two sides for a difference beyond whitespace, which the diff
+ * never marks.
  *
  * @param {string} value Value to strip.
  *
@@ -150,13 +146,9 @@ function childNodesOf( node: Node ): Node[] {
 /**
  * Builds the comparison key for a node and its subtree.
  *
- * Equal keys mean the node is the same on both sides and needs no diffing.
- * A subtree is described by its tag, its attributes in document order and
- * the keys of its children, and each distinct description is interned to
- * one short identity that stands in for it inside its parent. Keys are
- * therefore built once per node and stay short however deeply the markup
- * nests, where serializing each subtree in full would re-read every
- * descendant at every level.
+ * Equal keys mean the node is the same on both sides. Each distinct subtree is
+ * interned to one short identity, so each key is built once and stays short;
+ * serializing every subtree would be quadratic in depth.
  *
  * @param {Node}      node  Node to key.
  * @param {DiffState} state Running diff state, holding the key tables.
@@ -581,13 +573,10 @@ function appendChildDiff(
 /**
  * Marks the differences between two HTML strings.
  *
- * Both sides are parsed and walked together, and every marker is placed on
- * the node that carries the change: text changes are word-diffed inside
- * their own text node, an element whose attributes changed is marked on the
- * element itself, and an element that exists on one side only is copied
- * with a marker class. The incoming markup is therefore rebuilt from the
- * parsed document and carries only added marker classes, never a span
- * spliced into a tag.
+ * Both sides are parsed and walked together. Text is word-diffed inside its own
+ * text node, an attribute change marks its element, and an element on one side
+ * only is copied with a marker class. The incoming markup is rebuilt from the
+ * parsed document, so markers are the only additions.
  *
  * @param {string} original Original HTML string.
  * @param {string} changed  Changed HTML string.
@@ -738,9 +727,8 @@ interface HeaderProps {
 /**
  * Header row for one block diff card.
  *
- * The unmarked badge is rendered whether or not labels are shown, so
- * turning labels off never leaves an outlined column as the only cue that
- * the block changed.
+ * The unmarked badge shows even with labels off, so the dashed outline is never
+ * the only cue.
  *
  * @param {HeaderProps} props Component props.
  *
