@@ -16,6 +16,7 @@ use Safe_Publish\Content\Shortcode_ID_Rewriter;
 use Safe_Publish\Media\Media_Importer;
 use Safe_Publish\Tests\Integration\Integration_Test_Case;
 use Safe_Publish\Tests\Integration\Mock_Media_HTTP_Trait;
+use Safe_Publish\Utils\Options;
 use WP_Error;
 
 /**
@@ -33,6 +34,13 @@ class Content_Processor_Test extends Integration_Test_Case {
 	private Content_Processor $processor;
 
 	/**
+	 * Media importer shared by the content and featured-image paths.
+	 *
+	 * @var Media_Importer
+	 */
+	private Media_Importer $media_importer;
+
+	/**
 	 * Sets up test environment and builds the processor with real dependencies.
 	 */
 	#[\Override]
@@ -41,6 +49,7 @@ class Content_Processor_Test extends Integration_Test_Case {
 
 		$http_client             = new HTTP_Client();
 		$media_importer          = new Media_Importer( $http_client );
+		$this->media_importer    = $media_importer;
 		$content_media_processor = new Content_Media_Processor( $media_importer );
 
 		$this->processor = new Content_Processor(
@@ -1468,6 +1477,92 @@ class Content_Processor_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that a line-broken URL receives source library metadata after
+	 * sideloading from classic HTML or a Gutenberg block attribute.
+	 *
+	 * @dataProvider line_broken_media_content_provider
+	 * @param bool $block Whether to import from a block URL attribute.
+	 */
+	public function test_line_broken_media_applies_library_metadata(
+		bool $block
+	): void {
+		// ARRANGE: The export map uses the normalized URL as its key.
+		$source_site_url = 'https://source.example.com';
+		$media_url       = $source_site_url
+			. '/wp-content/uploads/2025/01/line-broken.jpg';
+		$broken_url      = str_replace( 'line-broken', "line-\nbroken", $media_url );
+		$metadata        = array(
+			'alt'         => 'Library alt',
+			'title'       => 'Library title',
+			'caption'     => 'Library caption',
+			'description' => 'Library description',
+			'parent'      => '4242',
+		);
+		$content         = $block
+			? serialize_block(
+				array(
+					'blockName'    => 'core/cover',
+					'attrs'        => array( 'url' => $broken_url ),
+					'innerBlocks'  => array(),
+					'innerHTML'    => '',
+					'innerContent' => array(),
+				)
+			)
+			: '<img src="' . $broken_url . '">';
+
+		// ACT: Process the content with the exported metadata map.
+		$processed = $this->processor->process_content(
+			$content,
+			$source_site_url,
+			array( 'library_metadata_map' => array( $media_url => $metadata ) )
+		);
+
+		// ASSERT: The normalized URL is fetched and its metadata is applied.
+		$this->assertIsString( $processed );
+		$this->assertSame( array( $media_url ), $this->requested_urls );
+		$attachments = get_posts(
+			array(
+				'post_type'      => 'attachment',
+				'post_status'    => 'inherit',
+				'meta_key'       => Options::META_ORIGINAL_URL,
+				'fields'         => 'ids',
+				'posts_per_page' => -1,
+			)
+		);
+		$this->assertCount( 1, $attachments );
+		$attachment_id = $attachments[0];
+		$attachment    = get_post( $attachment_id );
+		$this->assertSame(
+			$media_url,
+			get_post_meta( $attachment_id, Options::META_ORIGINAL_URL, true )
+		);
+		$this->assertSame( 'Library alt', get_post_meta( $attachment_id, '_wp_attachment_image_alt', true ) );
+		$this->assertSame( 'Library title', $attachment->post_title );
+		$this->assertSame( 'Library caption', $attachment->post_excerpt );
+		$this->assertSame( 'Library description', $attachment->post_content );
+		$this->assertSame(
+			'4242',
+			get_post_meta(
+				$attachment_id,
+				Options::META_SOURCE_ATTACHMENT_PARENT_ID,
+				true
+			)
+		);
+	}
+
+	/**
+	 * Provides classic HTML and block attribute media paths.
+	 *
+	 * @return array<string, array{bool}>
+	 */
+	public static function line_broken_media_content_provider(): array {
+		return array(
+			'classic HTML'    => array( false ),
+			'block attribute' => array( true ),
+		);
+	}
+
+	/**
 	 * Verifies that a non-ASCII third-party media URL is left untouched.
 	 *
 	 * Resolving it against the source site would hide its real host from the
@@ -2647,6 +2742,232 @@ class Content_Processor_Test extends Integration_Test_Case {
 			$this->processor->get_unprocessable_media(),
 			'Failed download URL must not also be recorded as unprocessable'
 		);
+	}
+
+	/**
+	 * Verifies that a failed absolute image URL is requested once per pass.
+	 */
+	public function test_failed_image_download_is_attempted_once_per_pass(): void {
+		// ARRANGE: The same absolute URL appears in attrs and serialized HTML.
+		$url     = 'https://source.example.com/gone.jpg';
+		$content = '<!-- wp:image {"url":"' . $url . '"} -->'
+			. '<figure class="wp-block-image"><img src="' . $url . '"/></figure>'
+			. '<!-- /wp:image -->';
+
+		// ACT: Process the same content twice with downloads failing.
+		$this->process_with_all_downloads_failing( $content );
+		$first_pass_requests  = $this->requested_urls;
+		$this->requested_urls = array();
+		$this->process_with_all_downloads_failing( $content );
+
+		// ASSERT: Each pass attempts the URL once and records its failure.
+		$this->assertSame( array( $url ), $first_pass_requests );
+		$this->assertSame( array( $url ), $this->requested_urls );
+		$this->assertSame(
+			array( $url => 'core/image' ),
+			$this->processor->get_failed_media()
+		);
+	}
+
+	/**
+	 * Verifies that a rejected sideload is attempted once and retried next pass.
+	 */
+	public function test_failed_image_sideload_is_attempted_once_per_pass(): void {
+		// ARRANGE: The same image URL appears in block attrs and HTML.
+		$url           = 'https://source.example.com/rejected.jpg';
+		$content       = '<!-- wp:image {"url":"' . $url . '"} -->'
+			. '<figure class="wp-block-image"><img src="' . $url . '"/></figure>'
+			. '<!-- /wp:image -->';
+		$fail_sideload = static function ( array $file ): array {
+			$file['error'] = 'Forced sideload rejection for test';
+			return $file;
+		};
+		add_filter( 'wp_handle_sideload_prefilter', $fail_sideload, 11, 1 );
+
+		// ACT: Reject the first pass, then allow the next pass to succeed.
+		try {
+			$this->processor->process_content( $content, 'https://source.example.com' );
+			$first_pass_requests  = $this->requested_urls;
+			$first_pass_failures  = $this->processor->get_failed_media();
+			$this->requested_urls = array();
+		} finally {
+			remove_filter( 'wp_handle_sideload_prefilter', $fail_sideload, 11 );
+		}
+		$processed = $this->processor->process_content(
+			$content,
+			'https://source.example.com'
+		);
+
+		// ASSERT: One download per pass; a later pass can create the attachment.
+		$this->assertSame( array( $url ), $first_pass_requests );
+		$this->assertSame( array( $url => 'core/image' ), $first_pass_failures );
+		$this->assertSame( array( $url ), $this->requested_urls );
+		$this->assertSame( array(), $this->processor->get_failed_media() );
+		$this->assertStringNotContainsString( $url, $processed );
+	}
+
+	/**
+	 * Verifies that a failed inline URL can be retried as a featured image.
+	 */
+	public function test_inline_failure_does_not_block_featured_image(): void {
+		// ARRANGE: The featured media record resolves to the failed inline URL.
+		$url      = 'https://source.example.com/featured-retry.jpg';
+		$media_id = 9910635;
+		$mock_api = static function (
+			$preempt,
+			array $_args,
+			string $request_url
+		) use (
+			$media_id,
+			$url
+		) {
+			if ( ! str_contains( $request_url, '/wp-json/wp/v2/media/' . $media_id ) ) {
+				return $preempt;
+			}
+
+			return array(
+				'response' => array(
+					'code'    => 200,
+					'message' => 'OK',
+				),
+				'body'     => (string) wp_json_encode( array( 'source_url' => $url ) ),
+				'headers'  => array(),
+			);
+		};
+		add_filter( 'pre_http_request', $mock_api, 5, 3 );
+
+		try {
+			// ACT: Fail the inline import, then retry through featured media.
+			$this->process_with_all_downloads_failing( '<img src="' . $url . '">' );
+			$inline_failures      = $this->processor->get_failed_media();
+			$this->requested_urls = array();
+			$featured_id          = $this->media_importer->import_featured_image(
+				$media_id,
+				'https://source.example.com'
+			);
+		} finally {
+			remove_filter( 'pre_http_request', $mock_api, 5 );
+		}
+
+		// ASSERT: The same URL is downloaded for featured media after the pass.
+		$this->assertSame( array( $url => '' ), $inline_failures );
+		$this->assertIsInt( $featured_id );
+		$this->assertSame( 'attachment', get_post_type( $featured_id ) );
+		$this->assertContains( $url, $this->requested_urls );
+	}
+
+	/**
+	 * Verifies that a late failure from one bulk post cannot block the next.
+	 */
+	public function test_start_reset_retries_failure_from_previous_post(): void {
+		// ARRANGE: A prior post finishes, then its featured media fails.
+		$url = 'https://source.example.com/next-post.jpg';
+		$this->processor->process_content( '<p>First post</p>', 'https://source.example.com' );
+		$fail = static function ( $preempt, array $_args, string $request_url ) use ( $url ) {
+			return $url === $request_url
+				? new WP_Error( 'http_request_failed', 'forced failure for test' )
+				: $preempt;
+		};
+		add_filter( 'pre_http_request', $fail, 5, 3 );
+
+		try {
+			$late_result = $this->media_importer->import_owned_media_as_attachment(
+				$url,
+				'https://source.example.com'
+			);
+		} finally {
+			remove_filter( 'pre_http_request', $fail, 5 );
+		}
+
+		// ACT: Process the next post with the same source URL.
+		$this->requested_urls = array();
+		$processed            = $this->processor->process_content(
+			'<img src="' . $url . '">',
+			'https://source.example.com'
+		);
+
+		// ASSERT: The next post gets a fresh download and a real attachment.
+		$this->assertFalse( $late_result );
+		$this->assertSame( array( $url ), $this->requested_urls );
+		$this->assertSame( array(), $this->processor->get_failed_media() );
+		$this->assertStringNotContainsString( $url, $processed );
+		$this->assertCount( 1, $this->media_importer->get_newly_created_attachment_ids() );
+	}
+
+	/**
+	 * Verifies that a cached image failure keeps an ambiguous href as a link.
+	 */
+	public function test_cached_image_failure_does_not_fail_ambiguous_href(): void {
+		// ARRANGE: The first use is an image whose download fails.
+		$url  = 'https://source.example.com/shared.jpg';
+		$fail = static function ( $preempt, array $_args, string $request_url ) use ( $url ) {
+			return $url === $request_url
+				? new WP_Error( 'http_request_failed', 'forced failure for test' )
+				: $preempt;
+		};
+		add_filter( 'pre_http_request', $fail, 5, 3 );
+
+		try {
+			// ACT: Reuse the URL as an ambiguous anchor href.
+			$image_result     = $this->media_importer->import_source_media(
+				$url,
+				'https://source.example.com'
+			);
+			$link_result      = $this->media_importer->import_source_media(
+				$url,
+				'https://source.example.com',
+				true
+			);
+			$bulk_link_result = $this->media_importer
+				->import_source_media_as_attachment(
+					$url,
+					'https://source.example.com',
+					true
+				);
+		} finally {
+			remove_filter( 'pre_http_request', $fail, 5 );
+		}
+
+		// ASSERT: The link is skipped without a second request or failure.
+		$this->assertFalse( $image_result );
+		$this->assertNull( $link_result );
+		$this->assertNull( $bulk_link_result );
+		$this->assertSame( array( $url ), $this->requested_urls );
+	}
+
+	/**
+	 * Verifies that a failed classic image download is attempted only once.
+	 */
+	public function test_repeated_classic_image_download_failure_is_cached(): void {
+		// ARRANGE: The same image appears twice in classic content.
+		$url = 'https://source.example.com/classic-missing.jpg';
+
+		// ACT: Force both references to fail their download.
+		$this->process_with_all_downloads_failing(
+			'<img src="' . $url . '"><img src="' . $url . '">'
+		);
+
+		// ASSERT: The URL is requested once and attributed once.
+		$this->assertSame( array( $url ), $this->requested_urls );
+		$this->assertSame( array( $url => '' ), $this->processor->get_failed_media() );
+	}
+
+	/**
+	 * Verifies that an unsupported classic image is downloaded only once.
+	 */
+	public function test_repeated_classic_unsupported_image_is_cached(): void {
+		// ARRANGE: An image URL returns HTML instead of image bytes.
+		$url = 'https://source.example.com/serves-html/classic.jpg';
+
+		// ACT: Process both image references in one classic pass.
+		$this->processor->process_content(
+			'<img src="' . $url . '"><img src="' . $url . '">',
+			'https://source.example.com'
+		);
+
+		// ASSERT: The unsupported file is requested and reported once.
+		$this->assertSame( array( $url ), $this->requested_urls );
+		$this->assertSame( array( $url => '' ), $this->processor->get_failed_media() );
 	}
 
 	/**
