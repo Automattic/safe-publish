@@ -367,6 +367,77 @@ class Content_Processor_Whitespace_Url_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that a parsed tag with a broken quote still reports its media URL.
+	 */
+	public function test_broken_quote_still_reports_unprocessable_media(): void {
+		// ARRANGE: The parser consumes the next quote as part of src.
+		$broken = self::SOURCE . '/broken.jpg';
+		$html   = '<img src="' . $broken . ' alt="Cat">';
+
+		// ACT: Process the malformed image.
+		$this->processor->process_content( $html, self::SOURCE );
+
+		// ASSERT: The original URL remains visible as unprocessable media.
+		$this->assertArrayHasKey(
+			$broken,
+			$this->processor->get_unprocessable_media()
+		);
+	}
+
+	/**
+	 * Verifies that a stray quote in an unquoted src remains reportable.
+	 */
+	public function test_unquoted_src_with_stray_quote_is_unprocessable(): void {
+		// ARRANGE: The parser includes the stray quote in the src value.
+		$broken = self::SOURCE . '/broken.jpg';
+		$html   = '<img src=' . $broken . '" alt="Cat">';
+
+		// ACT: Process the malformed image.
+		$this->processor->process_content( $html, self::SOURCE );
+
+		// ASSERT: Report the browser-visible URL, not the garbled value.
+		$this->assertArrayHasKey(
+			$broken,
+			$this->processor->get_unprocessable_media()
+		);
+	}
+
+	/**
+	 * Verifies that an unrelated malformed attr does not duplicate a failure.
+	 */
+	public function test_unrelated_broken_attr_does_not_duplicate_src_failure(): void {
+		// ARRANGE: The line-broken src parses; data-note has a broken quote.
+		$missing = self::SOURCE . '/missing.png';
+		$html    = '<img src="' . self::SOURCE
+			. "/missing\n.png\" data-note=\"foo bar=\"baz\">";
+
+		// ACT: The valid src is attempted and fails to download.
+		$this->processor->process_content( $html, self::SOURCE );
+
+		// ASSERT: Its failure is reported only once as a download failure.
+		$this->assertSame( array( $missing ), array_keys( $this->processor->get_failed_media() ) );
+		$this->assertSame( array(), $this->processor->get_unprocessable_media() );
+	}
+
+	/**
+	 * Verifies that a parsed but unsupported media attribute remains reported.
+	 */
+	public function test_video_srcset_still_reports_unprocessed_media(): void {
+		// ARRANGE: The media importer does not process video srcset.
+		$unprocessed = self::SOURCE . '/missing.png';
+		$html        = '<video srcset="' . $unprocessed . '"></video>';
+
+		// ACT: Process the video markup.
+		$this->processor->process_content( $html, self::SOURCE );
+
+		// ASSERT: The URL is reported rather than silently rewritten.
+		$this->assertArrayHasKey(
+			$unprocessed,
+			$this->processor->get_unprocessable_media()
+		);
+	}
+
+	/**
 	 * Verifies that a non-ASCII space is left in place, since a browser keeps it
 	 * too and the source site serves a different path than the stripped form.
 	 */

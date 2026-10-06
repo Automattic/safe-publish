@@ -457,15 +457,28 @@ class Content_Media_Processor {
 		$check_processor = new WP_HTML_Tag_Processor( $check_content );
 
 		while ( $check_processor->next_tag() ) {
-			if ( ! in_array(
-				$check_processor->get_tag(),
-				array( 'IMG', 'VIDEO', 'AUDIO', 'SOURCE', 'EMBED', 'OBJECT' ),
-				true
-			) ) {
+			$processed_attrs = match ( $check_processor->get_tag() ) {
+				'IMG', 'SOURCE' => array( 'src', 'srcset' ),
+				'VIDEO' => array( 'src', 'poster' ),
+				'AUDIO', 'EMBED' => array( 'src' ),
+				'OBJECT' => array( 'data' ),
+				default => array(),
+			};
+
+			if ( array() === $processed_attrs ) {
 				continue;
 			}
 
-			foreach ( array( 'src', 'poster', 'srcset', 'data' ) as $attr ) {
+			foreach ( $processed_attrs as $attr ) {
+				$value = $check_processor->get_attribute( $attr );
+
+				// Malformed quoting can leave extra markup in the parsed value.
+				// Keep that attribute for the loose URL detection pass.
+				if ( is_string( $value )
+					&& 1 === preg_match( '/(?:["\']|\s+[a-z][a-z0-9:-]*=)$/i', $value ) ) {
+					continue;
+				}
+
 				$check_processor->remove_attribute( $attr );
 			}
 		}
