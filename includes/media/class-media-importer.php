@@ -57,6 +57,13 @@ class Media_Importer {
 	private array $newly_created_attachment_ids = array();
 
 	/**
+	 * Terminal media failures during the current content-processing pass.
+	 *
+	 * @var array<array-key, true>
+	 */
+	private array $failed_media = array();
+
+	/**
 	 * Source URL => library metadata applied to the attachment sideloaded from
 	 * that URL, keyed by the query-stripped source URL.
 	 *
@@ -121,13 +128,17 @@ class Media_Importer {
 		}
 
 		// Strip query parameters for consistency with import_source_media_as_attachment().
-		$media_url = strtok( $media_url, '?' );
+		$media_url = self::get_download_url( $media_url, $source_site_url );
 
 		// Check if we already imported this media.
-		$existing_attachment = $this->get_attachment_by_url( $media_url );
+		$existing_attachment = self::get_attachment_by_url( $media_url );
 		if ( $existing_attachment ) {
 			$imported_id = $existing_attachment;
 			return wp_get_attachment_url( $existing_attachment );
+		}
+
+		if ( isset( $this->failed_media[ $media_url ] ) ) {
+			return $skip_if_not_media ? null : false;
 		}
 
 		$this->ensure_media_functions_loaded();
@@ -136,6 +147,7 @@ class Media_Importer {
 		$temp_file = download_url( $media_url );
 
 		if ( is_wp_error( $temp_file ) ) {
+			$this->failed_media[ $media_url ] = true;
 			$this->logger->media_download_failed(
 				$media_url,
 				$source_site_url,
@@ -157,6 +169,7 @@ class Media_Importer {
 				return null;
 			}
 
+			$this->failed_media[ $media_url ] = true;
 			$this->logger->media_unsupported_file_type(
 				$media_url,
 				$source_site_url,
@@ -197,6 +210,7 @@ class Media_Importer {
 		}
 
 		if ( is_wp_error( $attachment_id ) ) {
+			$this->failed_media[ $media_url ] = true;
 			$this->logger->media_sideload_failed(
 				$media_url,
 				$source_site_url,
@@ -317,12 +331,16 @@ class Media_Importer {
 		string $source_site_url,
 		bool $skip_if_not_media = false
 	): int|false|null {
-		$media_url = strtok( $media_url, '?' ); // Remove query parameters.
+		$media_url = self::get_download_url( $media_url, $source_site_url );
 
 		// Check if we already imported this media.
-		$existing_attachment = $this->get_attachment_by_url( $media_url );
+		$existing_attachment = self::get_attachment_by_url( $media_url );
 		if ( $existing_attachment ) {
 			return $existing_attachment;
+		}
+
+		if ( isset( $this->failed_media[ $media_url ] ) ) {
+			return $skip_if_not_media ? null : false;
 		}
 
 		$this->ensure_media_functions_loaded();
@@ -373,6 +391,7 @@ class Media_Importer {
 		$temp_file = $this->http_client->download_file( $media_url );
 
 		if ( is_wp_error( $temp_file ) ) {
+			$this->failed_media[ $media_url ] = true;
 			$this->logger->media_download_failed(
 				$media_url,
 				$source_site_url,
@@ -395,6 +414,7 @@ class Media_Importer {
 				return null;
 			}
 
+			$this->failed_media[ $media_url ] = true;
 			$this->logger->media_unsupported_file_type(
 				$media_url,
 				$source_site_url,
@@ -450,6 +470,7 @@ class Media_Importer {
 		}
 
 		if ( is_wp_error( $attachment_id ) ) {
+			$this->failed_media[ $media_url ] = true;
 			$this->logger->media_sideload_failed(
 				$media_url,
 				$source_site_url,
@@ -461,6 +482,7 @@ class Media_Importer {
 
 		// Verify the attachment was actually created.
 		if ( ! $attachment_id || ! is_numeric( $attachment_id ) ) {
+			$this->failed_media[ $media_url ] = true;
 			$this->logger->invalid_attachment_id(
 				$media_url,
 				$source_site_url,
@@ -497,6 +519,13 @@ class Media_Importer {
 	 */
 	public function reset_newly_created_attachment_ids(): void {
 		$this->newly_created_attachment_ids = array();
+	}
+
+	/**
+	 * Resets media failures for a new content-processing pass.
+	 */
+	public function reset_failed_media(): void {
+		$this->failed_media = array();
 	}
 
 	/**
@@ -877,7 +906,10 @@ class Media_Importer {
 		}
 
 		// Check if we already imported this featured image.
-		$existing_attachment = $this->get_attachment_by_featured_media_id( $featured_media_id, $source_site_url );
+		$existing_attachment = self::get_attachment_by_featured_media_id(
+			$featured_media_id,
+			$source_site_url
+		);
 		if ( false !== $existing_attachment ) {
 			return $existing_attachment;
 		}
@@ -914,6 +946,55 @@ class Media_Importer {
 	}
 
 	/**
+	 * Resolves a source media ID to the destination attachment an import would
+	 * reuse, without importing anything.
+	 *
+	 * Mirrors import_featured_image()'s order: The origin-scoped featured media
+	 * ID first, then the recorded source URL that sideload_media() deduplicates
+	 * against.
+	 *
+	 * @param int    $source_media_id Source media ID.
+	 * @param string $source_site_url Source site URL; a trailing slash is
+	 *                                ignored.
+	 * @param string $source_url      Optional. Source media URL, for the
+	 *                                deduplication fallback. Default ''.
+	 * @return int Attachment ID, or 0 when nothing matches.
+	 */
+	public static function find_imported_attachment_id(
+		int $source_media_id,
+		string $source_site_url,
+		string $source_url = ''
+	): int {
+		$source_site_url = untrailingslashit( $source_site_url );
+
+		if ( 0 === $source_media_id || '' === $source_site_url ) {
+			return 0;
+		}
+
+		$attachment_id = self::get_attachment_by_featured_media_id(
+			$source_media_id,
+			$source_site_url
+		);
+		if ( false !== $attachment_id ) {
+			return $attachment_id;
+		}
+
+		if ( '' === $source_url ) {
+			return 0;
+		}
+
+		$resolved_url  = URL_Validator::resolve_relative_url(
+			$source_url,
+			$source_site_url
+		);
+		$attachment_id = self::get_attachment_by_url(
+			(string) strtok( $resolved_url, '?' )
+		);
+
+		return false !== $attachment_id ? $attachment_id : 0;
+	}
+
+	/**
 	 * Returns a URL with the query string parameters from another URL reapplied
 	 * onto it.
 	 *
@@ -935,6 +1016,19 @@ class Media_Importer {
 		parse_str( $query, $params );
 
 		return $clean_url . '?' . http_build_query( $params );
+	}
+
+	/**
+	 * Returns the resolved URL used for a media download.
+	 *
+	 * @param string $media_url       Source media URL.
+	 * @param string $source_site_url Source site URL for relative URLs.
+	 * @return string URL without query parameters.
+	 */
+	public static function get_download_url( string $media_url, string $source_site_url ): string {
+		$resolved_url = URL_Validator::resolve_relative_url( $media_url, $source_site_url );
+
+		return (string) strtok( $resolved_url, '?' );
 	}
 
 	/**
@@ -1158,7 +1252,9 @@ class Media_Importer {
 	 * @param string $original_url Original source URL.
 	 * @return int|false Attachment ID on success, false on failure.
 	 */
-	private function get_attachment_by_url( string $original_url ): int|false {
+	private static function get_attachment_by_url(
+		string $original_url
+	): int|false {
 		// Check by the exact URL stored in metadata.
 		$attachments = get_posts(
 			array(
@@ -1184,7 +1280,7 @@ class Media_Importer {
 	 * @param string $source_site_url   Source site URL.
 	 * @return int|false Attachment ID on success, false on failure.
 	 */
-	private function get_attachment_by_featured_media_id(
+	private static function get_attachment_by_featured_media_id(
 		int $featured_media_id,
 		string $source_site_url
 	): int|false {
