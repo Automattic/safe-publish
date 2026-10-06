@@ -615,6 +615,76 @@ class Media_Processor_Matching_Test extends Source_Posts_API_Test_Base {
 	}
 
 	/**
+	 * Verifies that a media URL after an unclosed script tag is still reported.
+	 */
+	public function test_url_after_unclosed_script_is_unprocessable(): void {
+		// ARRANGE: An unclosed script followed by a source-domain image.
+		$source_site_url = 'https://example.com';
+		$url             = 'https://example.com/photo.jpg';
+		$content         = '<script>var a = 1;<img src="' . $url . '">';
+
+		// ACT: Process content.
+		$this->content_media_processor->process_content(
+			$content,
+			$source_site_url
+		);
+
+		// ASSERT: The URL is reported as unprocessable, and nothing downloaded.
+		$this->assertSame(
+			array( $url ),
+			array_keys(
+				$this->content_media_processor->get_unprocessable_media()
+			)
+		);
+		$this->assertSame(
+			array(),
+			$this->content_media_processor->get_failed_media()
+		);
+	}
+
+	/**
+	 * Verifies that many unclosed script and style tags process quickly.
+	 */
+	public function test_unclosed_script_and_style_tags_scan_quickly(): void {
+		// ARRANGE: 300 KB of unclosed tags; rescanning per tag takes seconds.
+		$content = str_repeat( '<script><style>', 20000 );
+
+		// ACT: Time the processing pass.
+		$start   = microtime( true );
+		$result  = $this->content_media_processor->process_content(
+			$content,
+			'https://example.com'
+		);
+		$elapsed = microtime( true ) - $start;
+
+		// ASSERT: Content is unchanged, and the scan stays under a second.
+		$this->assertSame( $content, $result );
+		$this->assertLessThan( 1.0, $elapsed );
+	}
+
+	/**
+	 * Verifies that closed blocks before a long unclosed script are stripped.
+	 */
+	public function test_strips_closed_blocks_before_long_unclosed_tag(): void {
+		// ARRANGE: A media tag in a closed script, then a 2 MB unclosed one.
+		$url     = 'https://example.com/photo.jpg';
+		$content = '<script>var tpl = \'<img src="' . $url . '">\';</script>'
+			. '<script>' . str_repeat( 'a', 2 * MB_IN_BYTES );
+
+		// ACT: Process content.
+		$this->content_media_processor->process_content(
+			$content,
+			'https://example.com'
+		);
+
+		// ASSERT: The closed script is stripped, so nothing is reported.
+		$this->assertSame(
+			array(),
+			$this->content_media_processor->get_unprocessable_media()
+		);
+	}
+
+	/**
 	 * Verifies that the missed-URL detection does not false-positive on
 	 * source-domain media URLs that appear in non-media contexts (links, CSS,
 	 * text).
@@ -687,6 +757,22 @@ class Media_Processor_Matching_Test extends Source_Posts_API_Test_Base {
 			'url_in_comment'   => array(
 				'<!-- ' . $url . ' -->',
 				'media URL in comment (stripped)',
+			),
+			'img_in_script'    => array(
+				'<script>var tpl = \'<img src="' . $url . '">\';</script>',
+				'media tag in script (stripped)',
+			),
+			'img_spaced_end'   => array(
+				'<script>var tpl = \'<img src="' . $url . '">\';</script >',
+				'media tag in script with a spaced end tag (stripped)',
+			),
+			'img_in_style'     => array(
+				'<style>/* <img src="' . $url . '"> */</style>',
+				'media tag in style (stripped)',
+			),
+			'img_in_comment'   => array(
+				'<!-- <img src="' . $url . '"> -->',
+				'media tag in comment (stripped)',
 			),
 		);
 	}
