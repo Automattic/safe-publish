@@ -459,10 +459,16 @@ class Content_Media_Processor {
 
 		// Strip comments and script/style blocks so URLs inside them don't
 		// trigger false positives. The HTML API natively skips these during
-		// processing, but this detection pass uses a plain regex.
-		$check_content = preg_replace(
-			'~<!--.*?-->|<(script|style)\b[^>]*>.*?</\1\s*>~si',
-			'',
+		// processing, but this detection pass uses a plain regex. An unclosed
+		// script or style tag matches to the end once and is kept, since the
+		// HTML API stops there. Possessive runs avoid a backtrack per byte.
+		$check_content = preg_replace_callback(
+			'~<!--.*?-->|<(script|style)\b[^>]*>'
+				. '[^<]*+(?:<(?!/\1\s*>)[^<]*+)*+(</\1\s*>)?~si',
+			static fn ( array $matches ): string =>
+				isset( $matches[1] ) && ! isset( $matches[2] )
+					? $matches[0]
+					: '',
 			$content
 		) ?? $content;
 
