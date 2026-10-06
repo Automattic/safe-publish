@@ -1283,6 +1283,839 @@ class Import_Rollback_Test extends Source_Posts_API_Test_Base {
 	}
 
 	/**
+	 * Verifies that inline media sideloaded earlier in the run is deleted when
+	 * the featured image fails on the create path.
+	 */
+	public function test_inline_media_is_deleted_when_featured_image_fails_on_create(): void {
+		// ARRANGE: One downloadable inline image, plus a featured image whose
+		// media record 404s.
+		$inline_url                = 'https://source.example.com/inline-create.jpg';
+		$this->mock_post_overrides = array(
+			'featured_media' => 100,
+			'content'        => '<p><img src="' . $inline_url . '" alt="inline"></p>',
+		);
+
+		$fail_media_api = $this->make_featured_image_fail_filter();
+		add_filter( 'pre_http_request', $fail_media_api, 6, 3 );
+
+		$session_id         = $this->repository->create_session( 'https://source.example.com', 'bulk' );
+		$attachments_before = $this->get_attachment_count();
+		$created            = array();
+		$recorder           = $this->record_created_attachments( $created );
+
+		$post_data = array(
+			'id'        => 9601,
+			'title'     => 'Post With Inline Media And Failing Featured Image',
+			'content'   => '<p>Stale content.</p>',
+			'link'      => 'https://source.example.com/create-inline-media-cleanup',
+			'post_type' => 'posts',
+		);
+
+		// ACT: Attempt the import.
+		$result = $this->import_service->import_post( $post_data, $session_id );
+
+		remove_filter( 'pre_http_request', $fail_media_api, 6 );
+		remove_action( 'add_attachment', $recorder );
+
+		// ASSERT: The import aborted on the featured image.
+		$this->assertFalse(
+			$result['success'],
+			'Import should fail when the featured image cannot be imported.'
+		);
+		$this->assertStringContainsString( 'featured image', $result['error'] );
+
+		// ASSERT: The run downloaded the inline image, and the abort removed it.
+		$this->assertNotSame(
+			array(),
+			$created,
+			'The run must download the inline image before the abort.'
+		);
+		$this->assert_no_new_attachments(
+			$attachments_before,
+			'Inline media must be deleted when the featured image fails on create.'
+		);
+	}
+
+	/**
+	 * Verifies that inline media sideloaded earlier in the run is deleted when
+	 * the featured image fails on the update path.
+	 */
+	public function test_inline_media_is_deleted_when_featured_image_fails_on_update(): void {
+		$session_id = $this->repository->create_session( 'https://source.example.com', 'bulk' );
+
+		// ARRANGE: Import once without media so the post exists.
+		$post_data = array(
+			'id'        => 9602,
+			'title'     => 'Post For Update Featured Image Failure',
+			'content'   => '<p>Original content.</p>',
+			'link'      => 'https://source.example.com/update-inline-media-cleanup',
+			'post_type' => 'posts',
+		);
+
+		$first = $this->import_service->import_post( $post_data, $session_id );
+		$this->assertTrue( $first['success'], 'Initial import should succeed.' );
+
+		// ARRANGE: Re-import with an inline image the run has to download and a
+		// featured image that 404s.
+		$inline_url                = 'https://source.example.com/inline-update.jpg';
+		$this->mock_post_overrides = array(
+			'featured_media' => 100,
+			'content'        => '<p><img src="' . $inline_url . '" alt="inline"></p>',
+		);
+
+		$fail_media_api = $this->make_featured_image_fail_filter();
+		add_filter( 'pre_http_request', $fail_media_api, 6, 3 );
+
+		$attachments_before = $this->get_attachment_count();
+		$created            = array();
+		$recorder           = $this->record_created_attachments( $created );
+
+		// ACT: Re-import the same post, hitting the update path.
+		$result = $this->import_service->import_post( $post_data, $session_id );
+
+		remove_filter( 'pre_http_request', $fail_media_api, 6 );
+		remove_action( 'add_attachment', $recorder );
+
+		// ASSERT: The re-import aborted on the featured image.
+		$this->assertFalse(
+			$result['success'],
+			'Re-import should fail when the featured image cannot be imported.'
+		);
+		$this->assertStringContainsString( 'featured image', $result['error'] );
+
+		// ASSERT: The run downloaded the inline image, and the abort removed it.
+		$this->assertNotSame(
+			array(),
+			$created,
+			'The run must download the inline image before the abort.'
+		);
+		$this->assert_no_new_attachments(
+			$attachments_before,
+			'Inline media must be deleted when the featured image fails on update.'
+		);
+	}
+
+	/**
+	 * Verifies that inline media sideloaded earlier in the run is deleted when
+	 * the database layer rejects the post insert.
+	 */
+	public function test_inline_media_is_deleted_when_post_insert_is_rejected(): void {
+		// ARRANGE: One downloadable inline image and a rejected post insert.
+		$inline_url                = 'https://source.example.com/inline-insert.jpg';
+		$this->mock_post_overrides = array(
+			'content' => '<p><img src="' . $inline_url . '" alt="inline"></p>',
+		);
+
+		$reject_insert = $this->reject_post_insert();
+
+		$session_id         = $this->repository->create_session( 'https://source.example.com', 'bulk' );
+		$attachments_before = $this->get_attachment_count();
+		$created            = array();
+		$recorder           = $this->record_created_attachments( $created );
+
+		$post_data = array(
+			'id'        => 9603,
+			'title'     => 'Post Whose Insert Is Rejected',
+			'content'   => '<p>Stale content.</p>',
+			'link'      => 'https://source.example.com/rejected-insert-media-cleanup',
+			'post_type' => 'posts',
+		);
+
+		// ACT: Attempt the import.
+		$result = $this->import_service->import_post( $post_data, $session_id );
+
+		remove_filter( 'wp_insert_post_empty_content', $reject_insert, 10 );
+		remove_action( 'add_attachment', $recorder );
+
+		// ASSERT: The insert was rejected.
+		$this->assertFalse(
+			$result['success'],
+			'Import should fail when the post insert is rejected.'
+		);
+
+		// ASSERT: No post was created.
+		$this->assertSame(
+			array(),
+			get_posts(
+				array(
+					'post_type'        => 'post',
+					'post_status'      => 'any',
+					'posts_per_page'   => 1,
+					'suppress_filters' => false,
+					'meta_key'         => Options::META_SOURCE_POST_ID,
+					// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
+					'meta_value'       => '9603',
+				)
+			),
+			'No post should exist when the insert is rejected.'
+		);
+
+		// ASSERT: The run downloaded the inline image, and the abort removed it.
+		$this->assertNotSame(
+			array(),
+			$created,
+			'The run must download the inline image before the abort.'
+		);
+		$this->assert_no_new_attachments(
+			$attachments_before,
+			'Inline media must be deleted when the post insert is rejected.'
+		);
+	}
+
+	/**
+	 * Verifies that a featured-image abort on the create path names the media
+	 * its cleanup could not delete, so the operator can remove it by hand.
+	 */
+	public function test_featured_image_abort_on_create_names_media_it_could_not_delete(): void {
+		// ARRANGE: One downloadable inline image, a featured image that 404s,
+		// and attachment deletion blocked so the cleanup leaves it behind.
+		$inline_url                = 'https://source.example.com/inline-survivor.jpg';
+		$this->mock_post_overrides = array(
+			'featured_media' => 100,
+			'content'        => '<p><img src="' . $inline_url . '" alt="inline"></p>',
+		);
+
+		$fail_media_api = $this->make_featured_image_fail_filter();
+		add_filter( 'pre_http_request', $fail_media_api, 6, 3 );
+
+		$block_deletion = static fn() => false;
+		add_filter( 'pre_delete_attachment', $block_deletion, 10, 3 );
+
+		$session_id = $this->repository->create_session( 'https://source.example.com', 'bulk' );
+
+		// ACT: Attempt the import.
+		$result = $this->import_service->import_post(
+			array(
+				'id'        => 9609,
+				'title'     => 'Post Whose Cleanup Cannot Delete Its Media',
+				'content'   => '<p>Stale content.</p>',
+				'link'      => 'https://source.example.com/cleanup-survivor',
+				'post_type' => 'posts',
+			),
+			$session_id
+		);
+
+		remove_filter( 'pre_delete_attachment', $block_deletion, 10 );
+		remove_filter( 'pre_http_request', $fail_media_api, 6 );
+
+		// ASSERT: The surviving attachment is named in both the message and
+		// the result payload.
+		$this->assertFalse( $result['success'], 'The import should fail.' );
+
+		$this->assert_survivor_reported( $result, $inline_url );
+	}
+
+	/**
+	 * Verifies that a featured-image abort on the update path names the media
+	 * its cleanup could not delete.
+	 */
+	public function test_featured_image_abort_on_update_names_media_it_could_not_delete(): void {
+		$session_id = $this->repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		// ARRANGE: Import once without media so the post exists.
+		$post_data = array(
+			'id'        => 9612,
+			'title'     => 'Post Whose Update Cleanup Cannot Delete Its Media',
+			'content'   => '<p>Original content.</p>',
+			'link'      => 'https://source.example.com/update-cleanup-survivor',
+			'post_type' => 'posts',
+		);
+
+		$first = $this->import_service->import_post( $post_data, $session_id );
+		$this->assertTrue(
+			$first['success'],
+			'Initial import should succeed.'
+		);
+
+		// ARRANGE: Re-import with a downloadable inline image, a featured image
+		// that 404s, and attachment deletion blocked.
+		$inline_url                = 'https://source.example.com/inline-update-survivor.jpg';
+		$this->mock_post_overrides = array(
+			'featured_media' => 100,
+			'content'        => '<p><img src="' . $inline_url . '" alt="inline"></p>',
+		);
+
+		$fail_media_api = $this->make_featured_image_fail_filter();
+		add_filter( 'pre_http_request', $fail_media_api, 6, 3 );
+
+		$block_deletion = static fn() => false;
+		add_filter( 'pre_delete_attachment', $block_deletion, 10, 3 );
+
+		// ACT: Re-import the same post, hitting the update path.
+		$result = $this->import_service->import_post( $post_data, $session_id );
+
+		remove_filter( 'pre_delete_attachment', $block_deletion, 10 );
+		remove_filter( 'pre_http_request', $fail_media_api, 6 );
+
+		// ASSERT: The featured image aborted the re-import, and the surviving
+		// attachment is named in both the message and the result payload.
+		$this->assertFalse( $result['success'], 'The re-import should fail.' );
+		$this->assertSame(
+			'featured_image_import_failed',
+			$result['original_error_code'] ?? null,
+			'The featured image should be the reported cause.'
+		);
+
+		$this->assert_survivor_reported( $result, $inline_url );
+	}
+
+	/**
+	 * Verifies that a rejected post insert names the media its cleanup could
+	 * not delete.
+	 */
+	public function test_rejected_insert_names_media_it_could_not_delete(): void {
+		// ARRANGE: One downloadable inline image, a rejected post insert, and
+		// attachment deletion blocked.
+		$inline_url                = 'https://source.example.com/inline-insert-survivor.jpg';
+		$this->mock_post_overrides = array(
+			'content' => '<p><img src="' . $inline_url . '" alt="inline"></p>',
+		);
+
+		$reject_insert = $this->reject_post_insert();
+
+		$block_deletion = static fn() => false;
+		add_filter( 'pre_delete_attachment', $block_deletion, 10, 3 );
+
+		$session_id = $this->repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		// ACT: Attempt the import.
+		$result = $this->import_service->import_post(
+			array(
+				'id'        => 9613,
+				'title'     => 'Post Whose Rejected Insert Leaves Media Behind',
+				'content'   => '<p>Stale content.</p>',
+				'link'      => 'https://source.example.com/insert-cleanup-survivor',
+				'post_type' => 'posts',
+			),
+			$session_id
+		);
+
+		remove_filter( 'pre_delete_attachment', $block_deletion, 10 );
+		remove_filter( 'wp_insert_post_empty_content', $reject_insert, 10 );
+
+		// ASSERT: The rejected insert aborted the import, and the surviving
+		// attachment is named in both the message and the result payload.
+		$this->assertFalse( $result['success'], 'The import should fail.' );
+		$this->assertSame(
+			'empty_content',
+			$result['original_error_code'] ?? null,
+			'The rejected insert should be the reported cause.'
+		);
+
+		$this->assert_survivor_reported( $result, $inline_url );
+	}
+
+	/**
+	 * Verifies that a meta failure on the create path names the media its
+	 * cleanup could not delete.
+	 */
+	public function test_meta_failure_on_create_names_media_it_could_not_delete(): void {
+		// ARRANGE: One downloadable inline image and a custom meta key whose
+		// write is blocked, with attachment deletion blocked too.
+		$inline_url                = 'https://source.example.com/inline-meta-survivor.jpg';
+		$this->mock_post_overrides = array(
+			'content' => '<p><img src="' . $inline_url . '" alt="inline"></p>',
+			'meta'    => array( 'custom_field' => 'value' ),
+		);
+
+		$block_meta = static function ( $check, $object_id, $meta_key ) {
+			unset( $object_id );
+			return 'custom_field' === $meta_key ? false : $check;
+		};
+		add_filter( 'update_post_metadata', $block_meta, 10, 3 );
+
+		$block_deletion = static fn() => false;
+		add_filter( 'pre_delete_attachment', $block_deletion, 10, 3 );
+
+		$session_id = $this->repository->create_session( 'https://source.example.com', 'bulk' );
+
+		// ACT: Attempt the import.
+		$result = $this->import_service->import_post(
+			array(
+				'id'        => 9610,
+				'title'     => 'Post Whose Meta Write Fails',
+				'content'   => '<p>Stale content.</p>',
+				'link'      => 'https://source.example.com/meta-failure-survivor',
+				'post_type' => 'posts',
+			),
+			$session_id
+		);
+
+		remove_filter( 'pre_delete_attachment', $block_deletion, 10 );
+		remove_filter( 'update_post_metadata', $block_meta, 10 );
+
+		// ASSERT: The surviving attachment is named in the result payload.
+		$this->assertFalse( $result['success'], 'The import should fail.' );
+
+		$this->assert_survivor_reported( $result, $inline_url );
+	}
+
+	/**
+	 * Verifies that a terms failure on the create path names the media its
+	 * cleanup could not delete.
+	 */
+	public function test_terms_failure_on_create_names_media_it_could_not_delete(): void {
+		// ARRANGE: One downloadable inline image and a term that cannot be
+		// created, with attachment deletion blocked.
+		$inline_url                = 'https://source.example.com/inline-terms-survivor.jpg';
+		$this->mock_post_overrides = array(
+			'content' => '<p><img src="' . $inline_url . '" alt="inline"></p>',
+			'terms'   => array( 'category' => array( 'Uncreatable Term' ) ),
+		);
+
+		$fail_terms     = $this->fail_term_creation();
+		$block_deletion = static fn() => false;
+		add_filter( 'pre_delete_attachment', $block_deletion, 10, 3 );
+
+		$session_id = $this->repository->create_session( 'https://source.example.com', 'bulk' );
+
+		// ACT: Attempt the import.
+		$result = $this->import_service->import_post(
+			array(
+				'id'        => 9611,
+				'title'     => 'Post Whose Term Write Fails',
+				'content'   => '<p>Stale content.</p>',
+				'link'      => 'https://source.example.com/terms-failure-survivor',
+				'post_type' => 'posts',
+			),
+			$session_id
+		);
+
+		remove_filter( 'pre_delete_attachment', $block_deletion, 10 );
+		remove_filter( 'pre_insert_term', $fail_terms );
+
+		// ASSERT: The surviving attachment is named in the result payload.
+		$this->assertFalse( $result['success'], 'The import should fail.' );
+
+		$this->assert_survivor_reported( $result, $inline_url );
+	}
+
+	/**
+	 * Verifies that an abort keeps the media the preceding post of the same
+	 * bulk run brought in, which the tracked list is scoped to exclude.
+	 */
+	public function test_abort_keeps_media_of_the_preceding_post_in_the_run(): void {
+		$session_id = $this->repository->create_session( 'https://source.example.com', 'bulk' );
+		$inline_url = 'https://source.example.com/inline-preceding.jpg';
+
+		// ARRANGE: The first post of the run imports an inline image.
+		$this->mock_post_overrides = array(
+			'content' => '<p><img src="' . $inline_url . '" alt="inline"></p>',
+		);
+
+		$first = $this->import_service->import_post(
+			array(
+				'id'        => 9607,
+				'title'     => 'First Post Of The Run',
+				'content'   => '<p>Stale content.</p>',
+				'link'      => 'https://source.example.com/run-first-post',
+				'post_type' => 'posts',
+			),
+			$session_id
+		);
+		$this->assertTrue( $first['success'], 'The first import should succeed.' );
+
+		$kept_id = $this->find_attachment_by_original_url( $inline_url );
+		$this->assertNotNull( $kept_id, 'The first import should create the attachment.' );
+
+		// ARRANGE: The next post of the same run aborts on its featured image.
+		$this->mock_post_overrides = array(
+			'featured_media' => 100,
+			'content'        => '<p>Content.</p>',
+		);
+
+		$fail_media_api = $this->make_featured_image_fail_filter();
+		add_filter( 'pre_http_request', $fail_media_api, 6, 3 );
+
+		// ACT: Import the second post through the same service instance, as a
+		// bulk run does.
+		$result = $this->import_service->import_post(
+			array(
+				'id'        => 9608,
+				'title'     => 'Second Post Of The Run',
+				'content'   => '<p>Stale content.</p>',
+				'link'      => 'https://source.example.com/run-second-post',
+				'post_type' => 'posts',
+			),
+			$session_id
+		);
+
+		remove_filter( 'pre_http_request', $fail_media_api, 6 );
+
+		// ASSERT: The second import aborted without taking the first post's
+		// media with it.
+		$this->assertFalse( $result['success'], 'The second import should fail.' );
+		$this->assertNotNull(
+			get_post( $kept_id ),
+			"An abort must not delete the preceding post's media."
+		);
+	}
+
+	/**
+	 * Verifies that an aborted re-import keeps the media an earlier import
+	 * already brought in, which the live post still uses.
+	 */
+	public function test_aborted_reimport_keeps_media_the_existing_post_uses(): void {
+		$session_id = $this->repository->create_session( 'https://source.example.com', 'bulk' );
+		$inline_url = 'https://source.example.com/inline-kept.jpg';
+
+		// ARRANGE: A first import downloads the inline image and succeeds.
+		$this->mock_post_overrides = array(
+			'content' => '<p><img src="' . $inline_url . '" alt="inline"></p>',
+		);
+
+		$post_data = array(
+			'id'        => 9604,
+			'title'     => 'Post Whose Media Must Survive A Failed Re-import',
+			'content'   => '<p>Stale content.</p>',
+			'link'      => 'https://source.example.com/reimport-keeps-media',
+			'post_type' => 'posts',
+		);
+
+		$first = $this->import_service->import_post( $post_data, $session_id );
+		$this->assertTrue( $first['success'], 'Initial import should succeed.' );
+
+		$kept_id = $this->find_attachment_by_original_url( $inline_url );
+		$this->assertNotNull( $kept_id, 'The first import should create the attachment.' );
+
+		// ARRANGE: Re-import the same content with a featured image that 404s,
+		// so the run aborts after deduplicating onto the existing attachment.
+		$this->mock_post_overrides['featured_media'] = 100;
+
+		$fail_media_api = $this->make_featured_image_fail_filter();
+		add_filter( 'pre_http_request', $fail_media_api, 6, 3 );
+
+		// ACT: Re-import the same post.
+		$result = $this->import_service->import_post( $post_data, $session_id );
+
+		remove_filter( 'pre_http_request', $fail_media_api, 6 );
+
+		// ASSERT: The re-import aborted, and the deduplicated attachment the
+		// live post uses is untouched.
+		$this->assertFalse( $result['success'], 'Re-import should fail.' );
+		$this->assertNotNull(
+			get_post( $kept_id ),
+			'An aborted re-import must not delete media it deduplicated onto.'
+		);
+	}
+
+	/**
+	 * Verifies that a discarded concurrent duplicate keeps a featured image the
+	 * sideload deduplicated onto, leaving the winner's thumbnail intact.
+	 */
+	public function test_discarded_duplicate_keeps_deduplicated_featured_image(): void {
+		// ARRANGE: An attachment already carrying the featured image's source
+		// URL, so the losing run's sideload deduplicates onto it.
+		$shared_id = self::factory()->attachment->create_object(
+			array(
+				'file'           => 'featured.jpg',
+				'post_mime_type' => 'image/jpeg',
+				'post_status'    => 'inherit',
+			)
+		);
+		update_post_meta(
+			$shared_id,
+			Options::META_ORIGINAL_URL,
+			'https://source.example.com/featured.jpg'
+		);
+
+		$this->mock_post_overrides = array( 'featured_media' => 100 );
+
+		$source_id   = 9605;
+		$claim_rival = $this->make_rival_claim_filter( $source_id, $shared_id );
+		add_filter( 'pre_http_request', $claim_rival, 4, 3 );
+
+		$session_id = $this->repository->create_session( 'https://source.example.com', 'bulk' );
+
+		$post_data = array(
+			'id'        => $source_id,
+			'title'     => 'Concurrent Loser With Deduplicated Featured Image',
+			'content'   => '<p>Content.</p>',
+			'link'      => 'https://source.example.com/duplicate-dedup-featured',
+			'post_type' => 'posts',
+		);
+
+		// ACT: Import, losing the race to the claim the filter inserts.
+		$result = $this->import_service->import_post( $post_data, $session_id );
+
+		remove_filter( 'pre_http_request', $claim_rival, 4 );
+
+		// ASSERT: The duplicate was discarded.
+		$this->assertFalse( $result['success'], 'The losing import should fail.' );
+		$this->assertStringContainsString( 'discarded', $result['error'] );
+
+		// ASSERT: The attachment survives with the winner still pointing at it;
+		// core scrubs _thumbnail_id site-wide when an attachment goes.
+		$this->assertNotNull(
+			get_post( $shared_id ),
+			'A deduplicated featured image must survive the discard.'
+		);
+
+		$claims = $this->find_claim_post_ids( $source_id );
+		$this->assertCount(
+			1,
+			$claims,
+			'The loser must be deleted, leaving only the winning claim.'
+		);
+		$this->assertSame(
+			$shared_id,
+			get_post_thumbnail_id( $claims[0] ),
+			"The winner's featured image must be intact."
+		);
+	}
+
+	/**
+	 * Verifies that a discarded concurrent duplicate still deletes a featured
+	 * image it sideloaded itself.
+	 */
+	public function test_discarded_duplicate_deletes_its_own_featured_image(): void {
+		// ARRANGE: No pre-existing attachment, so the losing run downloads the
+		// featured image and owns it.
+		$this->mock_post_overrides = array( 'featured_media' => 100 );
+
+		$source_id   = 9606;
+		$claim_rival = $this->make_rival_claim_filter( $source_id );
+		add_filter( 'pre_http_request', $claim_rival, 4, 3 );
+
+		$session_id         = $this->repository->create_session( 'https://source.example.com', 'bulk' );
+		$attachments_before = $this->get_attachment_count();
+		$created            = array();
+		$recorder           = $this->record_created_attachments( $created );
+
+		$post_data = array(
+			'id'        => $source_id,
+			'title'     => 'Concurrent Loser With Its Own Featured Image',
+			'content'   => '<p>Content.</p>',
+			'link'      => 'https://source.example.com/duplicate-own-featured',
+			'post_type' => 'posts',
+		);
+
+		// ACT: Import, losing the race to the claim the filter inserts.
+		$result = $this->import_service->import_post( $post_data, $session_id );
+
+		remove_filter( 'pre_http_request', $claim_rival, 4 );
+		remove_action( 'add_attachment', $recorder );
+
+		// ASSERT: The duplicate was discarded and took its own media with it.
+		$this->assertFalse( $result['success'], 'The losing import should fail.' );
+		$this->assertNotSame(
+			array(),
+			$created,
+			'The losing run must sideload its own featured image.'
+		);
+		$this->assert_no_new_attachments(
+			$attachments_before,
+			'A featured image the losing run sideloaded must still be deleted.'
+		);
+	}
+
+	/**
+	 * Verifies that a discarded concurrent duplicate names the media its
+	 * cleanup could not delete.
+	 */
+	public function test_discarded_duplicate_names_media_it_could_not_delete(): void {
+		// ARRANGE: No pre-existing attachment, so the losing run downloads the
+		// featured image, with attachment deletion blocked.
+		$this->mock_post_overrides = array( 'featured_media' => 100 );
+
+		$source_id   = 9614;
+		$claim_rival = $this->make_rival_claim_filter( $source_id );
+		add_filter( 'pre_http_request', $claim_rival, 4, 3 );
+
+		$block_deletion = static fn() => false;
+		add_filter( 'pre_delete_attachment', $block_deletion, 10, 3 );
+
+		$session_id = $this->repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+
+		// ACT: Import, losing the race to the claim the filter inserts.
+		$result = $this->import_service->import_post(
+			array(
+				'id'        => $source_id,
+				'title'     => 'Concurrent Loser Whose Cleanup Cannot Delete',
+				'content'   => '<p>Content.</p>',
+				'link'      => 'https://source.example.com/duplicate-cleanup-survivor',
+				'post_type' => 'posts',
+			),
+			$session_id
+		);
+
+		remove_filter( 'pre_delete_attachment', $block_deletion, 10 );
+		remove_filter( 'pre_http_request', $claim_rival, 4 );
+
+		// ASSERT: The discard aborted the import, and the featured image the
+		// losing run downloaded is named in both the message and the result
+		// payload.
+		$this->assertFalse(
+			$result['success'],
+			'The losing import should fail.'
+		);
+		$this->assertSame(
+			'duplicate_import',
+			$result['original_error_code'] ?? null,
+			'The discard should be the reported cause.'
+		);
+
+		$this->assert_survivor_reported(
+			$result,
+			'https://source.example.com/featured.jpg'
+		);
+	}
+
+	/**
+	 * Asserts that an aborted import reported the attachment its cleanup could
+	 * not delete, in both the result payload and the error message.
+	 *
+	 * @param array  $result     Import result.
+	 * @param string $inline_url Source URL of the blocked attachment.
+	 */
+	private function assert_survivor_reported(
+		array $result,
+		string $inline_url
+	): void {
+		$survivor_id = $this->find_attachment_by_original_url( $inline_url );
+		$this->assertNotNull(
+			$survivor_id,
+			'The blocked attachment should remain.'
+		);
+		$this->assertSame(
+			array( $survivor_id ),
+			$result['media_ids'] ?? array(),
+			'The result must carry the surviving attachment ID.'
+		);
+		$this->assertStringContainsString(
+			(string) $survivor_id,
+			$result['error'],
+			'The error must name the surviving attachment.'
+		);
+	}
+
+	/**
+	 * Records attachment IDs created while the action is registered, so a test
+	 * can assert the run downloaded media before asserting cleanup removed it.
+	 *
+	 * @param int[] $created Receives each new attachment ID.
+	 * @return Closure The action, so the caller can remove it.
+	 */
+	private function record_created_attachments( array &$created ): Closure {
+		$recorder = static function ( int $attachment_id ) use ( &$created ): void {
+			$created[] = $attachment_id;
+		};
+
+		add_action( 'add_attachment', $recorder );
+
+		return $recorder;
+	}
+
+	/**
+	 * Returns the ID of the attachment recorded against a source media URL.
+	 *
+	 * @param string $original_url Source media URL.
+	 * @return int|null Attachment ID, or null when none is recorded.
+	 */
+	private function find_attachment_by_original_url( string $original_url ): ?int {
+		$attachments = get_posts(
+			array(
+				'post_type'        => 'attachment',
+				'post_status'      => 'any',
+				'posts_per_page'   => 1,
+				'suppress_filters' => false,
+				'meta_key'         => Options::META_ORIGINAL_URL,
+				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
+				'meta_value'       => $original_url,
+			)
+		);
+
+		return array() === $attachments ? null : $attachments[0]->ID;
+	}
+
+	/**
+	 * Returns the IDs of every post claiming a source post ID.
+	 *
+	 * @param int $source_post_id Source post ID.
+	 * @return int[] Post IDs, newest first.
+	 */
+	private function find_claim_post_ids( int $source_post_id ): array {
+		return array_map(
+			static fn( \WP_Post $post ): int => $post->ID,
+			get_posts(
+				array(
+					'post_type'        => 'post',
+					'post_status'      => 'any',
+					'posts_per_page'   => 5,
+					'suppress_filters' => false,
+					'meta_key'         => Options::META_SOURCE_POST_ID,
+					// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
+					'meta_value'       => (string) $source_post_id,
+				)
+			)
+		);
+	}
+
+	/**
+	 * Returns a pre_http_request filter that inserts a rival claim for a source
+	 * post the first time its record is fetched.
+	 *
+	 * Register at priority 4 — ahead of the media mocks — so the claim lands
+	 * after the import's identity check and before its own insert, giving it
+	 * the lower post ID the losing branch requires. Its thumbnail has to be set
+	 * here too, since the claim does not exist before the import begins.
+	 *
+	 * @param int      $source_post_id Source post ID to claim.
+	 * @param int|null $thumbnail_id   Attachment to set as the claim's featured
+	 *                                 image.
+	 * @return Closure
+	 */
+	private function make_rival_claim_filter(
+		int $source_post_id,
+		?int $thumbnail_id = null
+	): Closure {
+		$claimed = false;
+
+		return static function (
+			$preempt,
+			array $_args,
+			string $url
+		) use (
+			$source_post_id,
+			$thumbnail_id,
+			&$claimed
+		) {
+			if ( $claimed || 1 !== preg_match( '#/wp-json/wp/v2/posts/\d+#', $url ) ) {
+				return $preempt;
+			}
+
+			$claimed   = true;
+			$winner_id = wp_insert_post(
+				array(
+					'post_title'  => 'Concurrent winner',
+					'post_status' => 'draft',
+					'post_type'   => 'post',
+					'meta_input'  => array(
+						Options::META_SOURCE_POST_ID  => $source_post_id,
+						Options::META_SOURCE_SITE_URL => 'https://source.example.com',
+						Options::META_IMPORTED_FROM   => Options::META_IMPORTED_FROM_VALUE,
+					),
+				)
+			);
+
+			if ( is_int( $winner_id ) && null !== $thumbnail_id ) {
+				set_post_thumbnail( $winner_id, $thumbnail_id );
+			}
+
+			return $preempt;
+		};
+	}
+
+	/**
 	 * Returns an update error after term assignment and restoration fail.
 	 *
 	 * @return WP_Error Combined update and restore failure.
@@ -1432,6 +2265,22 @@ class Import_Rollback_Test extends Source_Posts_API_Test_Base {
 		);
 
 		add_filter( 'pre_insert_term', $filter );
+
+		return $filter;
+	}
+
+	/**
+	 * Rejects the import's post insert, the trigger these cases use to reach
+	 * the rejected-insert abort. Only posts are rejected, so the sideload's own
+	 * attachment inserts still go through.
+	 *
+	 * @return Closure The filter, so the caller can remove it.
+	 */
+	private function reject_post_insert(): Closure {
+		$filter = static fn( $maybe_empty, array $postarr ): bool =>
+			'post' === ( $postarr['post_type'] ?? '' ) || (bool) $maybe_empty;
+
+		add_filter( 'wp_insert_post_empty_content', $filter, 10, 2 );
 
 		return $filter;
 	}

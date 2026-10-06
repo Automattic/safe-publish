@@ -730,6 +730,68 @@ class Post_Import_Service {
 	}
 
 	/**
+	 * Builds the history changes payload for a failed import from its error.
+	 *
+	 * @param WP_Error $error          Import failure.
+	 * @param string   $default_action Action to record when the error names none.
+	 * @return array Changes payload.
+	 */
+	private function build_failure_changes(
+		WP_Error $error,
+		string $default_action
+	): array {
+		$error_data = $error->get_error_data();
+		$has_data   = is_array( $error_data );
+		$changes    = array(
+			'action' => $has_data && isset( $error_data['action'] )
+				? $error_data['action']
+				: $default_action,
+		);
+
+		if ( $has_data && isset( $error_data['media_ids'] ) ) {
+			$changes['media_ids'] = $error_data['media_ids'];
+		}
+
+		return $changes;
+	}
+
+	/**
+	 * Aborts an import whose featured image could not be sideloaded, deleting
+	 * the run's media and logging the failure.
+	 *
+	 * @param array    $fields     Sanitized post fields.
+	 * @param int|null $session_id Import session ID for logging.
+	 * @return array Import error result.
+	 */
+	private function abort_on_featured_image_failure(
+		array $fields,
+		?int $session_id
+	): array {
+		$error = $this->cleanup_aborted_import_media(
+			new WP_Error(
+				'featured_image_import_failed',
+				__( 'Failed to import featured image.', 'safe-publish' ),
+				array( 'action' => 'featured_image_import_failed' )
+			)
+		);
+
+		$this->log_import_if_session(
+			$session_id,
+			$fields['source_post_id'],
+			$fields['title'],
+			'error',
+			null,
+			$error->get_error_message(),
+			$this->build_failure_changes(
+				$error,
+				'featured_image_import_failed'
+			)
+		);
+
+		return $this->build_error_result( $fields, $error );
+	}
+
+	/**
 	 * Builds a standardized success result array for an import operation.
 	 *
 	 * @param array $fields   Sanitized post fields.
@@ -1417,19 +1479,10 @@ class Post_Import_Service {
 		);
 
 		if ( false === $featured_attachment_id ) {
-			$error_message = __( 'Failed to import featured image.', 'safe-publish' );
-
-			$this->log_import_if_session(
-				$session_id,
-				$fields['source_post_id'],
-				$fields['title'],
-				'error',
-				null,
-				$error_message,
-				array( 'action' => 'featured_image_import_failed' )
+			return $this->abort_on_featured_image_failure(
+				$fields,
+				$session_id
 			);
-
-			return $this->build_error_result( $fields, $error_message );
 		}
 
 		$previous_content = $this->capture_previous_content(
@@ -1472,15 +1525,10 @@ class Post_Import_Service {
 		$this->resolve_term_conflict_issues( $term_report );
 
 		if ( is_wp_error( $post_id ) ) {
-			$error_data      = $post_id->get_error_data();
-			$action          = is_array( $error_data ) && isset( $error_data['action'] )
-				? $error_data['action']
-				: 'post_update_failed';
-			$failure_changes = array( 'action' => $action );
-
-			if ( is_array( $error_data ) && isset( $error_data['media_ids'] ) ) {
-				$failure_changes['media_ids'] = $error_data['media_ids'];
-			}
+			$failure_changes = $this->build_failure_changes(
+				$post_id,
+				'post_update_failed'
+			);
 
 			$this->log_import_if_session(
 				$session_id,
@@ -1631,19 +1679,10 @@ class Post_Import_Service {
 		);
 
 		if ( false === $featured_attachment_id ) {
-			$error_message = __( 'Failed to import featured image.', 'safe-publish' );
-
-			$this->log_import_if_session(
-				$session_id,
-				$fields['source_post_id'],
-				$fields['title'],
-				'error',
-				null,
-				$error_message,
-				array( 'action' => 'featured_image_import_failed' )
+			return $this->abort_on_featured_image_failure(
+				$fields,
+				$session_id
 			);
-
-			return $this->build_error_result( $fields, $error_message );
 		}
 
 		$source_site_url    = Options::get_connected_site_url_with_path();
@@ -1686,17 +1725,13 @@ class Post_Import_Service {
 
 		if ( is_wp_error( $post_id ) ) {
 			$error_data      = $post_id->get_error_data();
-			$action          = is_array( $error_data ) && isset( $error_data['action'] )
-				? $error_data['action']
-				: 'post_create_failed';
 			$failure_post_id = is_array( $error_data ) && isset( $error_data['post_id'] )
 				? absint( $error_data['post_id'] )
 				: 0;
-			$failure_changes = array( 'action' => $action );
-
-			if ( is_array( $error_data ) && isset( $error_data['media_ids'] ) ) {
-				$failure_changes['media_ids'] = $error_data['media_ids'];
-			}
+			$failure_changes = $this->build_failure_changes(
+				$post_id,
+				'post_create_failed'
+			);
 
 			$this->log_import_if_session(
 				$session_id,
@@ -3051,9 +3086,9 @@ class Post_Import_Service {
 	/**
 	 * Persists a new post with all associated data.
 	 *
-	 * Handles wp_insert_post, thumbnail, custom meta, and terms. On meta or
-	 * terms failure the post and any sideloaded media are cleaned up. Used by
-	 * both single and bulk import paths.
+	 * Handles wp_insert_post, thumbnail, custom meta, and terms. Any abort
+	 * cleans up the post and the media this run sideloaded, naming what it
+	 * could not remove. Used by both single and bulk import paths.
 	 *
 	 * meta_input must carry META_SOURCE_SITE_URL: The concurrent-duplicate
 	 * lookup compares it by value, so an absent row matches no sibling.
@@ -3091,7 +3126,7 @@ class Post_Import_Service {
 		$post_id = wp_insert_post( wp_slash( $post_args ), true );
 
 		if ( is_wp_error( $post_id ) ) {
-			return $post_id;
+			return $this->cleanup_aborted_import_media( $post_id );
 		}
 
 		$content_error = Post_Content_Integrity::verify(
@@ -3108,7 +3143,7 @@ class Post_Import_Service {
 
 			return null === $surviving_post_id && array() === $surviving_media_ids
 				? $content_error
-				: $this->build_new_import_cleanup_error(
+				: $this->build_import_cleanup_error(
 					$content_error,
 					$surviving_post_id,
 					$surviving_media_ids
@@ -3133,21 +3168,19 @@ class Post_Import_Service {
 			if ( null !== $winner ) {
 				wp_delete_post( $post_id, true );
 
-				if ( $featured_attachment_id > 0 ) {
-					wp_delete_attachment( $featured_attachment_id, true );
-				}
-
-				$this->content_processor->delete_newly_created_media();
-
-				return new WP_Error(
-					'duplicate_import',
-					__(
-						'Another import for this source post completed first; this duplicate was discarded.',
-						'safe-publish'
-					),
-					array(
-						'action'          => 'concurrent_import_lost_race',
-						'winning_post_id' => $winner->ID,
+				// No separate featured-image deletion: This run's own is
+				// tracked, and a dedup hit belongs to an earlier import.
+				return $this->cleanup_aborted_import_media(
+					new WP_Error(
+						'duplicate_import',
+						__(
+							'Another import for this source post completed first; this duplicate was discarded.',
+							'safe-publish'
+						),
+						array(
+							'action'          => 'concurrent_import_lost_race',
+							'winning_post_id' => $winner->ID,
+						)
 					)
 				);
 			}
@@ -3171,12 +3204,13 @@ class Post_Import_Service {
 
 		if ( is_wp_error( $meta_result ) ) {
 			wp_delete_post( $post_id, true );
-			$this->content_processor->delete_newly_created_media();
 
-			return new WP_Error(
-				'meta_update_failed',
-				$meta_result->get_error_message(),
-				array( 'action' => 'meta_update_failed' )
+			return $this->cleanup_aborted_import_media(
+				new WP_Error(
+					'meta_update_failed',
+					$meta_result->get_error_message(),
+					array( 'action' => 'meta_update_failed' )
+				)
 			);
 		}
 
@@ -3189,12 +3223,13 @@ class Post_Import_Service {
 
 		if ( is_wp_error( $terms_result ) ) {
 			wp_delete_post( $post_id, true );
-			$this->content_processor->delete_newly_created_media();
 
-			return new WP_Error(
-				'terms_update_failed',
-				$terms_result->get_error_message(),
-				array( 'action' => 'terms_update_failed' )
+			return $this->cleanup_aborted_import_media(
+				new WP_Error(
+					'terms_update_failed',
+					$terms_result->get_error_message(),
+					array( 'action' => 'terms_update_failed' )
+				)
 			);
 		}
 
@@ -3210,15 +3245,35 @@ class Post_Import_Service {
 	}
 
 	/**
-	 * Reports content filtering plus any new-import items cleanup could not remove.
+	 * Deletes the media this run sideloaded and folds any survivors into the
+	 * error the caller reports.
 	 *
-	 * @param WP_Error $content_error       Original persisted-content mismatch.
+	 * @param WP_Error $error Failure that aborted the import.
+	 * @return WP_Error The error, naming survivors when cleanup was incomplete.
+	 */
+	private function cleanup_aborted_import_media( WP_Error $error ): WP_Error {
+		$surviving_media_ids =
+			$this->content_processor->delete_newly_created_media();
+
+		return array() === $surviving_media_ids
+			? $error
+			: $this->build_import_cleanup_error(
+				$error,
+				null,
+				$surviving_media_ids
+			);
+	}
+
+	/**
+	 * Reports an import failure plus any items cleanup could not remove.
+	 *
+	 * @param WP_Error $original_error      Failure that aborted the import.
 	 * @param int|null $surviving_post_id   Post ID when the mapped post remains.
 	 * @param int[]    $surviving_media_ids Attachment IDs that remain.
 	 * @return WP_Error Combined cleanup failure.
 	 */
-	private function build_new_import_cleanup_error(
-		WP_Error $content_error,
+	private function build_import_cleanup_error(
+		WP_Error $original_error,
 		?int $surviving_post_id,
 		array $surviving_media_ids
 	): WP_Error {
@@ -3248,12 +3303,12 @@ class Post_Import_Service {
 					'%1$s Cleanup was incomplete. Remove the remaining %2$s manually before retrying.',
 					'safe-publish'
 				),
-				$content_error->get_error_message(),
+				$original_error->get_error_message(),
 				implode( ', ', $survivors )
 			),
 			array(
 				'action'              => 'content_cleanup_failed',
-				'original_error_code' => $content_error->get_error_code(),
+				'original_error_code' => $original_error->get_error_code(),
 				'post_id'             => $surviving_post_id,
 				'media_ids'           => $surviving_media_ids,
 			)
