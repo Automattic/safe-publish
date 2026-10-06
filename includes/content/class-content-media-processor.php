@@ -274,7 +274,11 @@ class Content_Media_Processor {
 		}
 
 		if ( false === $new_url ) {
-			$this->failed_media[ $url ] = $block_name;
+			$download_url                        = Media_Importer::get_download_url(
+				$url,
+				$source_site_url
+			);
+			$this->failed_media[ $download_url ] = $block_name;
 		}
 
 		return null;
@@ -401,7 +405,11 @@ class Content_Media_Processor {
 			}
 
 			if ( false === $new_url ) {
-				$this->failed_media[ $url ] = $block_name;
+				$download_url                        = Media_Importer::get_download_url(
+					$url,
+					$source_site_url
+				);
+				$this->failed_media[ $download_url ] = $block_name;
 				continue;
 			}
 
@@ -504,12 +512,13 @@ class Content_Media_Processor {
 
 		foreach ( $remaining as $raw_url ) {
 			// The regex reads raw markup, so decode entities the way the tag
-			// processor does; otherwise an already-recorded failure keyed by
-			// the decoded URL isn't matched here.
+			// processor does; otherwise the failed download URL won't match.
 			$url = WP_HTML_Decoder::decode_attribute( $raw_url );
 
+			$download_url = Media_Importer::get_download_url( $url, $source_site_url );
+
 			if ( ! array_key_exists( $url, $this->unprocessable_media )
-				&& ! array_key_exists( $url, $this->failed_media ) ) {
+				&& ! array_key_exists( $download_url, $this->failed_media ) ) {
 				$this->unprocessable_media[ $url ] = $block_name;
 			}
 		}

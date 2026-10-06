@@ -14,14 +14,72 @@ use Safe_Publish\Utils\Logger;
 
 /**
  * Logger for Safe Publish authentication events.
+ *
+ * Failures raised before authentication completes are recorded once per type
+ * per window: Their volume follows the caller, not operator activity.
  */
 class Auth_Logger extends Logger {
+
+	/**
+	 * Window, in seconds, covered by one pre-authentication failure row.
+	 */
+	private const PRE_AUTH_LOG_WINDOW = 5 * MINUTE_IN_SECONDS;
+
+	/**
+	 * Transient key prefix for the pre-authentication log window.
+	 */
+	private const PRE_AUTH_LOG_KEY_PREFIX = 'safe_publish_auth_fail_';
+
+	/**
+	 * Maximum stored length, in bytes, of a pre-authentication payload string.
+	 */
+	private const PRE_AUTH_FIELD_LIMIT = 256;
 
 	/**
 	 * Constructs the Auth_Logger instance.
 	 */
 	public function __construct() {
 		$this->channel = 'auth';
+	}
+
+	/**
+	 * Records a pre-authentication failure once per window.
+	 *
+	 * @param string $event      Event type.
+	 * @param array  $data       Event data.
+	 * @param bool   $server_log Optional. Whether the event also belongs in the
+	 *                           server error log. Default false.
+	 */
+	private function log_pre_auth_failure(
+		string $event,
+		array $data,
+		bool $server_log = false
+	): void {
+		$key = self::PRE_AUTH_LOG_KEY_PREFIX . $event;
+
+		if ( false !== get_transient( $key ) ) {
+			return;
+		}
+
+		// Every string here is caller-set, and none needs its full length to
+		// identify the failure.
+		foreach ( $data as $field => $value ) {
+			if ( is_string( $value ) ) {
+				$data[ $field ] = self::cap_forensic_string(
+					$value,
+					self::PRE_AUTH_FIELD_LIMIT
+				);
+			}
+		}
+
+		if ( $server_log ) {
+			$this->log_error( $event, $data );
+		} else {
+			$this->log_failure( $event, $data );
+		}
+
+		// Set last, so a failed write leaves the window open to retry.
+		set_transient( $key, 1, self::PRE_AUTH_LOG_WINDOW );
 	}
 
 	/**
@@ -34,12 +92,13 @@ class Auth_Logger extends Logger {
 		string $route,
 		string $method
 	): void {
-		$this->log_error(
+		$this->log_pre_auth_failure(
 			Log_Events::SECRET_NOT_CONFIGURED,
 			array(
 				'route'  => $route,
 				'method' => $method,
-			)
+			),
+			true
 		);
 	}
 
@@ -61,7 +120,7 @@ class Auth_Logger extends Logger {
 		int $time_diff,
 		int $max_allowed
 	): void {
-		$this->log_failure(
+		$this->log_pre_auth_failure(
 			Log_Events::TIMESTAMP_EXPIRED,
 			array(
 				'route'             => $route,
@@ -84,7 +143,7 @@ class Auth_Logger extends Logger {
 		string $route,
 		string $method
 	): void {
-		$this->log_failure(
+		$this->log_pre_auth_failure(
 			Log_Events::CONTENT_HASH_MISSING,
 			array(
 				'route'  => $route,
@@ -103,7 +162,7 @@ class Auth_Logger extends Logger {
 		string $route,
 		string $method
 	): void {
-		$this->log_failure(
+		$this->log_pre_auth_failure(
 			Log_Events::CONTENT_HASH_MISMATCH,
 			array(
 				'route'  => $route,
@@ -122,12 +181,13 @@ class Auth_Logger extends Logger {
 		string $route,
 		string $method
 	): void {
-		$this->log_error(
+		$this->log_pre_auth_failure(
 			Log_Events::CONNECTED_URL_NOT_CONFIGURED,
 			array(
 				'route'  => $route,
 				'method' => $method,
-			)
+			),
+			true
 		);
 	}
 
@@ -141,7 +201,7 @@ class Auth_Logger extends Logger {
 		string $route,
 		string $method
 	): void {
-		$this->log_failure(
+		$this->log_pre_auth_failure(
 			Log_Events::SITE_URL_HEADER_MISSING,
 			array(
 				'route'  => $route,
@@ -164,7 +224,7 @@ class Auth_Logger extends Logger {
 		string $request_site_url,
 		string $connected_site_url
 	): void {
-		$this->log_failure(
+		$this->log_pre_auth_failure(
 			Log_Events::SITE_URL_MISMATCH,
 			array(
 				'route'              => $route,
@@ -191,7 +251,7 @@ class Auth_Logger extends Logger {
 		string $request_site_url,
 		int $received_sig_length
 	): void {
-		$this->log_failure(
+		$this->log_pre_auth_failure(
 			Log_Events::SIGNATURE_INVALID,
 			array(
 				'route'               => $route,
