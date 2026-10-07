@@ -460,20 +460,27 @@ class Source_Media_REST_Field {
 	 * @return array<string, array<string, string>> Source URL => metadata.
 	 */
 	private function resolve_media_metadata( string $content ): array {
-		$host = wp_parse_url( home_url(), PHP_URL_HOST );
+		$site_url = URL_Validator::normalize_site_url( home_url() );
+		$host     = wp_parse_url( $site_url, PHP_URL_HOST );
 
 		if ( ! is_string( $host ) || '' === $host || '' === $content ) {
 			return array();
 		}
 
-		$pattern = '#https?://' . preg_quote( $host, '#' ) . '/[^\s"\'<>()]+#i';
-		$count   = preg_match_all( $pattern, $content, $matches );
-		$urls    = is_int( $count ) && 0 < $count ? $matches[0] : array();
-		$urls    = array_merge(
+		$port              = wp_parse_url( $site_url, PHP_URL_PORT );
+		$authority         = $host . ( is_int( $port ) ? ':' . $port : '' );
+		$url_pattern       = '(?:(?:https?:)?//'
+			. preg_quote( $authority, '#' )
+			. '/|/(?!/))[^\s"\'<>()]+';
+		$pattern           = '#(?<![a-z0-9:/<])(?<!<!-- )' . $url_pattern . '#i';
+		$attribute_pattern = '#^' . $url_pattern . '$#i';
+		$count             = preg_match_all( $pattern, $content, $matches );
+		$urls              = is_int( $count ) && 0 < $count ? $matches[0] : array();
+		$urls              = array_merge(
 			$urls,
-			$this->line_broken_attribute_urls( $content, $host ),
-			$this->block_attribute_urls( $content, $host ),
-			$this->line_broken_shortcode_urls( $content, $host )
+			$this->line_broken_attribute_urls( $content, $attribute_pattern ),
+			$this->block_attribute_urls( $content, $attribute_pattern ),
+			$this->line_broken_shortcode_urls( $content, $attribute_pattern )
 		);
 
 		if ( array() === $urls ) {
@@ -486,7 +493,13 @@ class Source_Media_REST_Field {
 		foreach ( array_unique( $urls ) as $raw_url ) {
 			$url = strtok( $raw_url, '?' );
 
-			if ( false === $url || isset( $map[ $url ] ) ) {
+			if ( false === $url ) {
+				continue;
+			}
+
+			$url = URL_Validator::resolve_relative_url( $url, $site_url );
+
+			if ( isset( $map[ $url ] ) ) {
 				continue;
 			}
 
@@ -539,16 +552,14 @@ class Source_Media_REST_Field {
 	 * content scan cannot cross whitespace without joining unrelated text.
 	 *
 	 * @param string $content Raw post content.
-	 * @param string $host    Source site host.
+	 * @param string $pattern Accepted source media URL pattern.
 	 * @return list<string> Normalized same-host attribute URLs.
 	 */
 	private function line_broken_attribute_urls(
 		string $content,
-		string $host
+		string $pattern
 	): array {
 		$processor = new WP_HTML_Tag_Processor( $content );
-		$pattern   = '#^https?://' . preg_quote( $host, '#' )
-			. '/[^\s"\'<>()]+$#i';
 		$urls      = array();
 
 		while ( $processor->next_tag() ) {
@@ -573,10 +584,10 @@ class Source_Media_REST_Field {
 	 * cannot match.
 	 *
 	 * @param string $content Raw post content.
-	 * @param string $host    Source site host.
-	 * @return list<string> Absolute same-host block attribute URLs.
+	 * @param string $pattern Accepted source media URL pattern.
+	 * @return list<string> Normalized same-host block attribute URLs.
 	 */
-	private function block_attribute_urls( string $content, string $host ): array {
+	private function block_attribute_urls( string $content, string $pattern ): array {
 		if ( false === strpos( $content, '<!-- wp:' ) ) {
 			return array();
 		}
@@ -586,7 +597,7 @@ class Source_Media_REST_Field {
 		foreach ( parse_blocks( $content ) as $block ) {
 			$urls = array_merge(
 				$urls,
-				$this->urls_in_block( $block, $host )
+				$this->urls_in_block( $block, $pattern )
 			);
 		}
 
@@ -597,23 +608,23 @@ class Source_Media_REST_Field {
 	 * Collects media URL attributes from a block and its child blocks.
 	 *
 	 * @param array  $block   Parsed block.
-	 * @param string $host  Source site host.
-	 * @return list<string> Absolute URLs.
+	 * @param string $pattern Accepted source media URL pattern.
+	 * @return list<string> Normalized URLs.
 	 */
 	private function urls_in_block(
 		array $block,
-		string $host
+		string $pattern
 	): array {
 		$attrs = $block['attrs'] ?? array();
 		$urls  = is_array( $attrs )
-			? $this->urls_in_block_values( $attrs, $host )
+			? $this->urls_in_block_values( $attrs, $pattern )
 			: array();
 
 		foreach ( $block['innerBlocks'] ?? array() as $child ) {
 			if ( is_array( $child ) ) {
 				$urls = array_merge(
 					$urls,
-					$this->urls_in_block( $child, $host )
+					$this->urls_in_block( $child, $pattern )
 				);
 			}
 		}
@@ -625,12 +636,12 @@ class Source_Media_REST_Field {
 	 * Collects media URL strings from nested block attribute values.
 	 *
 	 * @param array  $values  Attribute values.
-	 * @param string $host   Source site host.
-	 * @return list<string> Absolute URLs.
+	 * @param string $pattern Accepted source media URL pattern.
+	 * @return list<string> Normalized URLs.
 	 */
 	private function urls_in_block_values(
 		array $values,
-		string $host
+		string $pattern
 	): array {
 		$urls = array();
 
@@ -638,12 +649,12 @@ class Source_Media_REST_Field {
 			if ( is_array( $value ) ) {
 				$urls = array_merge(
 					$urls,
-					$this->urls_in_block_values( $value, $host )
+					$this->urls_in_block_values( $value, $pattern )
 				);
 				continue;
 			}
 
-			$url = $this->normalized_block_url( $value, $host );
+			$url = $this->normalized_block_url( $value, $pattern );
 
 			if ( null !== $url ) {
 				$urls[] = $url;
@@ -654,44 +665,32 @@ class Source_Media_REST_Field {
 	}
 
 	/**
-	 * Resolves a block attribute media URL against the source site and keeps
-	 * only HTTP URLs on that site's host.
+	 * Normalizes a block attribute URL accepted by the source media pattern.
 	 *
 	 * @param mixed  $value Block attribute value.
-	 * @param string $host  Source site host.
-	 * @return string|null Absolute URL, or null when not eligible.
+	 * @param string $pattern Accepted source media URL pattern.
+	 * @return string|null Normalized URL, or null when not eligible.
 	 */
-	private function normalized_block_url( mixed $value, string $host ): ?string {
+	private function normalized_block_url( mixed $value, string $pattern ): ?string {
 		if ( ! is_string( $value ) ) {
 			return null;
 		}
 
 		$url = URL_Validator::normalize_url_whitespace( $value );
-		if (
-			! URL_Validator::is_absolute_http_url( $url )
-			&& ! str_starts_with( $url, '/' )
-		) {
-			return null;
-		}
 
-		$url      = URL_Validator::resolve_relative_url( $url, home_url() );
-		$url_host = wp_parse_url( $url, PHP_URL_HOST );
-
-		return is_string( $url_host ) && 0 === strcasecmp( $url_host, $host )
-			? $url
-			: null;
+		return 1 === preg_match( $pattern, $url ) ? $url : null;
 	}
 
 	/**
 	 * Reads line-broken media URLs from live audio and video shortcodes.
 	 *
 	 * @param string $content Raw post content.
-	 * @param string $host    Source site host.
+	 * @param string $pattern Accepted source media URL pattern.
 	 * @return list<string> Normalized same-host shortcode URLs.
 	 */
 	private function line_broken_shortcode_urls(
 		string $content,
-		string $host
+		string $pattern
 	): array {
 		if (
 			false === strpbrk( $content, "\t\n\r" )
@@ -715,9 +714,7 @@ class Source_Media_REST_Field {
 			return array();
 		}
 
-		$url_pattern = '#^https?://' . preg_quote( $host, '#' )
-			. '/[^\s"\'<>()]+$#i';
-		$urls        = array();
+		$urls = array();
 
 		foreach ( $matches as $match ) {
 			if ( '[' === $match[1] && ']' === $match[4] ) {
@@ -740,7 +737,7 @@ class Source_Media_REST_Field {
 
 				$url = $this->normalized_line_broken_url(
 					$value,
-					$url_pattern
+					$pattern
 				);
 
 				if ( null !== $url ) {

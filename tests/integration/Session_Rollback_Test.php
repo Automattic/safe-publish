@@ -16,6 +16,7 @@ use Safe_Publish\Utils\Audit_Log_Table;
 use Safe_Publish\Utils\Import_Items_Table;
 use Safe_Publish\Utils\Imports_Table;
 use Safe_Publish\Utils\Options;
+use RuntimeException;
 use WP_Error;
 
 /**
@@ -1027,10 +1028,10 @@ class Session_Rollback_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Verifies that a legacy update without a previous-content snapshot keeps
-	 * its deletion fallback.
+	 * Verifies that a legacy update without a previous-content snapshot is
+	 * refused rather than deleting a post the import did not create.
 	 */
-	public function test_legacy_update_without_snapshot_deletes_the_post(): void {
+	public function test_legacy_update_without_snapshot_is_refused(): void {
 		// ARRANGE: A legacy updated row has no durable snapshot to restore.
 		$session_id = $this->repository->create_session(
 			'https://example.com',
@@ -1048,10 +1049,51 @@ class Session_Rollback_Test extends Integration_Test_Case {
 		// ACT: Roll back the legacy update.
 		$result = $this->rollback_service->rollback_item( $item_id );
 
-		// ASSERT: Existing fallback behavior deletes the post.
-		$this->assertIsArray( $result );
-		$this->assertSame( 'deleted', $result['action'] );
-		$this->assertNull( get_post( $post_id ) );
+		// ASSERT: The rollback is refused for want of a restore point.
+		$this->assertInstanceOf( WP_Error::class, $result );
+		$this->assertSame(
+			'missing_rollback_snapshot',
+			$result->get_error_code()
+		);
+
+		// ASSERT: The post the import updated survives, and the item stays
+		// open rather than being spent on a revert that never ran.
+		$this->assertNotNull( get_post( $post_id ) );
+		$item = $this->repository->get_item( $item_id );
+		$this->assertSame( 0, (int) $item['rolled_back'] );
+	}
+
+	/**
+	 * Verifies that a rollback with no restore point is refused before the
+	 * item is claimed, rather than claimed and then released.
+	 */
+	public function test_rollback_without_a_snapshot_refuses_before_claiming(): void {
+		// ARRANGE: A legacy updated row, with the items table's UPDATEs forced
+		// to fail so any claim attempt reports itself.
+		$session_id = $this->repository->create_session(
+			'https://example.com',
+			'bulk'
+		);
+		$post_id    = $this->factory()->post->create();
+		$item_id    = $this->repository->log_import_action(
+			$session_id,
+			1,
+			'Updated',
+			'updated',
+			$post_id
+		);
+		$this->fail_table_queries( 'UPDATE', Import_Items_Table::table_name() );
+
+		// ACT: Roll back the legacy update.
+		$result = $this->rollback_service->rollback_item( $item_id );
+
+		// ASSERT: The refusal is the snapshot one, so no claim was attempted;
+		// a claim would have failed against the broken UPDATE instead.
+		$this->assertInstanceOf( WP_Error::class, $result );
+		$this->assertSame(
+			'missing_rollback_snapshot',
+			$result->get_error_code()
+		);
 	}
 
 	/**
@@ -1138,6 +1180,15 @@ class Session_Rollback_Test extends Integration_Test_Case {
 		} finally {
 			remove_action( 'save_post', $delete_term );
 		}
+
+		// ACT: Retry once the term deletion no longer interferes.
+		$retry = $this->rollback_service->rollback_item( $history['item_id'] );
+
+		// ASSERT: The reopened item rolls back this time and is recorded.
+		$this->assertIsArray( $retry );
+		$this->assertSame( 'restored', $retry['action'] );
+		$item = $this->repository->get_item( $history['item_id'] );
+		$this->assertSame( 1, (int) $item['rolled_back'] );
 	}
 
 	/**
@@ -1482,6 +1533,401 @@ class Session_Rollback_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that a rollback which loses the claim to a rival request is
+	 * refused without writing its snapshot over the rival's outcome.
+	 */
+	public function test_rollback_item_refuses_when_it_loses_the_claim(): void {
+		// ARRANGE: An updated item whose claim a rival request takes between
+		// this request's pre-flight read and its own claim.
+		$session_id = $this->repository->create_session( 'https://example.com', 'bulk' );
+		$post_id    = $this->factory()->post->create(
+			array(
+				'post_title'   => 'Updated',
+				'post_content' => 'Imported content.',
+			)
+		);
+		$item_id    = $this->repository->log_import_action(
+			$session_id,
+			1,
+			'Updated',
+			'updated',
+			$post_id,
+			null,
+			array(
+				'previous_content' => 'Old content.',
+				'action'           => 'updated_existing',
+			)
+		);
+
+		$rival = function ( $query ) use ( &$rival, $item_id ) {
+			$query = (string) $query;
+
+			if (
+				0 !== stripos( ltrim( $query ), 'UPDATE' )
+				|| ! str_contains( $query, 'rolled_back' )
+			) {
+				return $query;
+			}
+
+			remove_filter( 'query', $rival );
+			$this->repository->claim_item_for_rollback( $item_id );
+
+			return $query;
+		};
+		add_filter( 'query', $rival );
+
+		try {
+			// ACT: Roll the item back against the rival.
+			$result = $this->rollback_service->rollback_item( $item_id );
+		} finally {
+			remove_filter( 'query', $rival );
+		}
+
+		// ASSERT: The losing request is refused.
+		$this->assertInstanceOf( WP_Error::class, $result );
+		$this->assertSame(
+			'item_already_rolled_back',
+			$result->get_error_code()
+		);
+
+		// ASSERT: It never wrote its snapshot over the post.
+		$this->assertSame(
+			'Imported content.',
+			get_post( $post_id )->post_content
+		);
+	}
+
+	/**
+	 * Verifies that a rollback into a trashed destination post is refused
+	 * rather than restoring where nobody can see it.
+	 */
+	public function test_rollback_item_refuses_a_trashed_destination(): void {
+		// ARRANGE: An updated item whose post was trashed after the listing
+		// that offered Roll back was loaded.
+		$session_id = $this->repository->create_session( 'https://example.com', 'bulk' );
+		$post_id    = $this->factory()->post->create(
+			array(
+				'post_title'   => 'Updated',
+				'post_content' => 'Imported content.',
+			)
+		);
+		$item_id    = $this->repository->log_import_action(
+			$session_id,
+			1,
+			'Updated',
+			'updated',
+			$post_id,
+			null,
+			array(
+				'previous_content' => 'Old content.',
+				'action'           => 'updated_existing',
+			)
+		);
+		wp_trash_post( $post_id );
+
+		// ACT: Roll the item back.
+		$result = $this->rollback_service->rollback_item( $item_id );
+
+		// ASSERT: The rollback is refused and names the trash.
+		$this->assertInstanceOf( WP_Error::class, $result );
+		$this->assertSame( 'post_in_trash', $result->get_error_code() );
+
+		// ASSERT: The snapshot was not written into the trashed post, and the
+		// item keeps the one rollback it had.
+		$this->assertSame(
+			'Imported content.',
+			get_post( $post_id )->post_content
+		);
+		$item = $this->repository->get_item( $item_id );
+		$this->assertSame( 0, (int) $item['rolled_back'] );
+	}
+
+	/**
+	 * Verifies that a created post in the trash is still deleted, since the
+	 * rollback removes it either way.
+	 */
+	public function test_rollback_item_deletes_a_trashed_created_post(): void {
+		// ARRANGE: A created item whose post was trashed after the listing
+		// that offered Roll back was loaded.
+		$session_id = $this->repository->create_session( 'https://example.com', 'bulk' );
+		$post_id    = $this->factory()->post->create(
+			array( 'post_title' => 'Imported Post' )
+		);
+		$item_id    = $this->repository->log_import_action(
+			$session_id,
+			1,
+			'Imported Post',
+			'success',
+			$post_id
+		);
+		wp_trash_post( $post_id );
+
+		// ACT: Roll the item back.
+		$result = $this->rollback_service->rollback_item( $item_id );
+
+		// ASSERT: The trash does not strand the post the import created.
+		$this->assertIsArray( $result );
+		$this->assertSame( 'deleted', $result['action'] );
+		$this->assertNull( get_post( $post_id ) );
+	}
+
+	/**
+	 * Verifies that a revert whose claim cannot be released reports the item
+	 * as stuck rather than as a plain failure.
+	 */
+	public function test_rollback_item_reports_a_claim_it_could_not_release(): void {
+		// ARRANGE: An updated item whose restore fails the integrity check,
+		// with the release write broken so the claim cannot come back.
+		$session_id = $this->repository->create_session( 'https://example.com', 'bulk' );
+		$post_id    = $this->factory()->post->create(
+			array( 'post_content' => 'Imported content.' )
+		);
+		$item_id    = $this->repository->log_import_action(
+			$session_id,
+			1,
+			'Updated',
+			'updated',
+			$post_id,
+			null,
+			array(
+				'previous_content' => 'Old content.',
+				'action'           => 'updated_existing',
+			)
+		);
+		$mangle     = static function ( array $data ): array {
+			$data['post_content'] = 'Mangled by a filter.';
+			return $data;
+		};
+		add_filter( 'wp_insert_post_data', $mangle );
+		$this->fail_queries_matching( 'SET `rolled_back` = 0' );
+
+		try {
+			// ACT: Roll the item back.
+			$result = $this->rollback_service->rollback_item( $item_id );
+		} finally {
+			remove_filter( 'wp_insert_post_data', $mangle );
+			$this->restore_failing_queries();
+		}
+
+		// ASSERT: The caller is told the record could not be reopened.
+		$this->assertInstanceOf( WP_Error::class, $result );
+		$this->assertSame( 'rollback_claim_stuck', $result->get_error_code() );
+
+		// ASSERT: The row is left flagged, which is what makes it stuck.
+		$item = $this->repository->get_item( $item_id );
+		$this->assertSame( 1, (int) $item['rolled_back'] );
+
+		// ASSERT: The audit log names the stuck item, not a plain failure.
+		$stuck = Audit_Log_Table::get_events(
+			array(
+				'channel'    => 'import',
+				'event_type' => 'ITEM_ROLLBACK_STUCK',
+			)
+		);
+		$this->assertCount( 1, $stuck );
+		$this->assertSame( 'error', $stuck[0]['level'] );
+		$this->assertSame( $item_id, $stuck[0]['data']['item_id'] );
+		$this->assertCount(
+			0,
+			Audit_Log_Table::get_events(
+				array(
+					'channel'    => 'import',
+					'event_type' => 'ITEM_ROLLBACK_FAILED',
+				)
+			)
+		);
+	}
+
+	/**
+	 * Verifies that a revert interrupted by a throwing hook releases its
+	 * claim, so the item stays retryable.
+	 */
+	public function test_rollback_item_reopens_when_a_hook_throws(): void {
+		// ARRANGE: An updated item whose save filter throws before the post
+		// is written.
+		$history = $this->create_updated_item( array() );
+		$throw   = static function (): never {
+			throw new RuntimeException( 'Hook failure.' );
+		};
+		add_filter( 'wp_insert_post_data', $throw );
+		$thrown = null;
+
+		try {
+			// ACT: Roll the item back through the throwing filter.
+			$this->rollback_service->rollback_item( $history['item_id'] );
+		} catch ( RuntimeException $exception ) {
+			$thrown = $exception;
+		} finally {
+			remove_filter( 'wp_insert_post_data', $throw );
+		}
+
+		// ASSERT: The exception reaches the caller.
+		$this->assertInstanceOf( RuntimeException::class, $thrown );
+		$this->assertSame( 'Hook failure.', $thrown->getMessage() );
+
+		// ASSERT: The post is untouched, and the item was reopened rather
+		// than left claimed.
+		$this->assertSame(
+			'Current content.',
+			get_post_field( 'post_content', $history['post_id'] )
+		);
+		$item = $this->repository->get_item( $history['item_id'] );
+		$this->assertSame( 0, (int) $item['rolled_back'] );
+
+		// ACT: Retry once the filter is gone.
+		$result = $this->rollback_service->rollback_item( $history['item_id'] );
+
+		// ASSERT: The retry restores the post and records the rollback.
+		$this->assertIsArray( $result );
+		$this->assertSame( 'restored', $result['action'] );
+		$this->assertSame(
+			'Previous content.',
+			get_post_field( 'post_content', $history['post_id'] )
+		);
+		$item = $this->repository->get_item( $history['item_id'] );
+		$this->assertSame( 1, (int) $item['rolled_back'] );
+	}
+
+	/**
+	 * Verifies that a rollback against a deleted destination post closes the
+	 * item instead of leaving its record open.
+	 */
+	public function test_rollback_item_closes_an_item_whose_post_is_gone(): void {
+		// ARRANGE: A created item whose post was deleted outside the plugin.
+		$session_id = $this->repository->create_session( 'https://example.com', 'bulk' );
+		$post_id    = $this->factory()->post->create(
+			array( 'post_title' => 'Imported Post' )
+		);
+		$item_id    = $this->repository->log_import_action(
+			$session_id,
+			1,
+			'Imported Post',
+			'success',
+			$post_id
+		);
+		wp_delete_post( $post_id, true );
+		Audit_Log_Table::clear( 'import' );
+
+		// ACT: Roll the item back.
+		$result = $this->rollback_service->rollback_item( $item_id );
+
+		// ASSERT: The rollback is refused and says the post is gone.
+		$this->assertInstanceOf( WP_Error::class, $result );
+		$this->assertSame( 'post_not_found', $result->get_error_code() );
+
+		// ASSERT: The row leaves the active set rather than staying open.
+		$item = $this->repository->get_item( $item_id );
+		$this->assertSame( 1, (int) $item['rolled_back'] );
+		$this->assertNull( $this->repository->get_item_for_post( $post_id ) );
+
+		// ASSERT: The audit log records a close, not a rollback.
+		$closed = Audit_Log_Table::get_events(
+			array(
+				'channel'    => 'import',
+				'event_type' => 'ITEM_CLOSED_POST_MISSING',
+			)
+		);
+		$this->assertCount( 1, $closed );
+		$this->assertSame( $item_id, $closed[0]['data']['item_id'] );
+		$this->assertSame( $session_id, $closed[0]['data']['session_id'] );
+		$this->assertSame( $post_id, $closed[0]['data']['post_id'] );
+		$this->assertCount(
+			0,
+			Audit_Log_Table::get_events(
+				array(
+					'channel'    => 'import',
+					'event_type' => 'ITEM_ROLLED_BACK',
+				)
+			)
+		);
+	}
+
+	/**
+	 * Verifies that an update over a post that held no content predicts a
+	 * restore, which is what the rollback then performs.
+	 */
+	public function test_update_over_empty_content_predicts_the_restore_it_performs(): void {
+		// ARRANGE: An update whose captured previous content is the empty
+		// string, as a page whose content lives in meta produces.
+		$session_id = $this->repository->create_session( 'https://example.com', 'bulk' );
+		$post_id    = $this->factory()->post->create(
+			array(
+				'post_title'   => 'Imported title',
+				'post_content' => 'Imported content.',
+			)
+		);
+		$item_id    = $this->repository->log_import_action(
+			$session_id,
+			1,
+			'Imported title',
+			'updated',
+			$post_id,
+			null,
+			array(
+				'previous_content' => '',
+				'previous_title'   => 'Original title',
+				'action'           => 'updated_existing',
+			)
+		);
+
+		// ASSERT: The stored prediction says restore, so the confirmation does
+		// not warn about a permanent deletion.
+		$item = $this->repository->get_item( $item_id );
+		$this->assertSame( '1', $item['has_previous_content'] );
+
+		// ACT: Roll the item back.
+		$result = $this->rollback_service->rollback_item( $item_id );
+
+		// ASSERT: The rollback restores, matching the prediction.
+		$this->assertIsArray( $result );
+		$this->assertSame( 'restored', $result['action'] );
+		$post = get_post( $post_id );
+		$this->assertNotNull( $post );
+		$this->assertSame( '', $post->post_content );
+		$this->assertSame( 'Original title', $post->post_title );
+	}
+
+	/**
+	 * Verifies that an update whose snapshot could not be stored predicts no
+	 * restore and is refused rather than deleting the post.
+	 */
+	public function test_update_with_an_unstorable_snapshot_predicts_no_restore(): void {
+		// ARRANGE: A changes payload wp_json_encode() rejects.
+		$session_id = $this->repository->create_session( 'https://example.com', 'bulk' );
+		$post_id    = $this->factory()->post->create(
+			array( 'post_title' => 'Imported title' )
+		);
+		$item_id    = $this->repository->log_import_action(
+			$session_id,
+			1,
+			'Imported title',
+			'updated',
+			$post_id,
+			null,
+			array(
+				'previous_content' => 'Old content.',
+				'unencodable'      => INF,
+			)
+		);
+
+		// ASSERT: Nothing persisted, so the row promises no restore.
+		$item = $this->repository->get_item( $item_id );
+		$this->assertNull( $item['content_changes'] );
+		$this->assertSame( '0', $item['has_previous_content'] );
+
+		// ACT: Roll the item back.
+		$result = $this->rollback_service->rollback_item( $item_id );
+
+		// ASSERT: The rollback is refused and the post survives.
+		$this->assertInstanceOf( WP_Error::class, $result );
+		$this->assertSame(
+			'missing_rollback_snapshot',
+			$result->get_error_code()
+		);
+		$this->assertNotNull( get_post( $post_id ) );
+	}
+
+	/**
 	 * Verifies that replaying a rolled-back item is refused and leaves the
 	 * post's current content untouched.
 	 */
@@ -1630,11 +2076,11 @@ class Session_Rollback_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Verifies that marking an already-rolled-back item reports success and
-	 * emits an ITEM_ALREADY_ROLLED_BACK event instead of ITEM_ROLLED_BACK.
+	 * Verifies that claiming an already-claimed item loses, and emits an
+	 * ITEM_ALREADY_ROLLED_BACK event instead of ITEM_ROLLED_BACK.
 	 */
-	public function test_mark_item_rolled_back_emits_already_rolled_back_when_no_row_changed(): void {
-		// ARRANGE: Item that is already flagged as rolled_back.
+	public function test_claim_item_for_rollback_loses_against_a_held_claim(): void {
+		// ARRANGE: Item whose claim is already held.
 		$session_id = $this->repository->create_session(
 			'https://example.com',
 			'bulk'
@@ -1649,14 +2095,15 @@ class Session_Rollback_Test extends Integration_Test_Case {
 			'success',
 			$post_id
 		);
-		$this->repository->mark_item_rolled_back( $item_id );
+		$this->assertTrue( $this->repository->claim_item_for_rollback( $item_id ) );
 		Audit_Log_Table::clear( 'import' );
 
-		// ACT: Mark the same item as rolled back again.
-		$flagged = $this->repository->mark_item_rolled_back( $item_id );
+		// ACT: Claim the same item again.
+		$claimed = $this->repository->claim_item_for_rollback( $item_id );
 
-		// ASSERT: The row already carries the flag, so the write succeeded.
-		$this->assertTrue( $flagged );
+		// ASSERT: The second caller is refused rather than told it won.
+		$this->assertInstanceOf( WP_Error::class, $claimed );
+		$this->assertSame( 'item_already_rolled_back', $claimed->get_error_code() );
 
 		// ASSERT: An ITEM_ALREADY_ROLLED_BACK event was emitted, not an
 		// ITEM_ROLLED_BACK event.
@@ -1686,7 +2133,7 @@ class Session_Rollback_Test extends Integration_Test_Case {
 	 * failure to its caller and emits an ITEM_ROLLBACK_FAILED audit event
 	 * with the wpdb error captured.
 	 */
-	public function test_mark_item_rolled_back_emits_failed_when_update_errors(): void {
+	public function test_claim_item_for_rollback_emits_failed_when_update_errors(): void {
 		// ARRANGE: A session with one item, and the items table's UPDATEs
 		// forced to fail.
 		$session_id = $this->repository->create_session( 'https://example.com', 'bulk' );
@@ -1702,16 +2149,16 @@ class Session_Rollback_Test extends Integration_Test_Case {
 		);
 		$this->fail_table_queries( 'UPDATE', Import_Items_Table::table_name() );
 
-		// ACT: Roll back the item.
-		$flagged = $this->repository->mark_item_rolled_back( $item_id );
+		// ACT: Claim the item.
+		$claimed = $this->repository->claim_item_for_rollback( $item_id );
 
 		// ASSERT: The failed write is reported to the caller.
-		$this->assertFalse( $flagged );
+		$this->assertInstanceOf( WP_Error::class, $claimed );
+		$this->assertSame( 'rollback_not_started', $claimed->get_error_code() );
 
 		// ASSERT: An ITEM_ROLLBACK_FAILED error event was emitted with the
-		// item ID, the snapshotted session_id and post_id (SELECT runs
-		// before the filtered UPDATE, so these are real values), and a
-		// non-empty wpdb_error string.
+		// item ID, real session_id and post_id (only UPDATEs are filtered, so
+		// the parent read still answers), and a non-empty wpdb_error string.
 		$events = Audit_Log_Table::get_events(
 			array(
 				'channel'    => 'import',
@@ -1736,12 +2183,12 @@ class Session_Rollback_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Verifies that a rollback whose flag write fails is reported as an
-	 * error even though the post was reverted.
+	 * Verifies that a rollback whose claim cannot be written is refused
+	 * before the post is touched.
 	 */
-	public function test_rollback_item_reports_a_rollback_it_could_not_record(): void {
+	public function test_rollback_item_refuses_a_claim_it_could_not_write(): void {
 		// ARRANGE: An updated item, with the items table's UPDATEs forced to
-		// fail at the SQL layer so only the flag write breaks.
+		// fail at the SQL layer so the claim breaks.
 		$session_id = $this->repository->create_session( 'https://example.com', 'bulk' );
 		$post_id    = $this->factory()->post->create(
 			array(
@@ -1766,16 +2213,16 @@ class Session_Rollback_Test extends Integration_Test_Case {
 		// ACT: Roll the item back.
 		$result = $this->rollback_service->rollback_item( $item_id );
 
-		// ASSERT: The caller is told the rollback went unrecorded.
+		// ASSERT: The caller is told the rollback never started.
 		$this->assertInstanceOf( WP_Error::class, $result );
-		$this->assertSame( 'rollback_not_recorded', $result->get_error_code() );
+		$this->assertSame( 'rollback_not_started', $result->get_error_code() );
 
-		// ASSERT: The revert itself still happened.
+		// ASSERT: The post keeps the imported content, untouched.
 		$post = get_post( $post_id );
 		$this->assertNotNull( $post );
-		$this->assertSame( 'Old content.', $post->post_content );
+		$this->assertSame( 'Imported content.', $post->post_content );
 
-		// ASSERT: The row stayed unflagged, matching what was reported.
+		// ASSERT: The row stayed unflagged, so the item is still retryable.
 		$item = $this->repository->get_item( $item_id );
 		$this->assertSame( 0, (int) $item['rolled_back'] );
 	}

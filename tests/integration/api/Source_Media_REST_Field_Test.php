@@ -224,6 +224,126 @@ class Source_Media_REST_Field_Test extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Verifies that scheme-less media resolves to its source library metadata.
+	 */
+	public function test_field_maps_scheme_less_urls_to_library_metadata(): void {
+		// ARRANGE: Local attachments and a foreign-only attachment reference.
+		$protocol     = $this->seed_attachment( '2025/01/protocol.jpg', 'Protocol' );
+		$root         = $this->seed_attachment( '2025/01/root.jpg', 'Root' );
+		$foreign      = $this->seed_attachment( '2025/01/foreign.jpg', 'Foreign' );
+		$protocol_url = (string) preg_replace(
+			'#^https?:#',
+			'',
+			$protocol['url']
+		);
+		$root_url     = (string) wp_parse_url( $root['url'], PHP_URL_PATH );
+		$foreign_path = (string) wp_parse_url( $foreign['url'], PHP_URL_PATH );
+		$post_id      = self::factory()->post->create(
+			array(
+				'post_content' => '<img src="' . $protocol_url . '">'
+					. '<img src="' . $root_url . '">'
+					. '<img src="//unrelated.example.com' . $foreign_path . '">',
+			)
+		);
+		$this->force_hmac_authenticated( true );
+
+		// ACT: Read the source media map through the single-post REST field.
+		$response = $this->server->dispatch(
+			new WP_REST_Request( 'GET', '/wp/v2/posts/' . $post_id )
+		);
+
+		// ASSERT: Each local URL carries its complete library metadata.
+		$this->assertSame( 200, $response->get_status() );
+		$media = $response->get_data()['safe_publish_media'];
+		$this->assertSame( array( $protocol['url'], $root['url'] ), array_keys( $media ) );
+		$this->assertSame( 'Protocol alt', $media[ $protocol['url'] ]['alt'] );
+		$this->assertSame( 'Protocol title', $media[ $protocol['url'] ]['title'] );
+		$this->assertSame( 'Protocol caption', $media[ $protocol['url'] ]['caption'] );
+		$this->assertSame( 'Root alt', $media[ $root['url'] ]['alt'] );
+		$this->assertSame( 'Root title', $media[ $root['url'] ]['title'] );
+		$this->assertSame( 'Root caption', $media[ $root['url'] ]['caption'] );
+	}
+
+	/**
+	 * Verifies that a site port is retained for every supported URL form.
+	 */
+	public function test_field_maps_media_urls_with_site_port(): void {
+		// ARRANGE: The source site and its upload URLs use a non-default port.
+		$with_port = static fn ( string $url ): string => (string) preg_replace(
+			'#^(https?://[^/:]+)(?::\d+)?#',
+			'$1:8443',
+			$url
+		);
+		add_filter( 'home_url', $with_port );
+		add_filter(
+			'upload_dir',
+			static function ( array $dir ) use ( $with_port ): array {
+				$dir['baseurl'] = $with_port( (string) $dir['baseurl'] );
+				$dir['url']     = $with_port( (string) $dir['url'] );
+				return $dir;
+			}
+		);
+		$absolute     = $this->seed_attachment( '2025/01/absolute.jpg', 'Absolute' );
+		$protocol     = $this->seed_attachment( '2025/01/protocol.jpg', 'Protocol' );
+		$root         = $this->seed_attachment( '2025/01/root.jpg', 'Root' );
+		$absolute_url = str_replace(
+			'absolute',
+			"abso\nlute",
+			$absolute['url']
+		);
+		$protocol_url = str_replace(
+			'protocol',
+			"pro\ntocol",
+			(string) preg_replace( '#^https?:#', '', $protocol['url'] )
+		);
+		$user_id      = self::factory()->user->create(
+			array( 'role' => 'administrator' )
+		);
+		wp_set_current_user( $user_id );
+		$this->grant_current_user_unfiltered_html();
+		$looked_up = array();
+		add_filter(
+			'pre_attachment_url_to_postid',
+			static function ( ?int $result, string $url ) use ( &$looked_up ) {
+				$looked_up[] = $url;
+				return $result;
+			},
+			10,
+			2
+		);
+		$post_id = self::factory()->post->create(
+			array(
+				'post_content' => '<img src="' . $absolute_url . '">'
+					. '<img src="' . $protocol_url . '">'
+					. '<img src="' . wp_parse_url( $root['url'], PHP_URL_PATH )
+					. '">',
+			)
+		);
+		$this->force_hmac_authenticated( true );
+		$this->assertStringContainsString( ':8443', home_url() );
+		$this->assertStringContainsString(
+			$protocol_url,
+			(string) get_post_field( 'post_content', $post_id )
+		);
+
+		// ACT: Read the source media map through the single-post REST field.
+		$response = $this->server->dispatch(
+			new WP_REST_Request( 'GET', '/wp/v2/posts/' . $post_id )
+		);
+
+		// ASSERT: Every form resolves to its attachment on the ported site.
+		$this->assertSame( 200, $response->get_status() );
+		$this->assertContains( $absolute['url'], $looked_up );
+		$this->assertContains( $protocol['url'], $looked_up );
+		$this->assertContains( $root['url'], $looked_up );
+		$media = $response->get_data()['safe_publish_media'];
+		$this->assertCount( 3, $media );
+		$this->assertSame( 'Absolute alt', $media[ $absolute['url'] ]['alt'] );
+		$this->assertSame( 'Protocol alt', $media[ $protocol['url'] ]['alt'] );
+		$this->assertSame( 'Root alt', $media[ $root['url'] ]['alt'] );
+	}
+
+	/**
 	 * Verifies that line breaks and tabs inside image URLs preserve library
 	 * metadata and source parents under the URLs the importer will request.
 	 */
@@ -239,8 +359,16 @@ class Source_Media_REST_Field_Test extends WP_UnitTestCase {
 				'post_parent' => $parent,
 			)
 		);
-		$broken_url = str_replace( 'line-broken', "line-\nbroken", $image['url'] );
-		$tabbed_url = str_replace( 'tab-broken', "tab-\tbroken", $tabbed['url'] );
+		$broken_url = str_replace(
+			'line-broken',
+			"line-\nbroken",
+			(string) preg_replace( '#^https?:#', '', $image['url'] )
+		);
+		$tabbed_url = str_replace(
+			'tab-broken',
+			"tab-\tbroken",
+			(string) wp_parse_url( $tabbed['url'], PHP_URL_PATH )
+		);
 		$post_id    = self::factory()->post->create(
 			array(
 				'post_content' => '<img src="' . $broken_url . '">'
@@ -284,7 +412,11 @@ class Source_Media_REST_Field_Test extends WP_UnitTestCase {
 	public function test_field_maps_line_broken_block_attribute_url(): void {
 		// ARRANGE: A cover URL exists only in the block comment's JSON attrs.
 		$image      = $this->seed_attachment( '2025/01/cover-image.jpg' );
-		$broken_url = str_replace( 'cover-image', "cover-\nimage", $image['url'] );
+		$broken_url = str_replace(
+			'cover-image',
+			"cover-\nimage",
+			(string) wp_parse_url( $image['url'], PHP_URL_PATH )
+		);
 		$content    = serialize_block(
 			array(
 				'blockName'    => 'core/cover',
@@ -482,9 +614,17 @@ class Source_Media_REST_Field_Test extends WP_UnitTestCase {
 			)
 		);
 		$content = '[video src="'
-			. str_replace( 'clip', "cl\nip", $video['url'] )
+			. str_replace(
+				'clip',
+				"cl\nip",
+				(string) preg_replace( '#^https?:#', '', $video['url'] )
+			)
 			. '" poster="'
-			. str_replace( 'poster', "po\tster", $poster['url'] )
+			. str_replace(
+				'poster',
+				"po\tster",
+				(string) wp_parse_url( $poster['url'], PHP_URL_PATH )
+			)
 			. '"] [audio mp3="'
 			. str_replace( 'track', "tr\rack", $audio['url'] )
 			. '"] [[video src="'
@@ -825,6 +965,45 @@ class Source_Media_REST_Field_Test extends WP_UnitTestCase {
 		$this->assertContains( $image['url'], $looked_up );
 		$this->assertNotContains( home_url( '/about' ), $looked_up );
 		$this->assertNotContains( home_url( '/contact' ), $looked_up );
+	}
+
+	/**
+	 * Verifies that HTML closing syntax is not queried as root-relative media.
+	 */
+	public function test_field_skips_markup_lookups_with_web_root_uploads(): void {
+		// ARRANGE: A web-root upload path cannot filter non-media by directory.
+		add_filter(
+			'upload_dir',
+			static function ( array $dir ): array {
+				$dir['baseurl'] = home_url( '/' );
+				return $dir;
+			}
+		);
+		$looked_up = array();
+		add_filter(
+			'pre_attachment_url_to_postid',
+			static function ( ?int $result, string $url ) use ( &$looked_up ) {
+				$looked_up[] = $url;
+				return $result;
+			},
+			10,
+			2
+		);
+		$post_id = self::factory()->post->create(
+			array(
+				'post_content' => '<p>Example</p><!-- /wp:image -->',
+			)
+		);
+		$this->force_hmac_authenticated( true );
+
+		// ACT: Export the source media map.
+		$response = $this->server->dispatch(
+			new WP_REST_Request( 'GET', '/wp/v2/posts/' . $post_id )
+		);
+
+		// ASSERT: Neither closing syntax reaches an attachment lookup.
+		$this->assertSame( 200, $response->get_status() );
+		$this->assertSame( array(), $looked_up );
 	}
 
 	/**

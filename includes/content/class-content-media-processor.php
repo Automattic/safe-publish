@@ -274,7 +274,11 @@ class Content_Media_Processor {
 		}
 
 		if ( false === $new_url ) {
-			$this->failed_media[ $url ] = $block_name;
+			$download_url                        = Media_Importer::get_download_url(
+				$url,
+				$source_site_url
+			);
+			$this->failed_media[ $download_url ] = $block_name;
 		}
 
 		return null;
@@ -401,7 +405,11 @@ class Content_Media_Processor {
 			}
 
 			if ( false === $new_url ) {
-				$this->failed_media[ $url ] = $block_name;
+				$download_url                        = Media_Importer::get_download_url(
+					$url,
+					$source_site_url
+				);
+				$this->failed_media[ $download_url ] = $block_name;
 				continue;
 			}
 
@@ -445,10 +453,16 @@ class Content_Media_Processor {
 
 		// Strip comments and script/style blocks so URLs inside them don't
 		// trigger false positives. The HTML API natively skips these during
-		// processing, but this detection pass uses a plain regex.
-		$check_content = preg_replace(
-			'~<!--.*?-->|<(script|style)\b[^>]*>.*?</\1\s*>~si',
-			'',
+		// processing, but this detection pass uses a plain regex. An unclosed
+		// script or style tag matches to the end once and is kept, since the
+		// HTML API stops there. Possessive runs avoid a backtrack per byte.
+		$check_content = preg_replace_callback(
+			'~<!--.*?-->|<(script|style)\b[^>]*>'
+				. '[^<]*+(?:<(?!/\1\s*>)[^<]*+)*+(</\1\s*>)?~si',
+			static fn ( array $matches ): string =>
+				isset( $matches[1] ) && ! isset( $matches[2] )
+					? $matches[0]
+					: '',
 			$content
 		) ?? $content;
 
@@ -471,12 +485,13 @@ class Content_Media_Processor {
 
 		foreach ( $remaining as $raw_url ) {
 			// The regex reads raw markup, so decode entities the way the tag
-			// processor does; otherwise an already-recorded failure keyed by
-			// the decoded URL isn't matched here.
+			// processor does; otherwise the failed download URL won't match.
 			$url = WP_HTML_Decoder::decode_attribute( $raw_url );
 
+			$download_url = Media_Importer::get_download_url( $url, $source_site_url );
+
 			if ( ! array_key_exists( $url, $this->unprocessable_media )
-				&& ! array_key_exists( $url, $this->failed_media ) ) {
+				&& ! array_key_exists( $download_url, $this->failed_media ) ) {
 				$this->unprocessable_media[ $url ] = $block_name;
 			}
 		}
