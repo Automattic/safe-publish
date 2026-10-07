@@ -791,15 +791,14 @@ class Media_Importer {
 	 * Fetches a source post's attached media set of a given type: The ordered
 	 * { id, menu_order } list a cross-post [gallery id="B"]/[playlist id="B"]
 	 * renders. Reads the source's referenced-media enrichment field, since the
-	 * media REST omits menu_order. The optional success flag distinguishes a
-	 * valid empty set from a failed fetch.
+	 * media REST omits menu_order. Any fetch or shape failure is logged and
+	 * yields an empty set so the caller degrades rather than aborts.
 	 *
 	 * @param int    $source_post_id   Referenced source post ID.
 	 * @param string $source_post_type Its post type slug, to resolve the REST base.
 	 * @param string $mime_group       Media type group: image, audio, or video.
 	 * @param string $source_site_url  Source site URL.
 	 * @param array  $auth_credentials Optional. Authentication credentials. Default empty array.
-	 * @param ?bool  $fetch_succeeded  Optional. Whether the fetch succeeded.
 	 * @return list<array{id: int, menu_order: int}> Ordered set, or empty.
 	 */
 	public function fetch_referenced_media_set(
@@ -807,11 +806,9 @@ class Media_Importer {
 		string $source_post_type,
 		string $mime_group,
 		string $source_site_url,
-		array $auth_credentials = array(),
-		?bool &$fetch_succeeded = null
+		array $auth_credentials = array()
 	): array {
-		$fetch_succeeded = false;
-		$rest_base       = Source_Post_Type_Resolver::resolve_rest_base(
+		$rest_base = Source_Post_Type_Resolver::resolve_rest_base(
 			$source_post_type,
 			$source_site_url,
 			array( $this->http_client, 'make_request' ),
@@ -854,10 +851,7 @@ class Media_Importer {
 		$items = is_array( $field )
 			? ( $field[ $mime_group ] ?? array() )
 			: null;
-		$set   = is_array( $items ) && array_is_list( $items )
-			? Source_Media_REST_Field::normalize_menu_order_set( $items )
-			: null;
-		if ( null === $set || count( $set ) !== count( $items ) ) {
+		if ( ! is_array( $items ) ) {
 			$this->logger->source_media_fetch_failed(
 				$source_post_id,
 				$source_site_url,
@@ -866,9 +860,7 @@ class Media_Importer {
 			return array();
 		}
 
-		$fetch_succeeded = true;
-
-		return $set;
+		return Source_Media_REST_Field::normalize_menu_order_set( $items );
 	}
 
 	/**

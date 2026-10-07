@@ -267,16 +267,17 @@ class Content_Processor {
 			isset( $context['source_post_id'] ) ? (int) $context['source_post_id'] : 0
 		);
 
-		// Pull imported references' media before remapping their post IDs.
-		$this->import_referenced_media_sets(
-			$referenced,
+		// Remap or strip the singular gallery/playlist `id` post reference.
+		$processed_content = $this->rewrite_gallery_post_references(
+			$processed_content,
 			$source_site_url,
 			$context
 		);
 
-		// Remap or strip the singular gallery/playlist `id` post reference.
-		$processed_content = $this->rewrite_gallery_post_references(
-			$processed_content,
+		// Pull each referenced post's rendered set so the remapped shortcode
+		// fills on the destination.
+		$this->import_referenced_media_sets(
+			$referenced,
 			$source_site_url,
 			$context
 		);
@@ -480,9 +481,10 @@ class Content_Processor {
 	 * Pulls the rendered set each cross-post [gallery id="B"]/[playlist id="B"]
 	 * reference imports, so the remapped shortcode fills on the destination.
 	 *
-	 * B is resolved like the id remap; an unimported B is skipped and later
-	 * recorded as a retryable warning by the remap. Each pulled item records
-	 * its source parent for the persist-time forward pass to parent to dest-B.
+	 * B is resolved like the id remap; an unimported B is skipped, having
+	 * already been recorded as a retryable warning by the remap. Each pulled
+	 * item records its source parent, which the persist-time forward pass
+	 * parents to dest-B.
 	 *
 	 * @param list<array{tag: string, type: string, source_id: int}> $referenced      Collected references.
 	 * @param string                                                 $source_site_url Source site URL.
@@ -534,8 +536,9 @@ class Content_Processor {
 
 	/**
 	 * Sideloads a referenced post's rendered set for one shortcode, applying
-	 * the source menu_order. A dangling or failed item is skipped and logged.
-	 * $parent_to_dest parents each item outside the persist-time forward pass.
+	 * the source menu_order. A dangling or failed item is skipped, not fatal.
+	 * $parent_to_dest parents each item to the referenced post, for the retry
+	 * path that runs outside the persist-time forward pass.
 	 *
 	 * @param array{tag: string, type: string, source_id: int} $ref             Collected reference.
 	 * @param int                                              $dest_post_id    Destination referenced post.
@@ -1856,8 +1859,8 @@ class Content_Processor {
 	 * resolvable destination, rewriting the persisted content in place.
 	 *
 	 * Targeted counterpart to the import-time remap: It rewrites only the `id`
-	 * matching $target_ref after fetching the referenced media set, and
-	 * persists without a revision or post_modified bump.
+	 * matching $target_ref and persists without a revision or post_modified
+	 * bump.
 	 *
 	 * @param int    $affected_post_id Post holding the stale reference.
 	 * @param int    $target_ref       Source post ID to repoint.
@@ -1922,8 +1925,8 @@ class Content_Processor {
 			);
 		}
 
-		// Pull any available media, while resolving the imported post ID even
-		// when its source media cannot be fetched or sideloaded.
+		// B is now imported; pull the set the reference renders and parent it
+		// to dest-B.
 		$this->pull_referenced_sets_for_retry(
 			$post->post_content,
 			$target_ref,

@@ -2134,9 +2134,9 @@ class Post_Import_Service {
 	 * Repoints one stale gallery/playlist `id` post reference in place and
 	 * resolves its issue on success.
 	 *
-	 * Self-verifying: The issue clears only when the target post resolves, the
-	 * referenced media set was fully imported, and the reference was rewritten;
-	 * otherwise the row stays, with last_seen refreshed.
+	 * Self-verifying: The issue clears only when the target post now resolves
+	 * and the reference was rewritten; otherwise the row stays, with last_seen
+	 * refreshed.
 	 *
 	 * @param int    $affected_post_id Post holding the reference.
 	 * @param int    $target_ref       Source post ID to repoint.
