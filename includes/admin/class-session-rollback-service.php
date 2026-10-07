@@ -341,39 +341,141 @@ final class Session_Rollback_Service {
 			);
 		}
 
-		$omissions  = array();
-		$referenced = $this->referenced_attachment_ids( $imported_media_ids );
+		return array(
+			'action'     => 'deleted',
+			'post_id'    => $post_id,
+			'post_title' => $post_title,
+			'omissions'  => $this->delete_imported_media( $imported_media_ids ),
+		);
+	}
 
-		foreach ( $imported_media_ids as $attachment_id ) {
-			// A check that could not answer withholds every deletion, since one
-			// failed scan covered the whole batch.
-			if ( null === $referenced ) {
-				$omissions[] = array(
+	/**
+	 * Deletes the imported attachments no surviving post still shows.
+	 *
+	 * An attachment can hold another as its poster, and keeps it only while
+	 * surviving itself. Holders go first, so one WordPress fails to delete
+	 * still keeps its poster.
+	 *
+	 * @param int[] $attachment_ids Owned, import-created attachment IDs.
+	 * @return array[] An omission per attachment a failure retained.
+	 */
+	private function delete_imported_media( array $attachment_ids ): array {
+		if ( array() === $attachment_ids ) {
+			return array();
+		}
+
+		$referenced = $this->referenced_attachment_ids( $attachment_ids );
+		$posters    = $this->poster_holders_in_batch( $attachment_ids );
+
+		// A check that could not answer withholds every deletion, since one
+		// failed scan covered the whole batch.
+		if ( null === $referenced || null === $posters ) {
+			return array_map(
+				static fn ( int $attachment_id ): array => array(
 					'field'         => 'media',
 					'reason'        => 'usage_check_failed',
 					'attachment_id' => $attachment_id,
-				);
-				continue;
-			}
+				),
+				$attachment_ids
+			);
+		}
 
+		$kept      = $this->with_held_posters(
+			array_fill_keys( $referenced, true ),
+			$posters
+		);
+		$ordered   = $this->holders_first( $attachment_ids, $posters );
+		$omissions = array();
+
+		foreach ( $ordered as $attachment_id ) {
 			// A surviving post may still show media parented here, since import
 			// deduplicates by source URL; skip those and delete only what this
 			// post solely owns.
-			if ( in_array( $attachment_id, $referenced, true ) ) {
+			if ( isset( $kept[ $attachment_id ] ) ) {
 				continue;
 			}
 
 			// Defer to the site's MEDIA_TRASH setting rather than forcing, so
 			// a wrong deletion stays recoverable where media trash is on.
-			wp_delete_attachment( $attachment_id, false );
+			$deleted = wp_delete_attachment( $attachment_id, false );
+
+			if ( $deleted instanceof WP_Post ) {
+				continue;
+			}
+
+			$kept[ $attachment_id ] = true;
+			$omissions[]            = array(
+				'field'         => 'media',
+				'reason'        => 'delete_failed',
+				'attachment_id' => $attachment_id,
+			);
+
+			$kept = $this->with_held_posters( $kept, $posters );
 		}
 
-		return array(
-			'action'     => 'deleted',
-			'post_id'    => $post_id,
-			'post_title' => $post_title,
-			'omissions'  => $omissions,
-		);
+		return $omissions;
+	}
+
+	/**
+	 * Adds the posters kept attachments hold, and any those posters hold.
+	 *
+	 * @param array<int, true>  $kept    Kept attachment IDs as keys.
+	 * @param array<int, int[]> $posters Held attachment IDs keyed by their holder.
+	 * @return array<int, true> Kept attachment IDs as keys, posters included.
+	 */
+	private function with_held_posters( array $kept, array $posters ): array {
+		// Repeated because a poster can itself hold one.
+		do {
+			$before = count( $kept );
+
+			foreach ( $posters as $holder_id => $held_ids ) {
+				if ( ! isset( $kept[ $holder_id ] ) ) {
+					continue;
+				}
+
+				foreach ( $held_ids as $held_id ) {
+					$kept[ $held_id ] = true;
+				}
+			}
+
+			$after = count( $kept );
+		} while ( $after > $before );
+
+		return $kept;
+	}
+
+	/**
+	 * Orders attachments so each holder comes before the posters it holds.
+	 *
+	 * @param int[]             $attachment_ids Attachment IDs.
+	 * @param array<int, int[]> $posters        Held attachment IDs keyed by their holder.
+	 * @return int[] Attachment IDs, holders first.
+	 */
+	private function holders_first(
+		array $attachment_ids,
+		array $posters
+	): array {
+		$ordered   = array();
+		$remaining = array_fill_keys( $attachment_ids, true );
+
+		while ( array() !== $remaining ) {
+			$holders = array_intersect_key( $posters, $remaining );
+			$next    = $remaining;
+
+			foreach ( $holders as $held_ids ) {
+				$next = array_diff_key( $next, array_flip( $held_ids ) );
+			}
+
+			// Posters holding each other in a loop have no first holder.
+			if ( array() === $next ) {
+				$next = $remaining;
+			}
+
+			$ordered   = array_merge( $ordered, array_keys( $next ) );
+			$remaining = array_diff_key( $remaining, $next );
+		}
+
+		return $ordered;
 	}
 
 	/**
@@ -428,10 +530,6 @@ final class Session_Rollback_Service {
 	 *                    answer.
 	 */
 	private function referenced_attachment_ids( array $attachment_ids ): ?array {
-		if ( array() === $attachment_ids ) {
-			return array();
-		}
-
 		$featured = $this->featured_image_attachment_ids( $attachment_ids );
 		$inlined  = $this->inlined_attachment_ids( $attachment_ids );
 		$listed   = $this->shortcode_attachment_ids();
@@ -452,7 +550,8 @@ final class Session_Rollback_Service {
 	}
 
 	/**
-	 * Returns which of the attachments a post uses as its featured image.
+	 * Returns which of the attachments a post outside the batch uses as its
+	 * featured image.
 	 *
 	 * Direct query: WP_Query's 'any' drops exclude_from_search types and
 	 * statuses, and a posts_where filter narrowing the result would read as
@@ -466,16 +565,18 @@ final class Session_Rollback_Service {
 		global $wpdb;
 
 		$placeholders = implode( ', ', array_fill( 0, count( $attachment_ids ), '%s' ) );
+		$values       = array_map( 'strval', $attachment_ids );
 
 		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
-		$values = $wpdb->get_col(
+		$held = $wpdb->get_col(
 			$wpdb->prepare(
 				"SELECT DISTINCT meta.meta_value FROM {$wpdb->postmeta} AS meta
 				 INNER JOIN {$wpdb->posts} AS posts ON posts.ID = meta.post_id
 				 WHERE meta.meta_key = '_thumbnail_id'
 					 AND meta.meta_value IN ( {$placeholders} )
+					 AND meta.post_id NOT IN ( {$placeholders} )
 					 AND posts.post_status <> 'auto-draft'",
-				array_map( 'strval', $attachment_ids )
+				array_merge( $values, $values )
 			)
 		);
 		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
@@ -484,7 +585,50 @@ final class Session_Rollback_Service {
 			return null;
 		}
 
-		return array_map( 'intval', $values );
+		return array_map( 'intval', $held );
+	}
+
+	/**
+	 * Returns which of the attachments each attachment holds as its poster.
+	 *
+	 * Split from the featured-image check so that one stays a row per
+	 * attachment: Holder identity only matters inside the batch, and asking
+	 * for it site-wide returns a row per holding post.
+	 *
+	 * @param int[] $attachment_ids Attachment IDs.
+	 * @return array<int, int[]>|null Held attachment IDs keyed by their holder,
+	 *                                null when the query failed.
+	 */
+	private function poster_holders_in_batch( array $attachment_ids ): ?array {
+		global $wpdb;
+
+		$placeholders = implode( ', ', array_fill( 0, count( $attachment_ids ), '%s' ) );
+		$values       = array_map( 'strval', $attachment_ids );
+
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
+		$rows = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT meta.post_id, meta.meta_value
+				 FROM {$wpdb->postmeta} AS meta
+				 WHERE meta.meta_key = '_thumbnail_id'
+					 AND meta.post_id IN ( {$placeholders} )
+					 AND meta.meta_value IN ( {$placeholders} )",
+				array_merge( $values, $values )
+			)
+		);
+		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
+
+		if ( '' !== $wpdb->last_error ) {
+			return null;
+		}
+
+		$holders = array();
+
+		foreach ( $rows as $row ) {
+			$holders[ (int) $row->post_id ][] = (int) $row->meta_value;
+		}
+
+		return $holders;
 	}
 
 	/**
