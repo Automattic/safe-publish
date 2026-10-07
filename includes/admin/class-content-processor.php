@@ -2972,6 +2972,7 @@ class Content_Processor {
 			$post             = get_post( $post_id );
 			if (
 				! $post instanceof WP_Post
+				|| ! post_type_exists( $post->post_type )
 				|| in_array(
 					$post->post_status,
 					array( 'draft', 'pending', 'auto-draft' ),

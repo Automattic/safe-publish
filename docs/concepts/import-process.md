@@ -304,11 +304,11 @@ Internal links inside post body content (for example `<a href>` in paragraphs an
 
 A permalink stored in a custom or third-party block's attributes — for example a block that saves a post's own URL — is treated the same way: host-swapped, but not re-derived. Rewriting an arbitrary attribute that merely looks like a permalink could point it at the wrong content, so only blocks whose attributes carry an explicit, known entity reference are re-derived.
 
-Navigation links and submenus are the exception: they carry an explicit entity reference, so their URLs are re-derived to the destination permalink when every slug in the target's path is final. Otherwise, the link ID is still mapped, and the URL is deferred (see [below](#navigation-links-with-deferred-urls)).
+Navigation links and submenus are the exception: they carry an explicit entity reference, so their URLs are re-derived to the destination permalink when every slug in the target's path is final and its post type is registered. Otherwise, the link ID is still mapped, and the URL is deferred (see [below](#navigation-links-with-deferred-urls)).
 
 ### Navigation links with deferred URLs
 
-If a target or one of its ancestors is a draft or pending approval, its slug can still change. The link keeps the host-swapped source path, which can 404 or open the wrong page after a slug collision. Needs attention records this deferred URL. Once the whole target path is final, use Retry to repair the URL without changing its mapped ID. Scheduled and non-public custom-status targets have final slugs and can be re-derived during import.
+If a target or one of its ancestors is a draft or pending approval, its slug can still change. An unregistered target post type also prevents a final permalink from being derived. The link keeps the host-swapped source path, which can 404 or open the wrong page after a slug collision. Needs attention records this deferred URL. Once the whole target path is final and its post type is registered, use Retry to repair the URL without changing its mapped ID. Scheduled and non-public custom-status targets have final slugs and can be re-derived during import.
 
 ### Navigation links to a term in another taxonomy are left unrepointed
 
