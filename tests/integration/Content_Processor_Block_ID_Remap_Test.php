@@ -1047,38 +1047,397 @@ class Content_Processor_Block_ID_Remap_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Verifies that scheduled and custom-status targets have final slugs.
+	 * Verifies that a scheduled target's url is re-derived to the permalink it
+	 * will carry on publication, not the temporary plain form.
 	 */
-	public function test_derives_urls_for_future_and_custom_statuses(): void {
-		// ARRANGE: Both statuses have final slugs despite being non-public.
+	public function test_rederives_scheduled_post_target(): void {
+		// ARRANGE: Pretty permalinks; a scheduled target whose slug was uniqued
+		// against a page already holding /about.
 		$this->set_permalink_structure( '/%postname%/' );
-		register_post_status( 'sp_review', array( 'public' => false ) );
-		foreach ( array( 'future', 'sp_review' ) as $status ) {
-			$target  = self::factory()->post->create(
-				array(
-					'post_type'   => 'page',
-					'post_status' => $status,
-					'post_name'   => 'about-' . $status,
-				)
-			);
-			$content = $this->nav_block_content(
-				array( $this->post_link( 99051, self::SOURCE_SITE_URL . '/about' ) )
-			);
+		self::factory()->post->create(
+			array(
+				'post_type' => 'page',
+				'post_name' => 'about',
+			)
+		);
+		$dest_post = self::factory()->post->create(
+			array(
+				'post_type'     => 'page',
+				'post_status'   => 'future',
+				'post_name'     => 'about',
+				'post_date'     => gmdate( 'Y-m-d H:i:s', time() + DAY_IN_SECONDS ),
+				'post_date_gmt' => gmdate( 'Y-m-d H:i:s', time() + DAY_IN_SECONDS ),
+			)
+		);
+		$source_id = 99031;
+		$content   = $this->nav_block_content(
+			array( $this->post_link( $source_id, self::SOURCE_SITE_URL . '/about' ) )
+		);
 
-			// ACT: Import the link against the non-public target.
-			$result = $this->processor->process_content(
-				$content,
-				self::SOURCE_SITE_URL,
-				array( 'session_id_map' => array( 99051 => $target ) )
-			);
+		// ACT: Run process_content.
+		$result = $this->processor->process_content(
+			$content,
+			self::SOURCE_SITE_URL,
+			array( 'session_id_map' => array( $source_id => $dest_post ) )
+		);
 
-			// ASSERT: The URL has the slug and no deferral was recorded.
-			$this->assertSame(
-				'http://example.org/about-' . $status . '/',
-				$this->first_nav_link_url( (string) $result )
-			);
-			$this->assertSame( array(), $this->processor->get_warnings() );
-		}
+		// ASSERT: id remapped and url on the collision-resolved destination slug.
+		$this->assertStringContainsString( '"id":' . $dest_post . ',', (string) $result );
+		$this->assertSame(
+			'http://example.org/about-2/',
+			$this->first_nav_link_url( (string) $result )
+		);
+	}
+
+	/**
+	 * Verifies that a target in a non-public custom status is re-derived to its
+	 * settled pretty permalink rather than a plain one.
+	 */
+	public function test_rederives_non_public_custom_status_target(): void {
+		// ARRANGE: Pretty permalinks; the target sits in a non-public status.
+		register_post_status( 'sp_hidden', array( 'public' => false ) );
+		$this->set_permalink_structure( '/%postname%/' );
+		$dest_post = self::factory()->post->create(
+			array(
+				'post_type'   => 'page',
+				'post_status' => 'sp_hidden',
+				'post_name'   => 'about',
+			)
+		);
+		$source_id = 99032;
+		$content   = $this->nav_block_content(
+			array( $this->post_link( $source_id, self::SOURCE_SITE_URL . '/about' ) )
+		);
+
+		// ACT: Run process_content.
+		$result = $this->processor->process_content(
+			$content,
+			self::SOURCE_SITE_URL,
+			array( 'session_id_map' => array( $source_id => $dest_post ) )
+		);
+
+		// ASSERT: id remapped and url re-derived to the destination permalink.
+		$this->assertStringContainsString( '"id":' . $dest_post . ',', (string) $result );
+		$this->assertSame(
+			'http://example.org/about/',
+			$this->first_nav_link_url( (string) $result )
+		);
+	}
+
+	/**
+	 * Verifies that a target in a search-excluded custom status resolves through
+	 * post meta and is re-derived to its settled pretty permalink.
+	 */
+	public function test_rederives_search_excluded_custom_status_target(): void {
+		// ARRANGE: A status the identity lookup has to name explicitly, claimed
+		// through post meta so the lookup does the resolving.
+		register_post_status(
+			'sp_hidden_xfs',
+			array(
+				'public'              => false,
+				'exclude_from_search' => true,
+			)
+		);
+		$this->set_permalink_structure( '/%postname%/' );
+		$dest_post = self::factory()->post->create(
+			array(
+				'post_type'   => 'page',
+				'post_status' => 'sp_hidden_xfs',
+				'post_name'   => 'about',
+			)
+		);
+		$source_id = 99033;
+		update_post_meta( $dest_post, Options::META_SOURCE_POST_ID, $source_id );
+		update_post_meta(
+			$dest_post,
+			Options::META_SOURCE_SITE_URL,
+			self::SOURCE_SITE_URL
+		);
+		$content = $this->nav_block_content(
+			array( $this->post_link( $source_id, self::SOURCE_SITE_URL . '/about' ) )
+		);
+
+		// ACT: Run process_content with no session map, forcing the meta lookup.
+		$result = $this->processor->process_content(
+			$content,
+			self::SOURCE_SITE_URL,
+			array()
+		);
+
+		// ASSERT: id remapped and url re-derived to the destination permalink.
+		$this->assertStringContainsString( '"id":' . $dest_post . ',', (string) $result );
+		$this->assertSame(
+			'http://example.org/about/',
+			$this->first_nav_link_url( (string) $result )
+		);
+	}
+
+	/**
+	 * Verifies that a published target under a draft ancestor is deferred, since
+	 * the ancestor's slug still moves the path.
+	 */
+	public function test_defers_target_under_draft_ancestor(): void {
+		// ARRANGE: Pretty permalinks; a published child under a draft parent.
+		$this->set_permalink_structure( '/%postname%/' );
+		$parent    = self::factory()->post->create(
+			array(
+				'post_type'   => 'page',
+				'post_status' => 'draft',
+				'post_name'   => 'parent',
+			)
+		);
+		$dest_post = self::factory()->post->create(
+			array(
+				'post_type'   => 'page',
+				'post_name'   => 'about',
+				'post_parent' => $parent,
+			)
+		);
+		$source_id = 99034;
+		$content   = $this->nav_block_content(
+			array( $this->post_link( $source_id, self::SOURCE_SITE_URL . '/about' ) )
+		);
+
+		// ACT: Run process_content.
+		$result = $this->processor->process_content(
+			$content,
+			self::SOURCE_SITE_URL,
+			array( 'session_id_map' => array( $source_id => $dest_post ) )
+		);
+
+		// ASSERT: id remapped, but the url only host-swapped (re-derive deferred).
+		$this->assertStringContainsString( '"id":' . $dest_post . ',', (string) $result );
+		$this->assertSame(
+			'http://example.org/about',
+			$this->first_nav_link_url( (string) $result )
+		);
+	}
+
+	/**
+	 * Verifies that a published target under a trashed ancestor is deferred.
+	 */
+	public function test_defers_target_under_trashed_ancestor(): void {
+		// ARRANGE: Pretty permalinks; a published child under a trashed parent.
+		$this->set_permalink_structure( '/%postname%/' );
+		$parent    = self::factory()->post->create(
+			array(
+				'post_type' => 'page',
+				'post_name' => 'parent',
+			)
+		);
+		$dest_post = self::factory()->post->create(
+			array(
+				'post_type'   => 'page',
+				'post_name'   => 'about',
+				'post_parent' => $parent,
+			)
+		);
+		wp_trash_post( $parent );
+		$source_id = 99036;
+		$content   = $this->nav_block_content(
+			array(
+				$this->post_link(
+					$source_id,
+					self::SOURCE_SITE_URL . '/about'
+				),
+			)
+		);
+
+		// ACT: Run process_content.
+		$result = $this->processor->process_content(
+			$content,
+			self::SOURCE_SITE_URL,
+			array( 'session_id_map' => array( $source_id => $dest_post ) )
+		);
+
+		// ASSERT: id remapped; url only host-swapped (deferred).
+		$this->assertStringContainsString(
+			'"id":' . $dest_post . ',',
+			(string) $result
+		);
+		$this->assertSame(
+			'http://example.org/about',
+			$this->first_nav_link_url( (string) $result )
+		);
+	}
+
+	/**
+	 * Verifies that a page under a draft ancestor is re-derived on a plain
+	 * structure, which links it by id.
+	 */
+	public function test_rederives_plain_page_under_draft_ancestor(): void {
+		// ARRANGE: Plain permalinks; a published child under a draft parent.
+		$this->set_permalink_structure( '' );
+		$parent    = self::factory()->post->create(
+			array(
+				'post_type'   => 'page',
+				'post_status' => 'draft',
+				'post_name'   => 'parent',
+			)
+		);
+		$dest_post = self::factory()->post->create(
+			array(
+				'post_type'   => 'page',
+				'post_name'   => 'about',
+				'post_parent' => $parent,
+			)
+		);
+		$source_id = 99037;
+		$content   = $this->nav_block_content(
+			array(
+				$this->post_link(
+					$source_id,
+					self::SOURCE_SITE_URL . '/about'
+				),
+			)
+		);
+
+		// ACT: Run process_content.
+		$result = $this->processor->process_content(
+			$content,
+			self::SOURCE_SITE_URL,
+			array( 'session_id_map' => array( $source_id => $dest_post ) )
+		);
+
+		// ASSERT: url re-derived to the ?page_id form.
+		$this->assertSame(
+			'http://example.org/?page_id=' . $dest_post,
+			$this->first_nav_link_url( (string) $result )
+		);
+	}
+
+	/**
+	 * Verifies that a hierarchical type still defers under a draft ancestor on
+	 * a plain structure, since its query var carries the ancestor's slug.
+	 */
+	public function test_defers_plain_query_var_under_draft_ancestor(): void {
+		// ARRANGE: Plain permalinks; a hierarchical child under a draft parent.
+		register_post_type(
+			'sp_hier',
+			array(
+				'public'       => true,
+				'hierarchical' => true,
+			)
+		);
+		$this->set_permalink_structure( '' );
+		$parent    = self::factory()->post->create(
+			array(
+				'post_type'   => 'sp_hier',
+				'post_status' => 'draft',
+				'post_name'   => 'parent',
+			)
+		);
+		$dest_post = self::factory()->post->create(
+			array(
+				'post_type'   => 'sp_hier',
+				'post_name'   => 'about',
+				'post_parent' => $parent,
+			)
+		);
+		$source_id = 99038;
+		$content   = $this->nav_block_content(
+			array(
+				$this->post_link(
+					$source_id,
+					self::SOURCE_SITE_URL . '/about'
+				),
+			)
+		);
+
+		// ACT: Run process_content.
+		$result = $this->processor->process_content(
+			$content,
+			self::SOURCE_SITE_URL,
+			array( 'session_id_map' => array( $source_id => $dest_post ) )
+		);
+
+		// ASSERT: id remapped; url only host-swapped (deferred).
+		$this->assertStringContainsString(
+			'"id":' . $dest_post . ',',
+			(string) $result
+		);
+		$this->assertSame(
+			'http://example.org/about',
+			$this->first_nav_link_url( (string) $result )
+		);
+
+		unregister_post_type( 'sp_hier' );
+	}
+
+	/**
+	 * Verifies that a non-hierarchical post with a draft parent is re-derived.
+	 */
+	public function test_rederives_post_with_draft_parent(): void {
+		// ARRANGE: Pretty permalinks; a published post with a draft parent.
+		$this->set_permalink_structure( '/%postname%/' );
+		$parent    = self::factory()->post->create(
+			array(
+				'post_status' => 'draft',
+				'post_name'   => 'parent',
+			)
+		);
+		$dest_post = self::factory()->post->create(
+			array(
+				'post_name'   => 'news',
+				'post_parent' => $parent,
+			)
+		);
+		$source_id = 99039;
+		$content   = $this->nav_block_content(
+			array(
+				$this->post_link(
+					$source_id,
+					self::SOURCE_SITE_URL . '/2020/05/news'
+				),
+			)
+		);
+
+		// ACT: Run process_content.
+		$result = $this->processor->process_content(
+			$content,
+			self::SOURCE_SITE_URL,
+			array( 'session_id_map' => array( $source_id => $dest_post ) )
+		);
+
+		// ASSERT: url re-derived to the destination permalink.
+		$this->assertSame(
+			'http://example.org/news/',
+			$this->first_nav_link_url( (string) $result )
+		);
+	}
+
+	/**
+	 * Verifies that a private target is re-derived even when the current user
+	 * cannot read it.
+	 */
+	public function test_rederives_private_post_target(): void {
+		// ARRANGE: Pretty permalinks; a private target and a logged-out user.
+		$this->set_permalink_structure( '/%postname%/' );
+		wp_set_current_user( 0 );
+		$dest_post = self::factory()->post->create(
+			array(
+				'post_type'   => 'page',
+				'post_status' => 'private',
+				'post_name'   => 'about',
+			)
+		);
+		$source_id = 99035;
+		$content   = $this->nav_block_content(
+			array( $this->post_link( $source_id, self::SOURCE_SITE_URL . '/about' ) )
+		);
+
+		// ACT: Run process_content.
+		$result = $this->processor->process_content(
+			$content,
+			self::SOURCE_SITE_URL,
+			array( 'session_id_map' => array( $source_id => $dest_post ) )
+		);
+
+		// ASSERT: url re-derived to the destination permalink.
+		$this->assertSame(
+			'http://example.org/about/',
+			$this->first_nav_link_url( (string) $result )
+		);
 	}
 
 	/**

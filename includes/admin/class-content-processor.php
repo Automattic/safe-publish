@@ -227,6 +227,7 @@ class Content_Processor {
 		$this->unprocessable_media = array();
 		$this->warnings            = array();
 		$this->media_importer->reset_newly_created_attachment_ids();
+		$this->media_importer->reset_failed_media();
 
 		$session_id_map = isset( $context['session_id_map'] )
 			&& is_array( $context['session_id_map'] )
@@ -321,14 +322,17 @@ class Content_Processor {
 		$this->unprocessable_media = self::normalize_media_map_keys( $this->unprocessable_media );
 
 		// The per-block markup pass can't see block-level download failures.
-		$this->unprocessable_media = array_diff_key(
-			$this->unprocessable_media,
-			$this->failed_media
-		);
+		foreach ( $this->unprocessable_media as $url => $_ ) {
+			$download_url = Media_Importer::get_download_url( $url, $source_site_url );
+			if ( array_key_exists( $download_url, $this->failed_media ) ) {
+				unset( $this->unprocessable_media[ $url ] );
+			}
+		}
 
 		$this->content_media_processor->reset_failed_media();
 		$this->content_media_processor->reset_unprocessable_media();
 		$this->shortcode_media_rewriter->reset_failed_media();
+		$this->media_importer->reset_failed_media();
 
 		return $this->replace_source_urls( $processed_content, $source_site_url );
 	}
@@ -762,31 +766,38 @@ class Content_Processor {
 		string $source_site_url,
 		array $session_id_map = array()
 	): string {
-		if ( empty( $content ) ) {
+		if ( '' === $content ) {
 			return $content;
 		}
 
 		$blocks = parse_blocks( $content );
 
-		if ( empty( $blocks ) ) {
+		if ( array() === $blocks ) {
 			return $content;
 		}
 
-		$needs_media_processing = $this->content_needs_processing( $content );
-		$needs_id_remap         = $this->content_has_id_reference_blocks( $blocks );
+		$needs_id_remap = $this->content_has_id_reference_blocks( $blocks );
 
-		if ( ! $needs_media_processing && ! $needs_id_remap ) {
+		$processed = array_map(
+			function ( $block ) use ( $source_site_url ) {
+				return $this->process_single_block( $block, $source_site_url );
+			},
+			$blocks
+		);
+
+		// Re-serializing rewrites attribute escapes, so return the original
+		// bytes when nothing changed and no ID remap is due. Content holding
+		// "http" is excluded: replace_source_urls() needs serialize_blocks() to
+		// unescape absolute URLs.
+		if (
+			! $needs_id_remap
+			&& false === strpos( $content, 'http' )
+			&& $processed === $blocks
+		) {
 			return $content;
 		}
 
-		if ( $needs_media_processing ) {
-			$blocks = array_map(
-				function ( $block ) use ( $source_site_url ) {
-					return $this->process_single_block( $block, $source_site_url );
-				},
-				$blocks
-			);
-		}
+		$blocks = $processed;
 
 		if ( $needs_id_remap ) {
 			$blocks = $this->process_block_id_references(
@@ -959,6 +970,22 @@ class Content_Processor {
 		}
 
 		return $normalized;
+	}
+
+	/**
+	 * Records a failed download URL with its originating block.
+	 *
+	 * @param string $url             Source media URL.
+	 * @param string $source_site_url Source site URL.
+	 * @param string $block_name      Originating block name.
+	 */
+	private function record_failed_media(
+		string $url,
+		string $source_site_url,
+		string $block_name
+	): void {
+		$download_url                          = Media_Importer::get_download_url( $url, $source_site_url );
+		$this->failed_media[ $download_url ] ??= $block_name;
 	}
 
 	/**
@@ -1162,14 +1189,22 @@ class Content_Processor {
 		}
 
 		if ( false === $attachment_id ) {
-			$this->failed_media[ $original_url ] = $block['blockName'];
+			$this->record_failed_media(
+				$original_url,
+				$source_site_url,
+				$block['blockName']
+			);
 			return $this->process_block_inner_html( $block, $source_site_url );
 		}
 
 		$new_url = wp_get_attachment_url( $attachment_id );
 
 		if ( false === $new_url ) {
-			$this->failed_media[ $original_url ] = $block['blockName'];
+			$this->record_failed_media(
+				$original_url,
+				$source_site_url,
+				$block['blockName']
+			);
 			return $this->process_block_inner_html( $block, $source_site_url );
 		}
 
@@ -1295,14 +1330,22 @@ class Content_Processor {
 		}
 
 		if ( false === $attachment_id ) {
-			$this->failed_media[ $media_url ] = $block['blockName'];
+			$this->record_failed_media(
+				$media_url,
+				$source_site_url,
+				$block['blockName']
+			);
 			return $this->process_block_inner_html( $block, $source_site_url );
 		}
 
 		$new_url = wp_get_attachment_url( $attachment_id );
 
 		if ( false === $new_url ) {
-			$this->failed_media[ $media_url ] = $block['blockName'];
+			$this->record_failed_media(
+				$media_url,
+				$source_site_url,
+				$block['blockName']
+			);
 			return $this->process_block_inner_html( $block, $source_site_url );
 		}
 
@@ -1586,14 +1629,22 @@ class Content_Processor {
 				}
 
 				if ( false === $attachment_id ) {
-					$this->failed_media[ $value ] = $block['blockName'];
+					$this->record_failed_media(
+						$value,
+						$source_site_url,
+						$block['blockName']
+					);
 					continue;
 				}
 
 				$new_url = wp_get_attachment_url( $attachment_id );
 
 				if ( false === $new_url ) {
-					$this->failed_media[ $value ] = $block['blockName'];
+					$this->record_failed_media(
+						$value,
+						$source_site_url,
+						$block['blockName']
+					);
 					continue;
 				}
 
@@ -1626,18 +1677,6 @@ class Content_Processor {
 		}
 
 		return $attrs;
-	}
-
-	/**
-	 * Whether the content contains HTTP URLs, the trigger for the media/URL
-	 * transformation. Only that pass depends on this check; block-ID remapping
-	 * is gated separately by content_has_id_reference_blocks().
-	 *
-	 * @param string $content Content to check.
-	 * @return bool True when the content contains an HTTP URL.
-	 */
-	private function content_needs_processing( string $content ): bool {
-		return false !== strpos( $content, 'http' );
 	}
 
 	/**
@@ -2905,9 +2944,9 @@ class Content_Processor {
 	 *
 	 * The source url's query is carried over with post/term identity vars
 	 * removed (so a plain-permalink source's stale id cannot override the new
-	 * path) and its fragment preserved. Draft, pending, and auto-draft post
-	 * targets are left alone: Their slug is not final, so re-deriving would
-	 * store a temporary url.
+	 * path) and its fragment preserved. A post target with an unsettled path or
+	 * unregistered type is left alone, since re-deriving would store a temporary
+	 * url.
 	 *
 	 * @param array<string, mixed> $attrs    Block attrs.
 	 * @param string               $url_attr Attr holding the link url.
@@ -2932,9 +2971,9 @@ class Content_Processor {
 
 		$permalink = 'term' === $kind
 			? get_term_link( $dest_id )
-			: get_permalink( $this->published_post_copy( $dest_id ) );
+			: $this->viewable_permalink( $dest_id );
 
-		if ( ! is_string( $permalink ) ) {
+		if ( ! is_string( $permalink ) || '' === $permalink ) {
 			return $attrs;
 		}
 
@@ -2957,51 +2996,85 @@ class Content_Processor {
 	}
 
 	/**
-	 * Whether every slug in a destination post's path is final.
+	 * Whether a destination post's permalink can be derived now.
 	 *
 	 * @param int $post_id Destination post id.
-	 * @return bool True when the target and all ancestors have final slugs.
+	 * @return bool True when its type is registered and its path is settled.
 	 */
 	public function is_post_path_final( int $post_id ): bool {
-		$seen = array();
-		while ( $post_id > 0 ) {
-			if ( isset( $seen[ $post_id ] ) ) {
-				return false;
-			}
-			$seen[ $post_id ] = true;
-			$post             = get_post( $post_id );
-			if (
-				! $post instanceof WP_Post
-				|| ! post_type_exists( $post->post_type )
-				|| in_array(
-					$post->post_status,
-					array( 'draft', 'pending', 'auto-draft' ),
-					true
-				)
-			) {
-				return false;
-			}
-			$post_id = (int) $post->post_parent;
-		}
+		$post = get_post( $post_id );
 
-		return true;
+		return $post instanceof WP_Post
+			&& post_type_exists( $post->post_type )
+			&& ! $this->has_unsettled_path( $post_id );
 	}
 
 	/**
-	 * Returns a post copy with its final permalink behavior enabled.
+	 * Whether any slug in a post's permalink path is still provisional. Core
+	 * defers unique slugs for drafts and suffixes a trashed post's slug.
 	 *
 	 * @param int $post_id Destination post id.
-	 * @return WP_Post|int Published copy, or the original id when absent.
+	 * @return bool True when the post or an ancestor holds a provisional slug.
 	 */
-	private function published_post_copy( int $post_id ): WP_Post|int {
-		$post = get_post( $post_id );
-		if ( ! $post instanceof WP_Post ) {
-			return $post_id;
+	private function has_unsettled_path( int $post_id ): bool {
+		$unsettled = array( 'draft', 'pending', 'auto-draft', 'trash' );
+
+		if ( in_array( get_post_status( $post_id ), $unsettled, true ) ) {
+			return true;
 		}
 
-		$copy              = clone $post;
-		$copy->post_status = 'publish';
-		return $copy;
+		if ( ! $this->has_ancestor_path( $post_id ) ) {
+			return false;
+		}
+
+		foreach ( get_post_ancestors( $post_id ) as $ancestor_id ) {
+			if ( in_array( get_post_status( $ancestor_id ), $unsettled, true ) ) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * Whether ancestor slugs form part of a post's permalink: Only hierarchical
+	 * types nest them, and a plain structure only through a query var.
+	 *
+	 * @param int $post_id Destination post id.
+	 * @return bool True when an ancestor's slug can move the permalink.
+	 */
+	private function has_ancestor_path( int $post_id ): bool {
+		$type = get_post_type_object( (string) get_post_type( $post_id ) );
+		if ( ! ( $type instanceof WP_Post_Type ) || ! $type->hierarchical ) {
+			return false;
+		}
+
+		return '' !== get_option( 'permalink_structure' )
+			|| is_string( $type->query_var );
+	}
+
+	/**
+	 * Returns the permalink a post will have once it is publicly viewable.
+	 * get_permalink() yields the plain ?p= form for statuses WordPress hides, so
+	 * the lookup runs against a copy marked published, as get_sample_permalink()
+	 * does. The clone keeps the 'raw' filter, without which get_post() refetches
+	 * and discards it.
+	 *
+	 * @param int $post_id Destination post id.
+	 * @return string Permalink, or '' when it cannot be derived.
+	 */
+	private function viewable_permalink( int $post_id ): string {
+		$post = get_post( $post_id );
+		if ( ! ( $post instanceof WP_Post ) ) {
+			return '';
+		}
+
+		$viewable              = clone $post;
+		$viewable->post_status = 'publish';
+
+		$permalink = get_permalink( $viewable );
+
+		return is_string( $permalink ) ? $permalink : '';
 	}
 
 	/**

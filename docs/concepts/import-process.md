@@ -94,6 +94,7 @@ An inline `<img>` carries two attachment-ID references alongside its URL — the
 - Uploaded to media library regardless of serving host — unlike content media (step 3), an off-domain featured image is still downloaded because it belongs to the source.
 - The source library metadata (alt text, title, caption, description) is applied to the destination attachment, fetched in edit context for the raw values.
 - Set as post thumbnail via `set_post_thumbnail()`.
+- A re-import reuses the destination attachment already recorded against the source media ID and origin site, falling back to one sideloaded from the same URL. **Compare** resolves the incoming image the same way, so an unchanged featured image reports no difference, while a repointed or not-yet-imported one still does. A source that dropped its featured image is reported with a note, since the import sets a thumbnail but never clears one. When the source's media record cannot be read, the comparison previews the copy the import would reuse; with no copy, it marks the image unavailable with a note, since the import needs that same record. The failure goes to the audit log.
 
 ### URL Replacement
 
@@ -116,7 +117,7 @@ Post content and excerpts pass through WordPress' normal save filters for the ac
 - Post data set:
   - **Title**: From source post title
   - **Content**: Transformed content with updated URLs
-  - **Slug**: From source post slug (WordPress appends `-2`, `-3`, etc. if the slug already exists)
+  - **Slug**: From source post slug, kept as-is even when the destination already uses it. WordPress resolves a collision by appending `-2`, `-3`, and so on only once the post leaves draft or pending, for example when it is published or scheduled in the editor, so the slug is not final at import.
   - **Status**: Always `draft`
   - **Post type**: Same as source post
   - **Post Meta**: meta available via REST is transferred, see below for more details.
@@ -248,9 +249,12 @@ Bulk imports process multiple posts sequentially:
 
 - **Trashed destination post**: Import is refused when the only destination post linked to the source post is in the trash, so a second linked copy is never created. Restore that post to update it, or delete it permanently to import a fresh copy.
 - **Inline media download failures**: Import is aborted; any attachments already created during the run are deleted.
-- **Featured image failures**: Import is aborted.
+- **Featured image failures**: Import is aborted; any attachments already created during the run are deleted.
+- **Post insert rejected**: Import is aborted; any attachments already created during the run are deleted.
 - **Meta/term failures**: Import is aborted; for new posts, the post and its attachments are deleted. For updates, the post is rolled back to its pre-update state.
 - **Network timeouts on API requests**: No automatic retry; on WordPress VIP, consecutive failures will temporarily block further requests for up to 20 seconds to protect performance.
+
+Cleanup deletes only the media the aborted run itself downloaded; a file an earlier import already brought in is left alone. An attachment the cleanup cannot remove is named in the reported error, except after an inline-media failure.
 
 ### Error Reporting
 
@@ -304,11 +308,13 @@ Internal links inside post body content (for example `<a href>` in paragraphs an
 
 A permalink stored in a custom or third-party block's attributes — for example a block that saves a post's own URL — is treated the same way: host-swapped, but not re-derived. Rewriting an arbitrary attribute that merely looks like a permalink could point it at the wrong content, so only blocks whose attributes carry an explicit, known entity reference are re-derived.
 
-Navigation links and submenus are the exception: they carry an explicit entity reference, so their URLs are re-derived to the destination permalink when every slug in the target's path is final and its post type is registered. Otherwise, the link ID is still mapped, and the URL is deferred (see [below](#navigation-links-with-deferred-urls)).
+Navigation links and submenus are the exception: they carry an explicit entity reference, so their URLs are re-derived to the destination permalink when the target post type is registered and its path is settled. Otherwise, the link ID is still mapped, and the URL is deferred (see [below](#navigation-links-with-deferred-urls)).
 
 ### Navigation links with deferred URLs
 
-If a target or one of its ancestors is a draft or pending approval, its slug can still change. An unregistered target post type also prevents a final permalink from being derived. The link keeps the host-swapped source path, which can 404 or open the wrong page after a slug collision. Needs attention records this deferred URL. Once the whole target path is final and its post type is registered, use Retry to repair the URL without changing its mapped ID. Scheduled and non-public custom-status targets have final slugs and can be re-derived during import.
+WordPress settles a post's slug only when it leaves draft or pending. A target in either status keeps the host-swapped source path instead of a URL that would move later. The same applies when a parent page the target sits under is a draft, pending, or in the trash (where its slug carries a temporary `__trashed` suffix), because the parent's slug forms part of the child's path. Under plain permalinks, a page's URL uses its ID instead of a path, so its parents do not matter. An unregistered target post type also prevents a final permalink from being derived.
+
+A deferred link can 404 or open the wrong page under a slug collision or a different permalink structure. Needs attention records the deferred URL. Once the target's path is settled and its post type is registered, use Retry to repair the URL without changing the mapped ID. Scheduled targets and targets in a non-public custom status can be re-derived during import because their slugs are already settled.
 
 ### Navigation links to a term in another taxonomy are left unrepointed
 

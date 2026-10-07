@@ -905,6 +905,83 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 	}
 
 	/**
+	 * Verifies that a link to an unregistered target type remains retryable
+	 * until the type is registered again.
+	 */
+	public function test_deferred_navigation_url_retries_after_type_registration(): void {
+		// ARRANGE: The target is a draft in a registered custom post type.
+		global $wp_rewrite;
+		$wp_rewrite->set_permalink_structure( '/%postname%/' );
+		register_post_type( 'sp_missing', array( 'public' => true ) );
+		$target = $this->seed_target_post( 9705, self::BLOG_URL, 'sp_missing' );
+		wp_update_post(
+			array(
+				'ID'          => $target,
+				'post_status' => 'draft',
+			)
+		);
+
+		// ACT: Import a link, then publish its target without its post type.
+		$result  = $this->import_under(
+			self::BLOG_URL,
+			7205,
+			array( 'content' => $this->post_link_content( 9705, 'sp_missing' ) )
+		);
+		$post_id = (int) $result['post_id'];
+		wp_update_post(
+			array(
+				'ID'          => $target,
+				'post_status' => 'publish',
+			)
+		);
+		unregister_post_type( 'sp_missing' );
+
+		// ASSERT: The mapped ID is retained and the URL still awaits the type.
+		$this->assertSame( array( $target ), $this->nav_link_ids( $post_id ) );
+		$this->assertNotNull(
+			$this->attention->get_issue(
+				$post_id,
+				'deferred_navigation_url',
+				9705,
+				'post'
+			)
+		);
+		$this->assertSame(
+			Reconcile_Outcome::UNRESOLVED,
+			$this->import_service->retry_deferred_navigation_url(
+				$post_id,
+				9705,
+				self::BLOG_URL
+			)->type
+		);
+
+		// ACT: Restore the type and retry the URL repair.
+		register_post_type( 'sp_missing', array( 'public' => true ) );
+		$outcome = $this->import_service->retry_deferred_navigation_url(
+			$post_id,
+			9705,
+			self::BLOG_URL
+		);
+
+		// ASSERT: The final permalink replaces the temporary URL.
+		$this->assertSame( Reconcile_Outcome::RESOLVED, $outcome->type );
+		$this->assertSame( array( $target ), $this->nav_link_ids( $post_id ) );
+		$this->assertStringContainsString(
+			(string) get_permalink( $target ),
+			(string) get_post_field( 'post_content', $post_id )
+		);
+		$this->assertNull(
+			$this->attention->get_issue(
+				$post_id,
+				'deferred_navigation_url',
+				9705,
+				'post'
+			)
+		);
+		unregister_post_type( 'sp_missing' );
+	}
+
+	/**
 	 * Verifies that repointing an initially unmapped draft link transfers its
 	 * issue to URL repair without reporting the whole reference resolved.
 	 */
