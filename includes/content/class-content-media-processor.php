@@ -451,11 +451,10 @@ class Content_Media_Processor {
 			return;
 		}
 
-		// A source served on a port writes that port into its media URLs, so
-		// the detection pass has to carry it to see them at all.
-		$source_port = wp_parse_url( $source_site_url, PHP_URL_PORT );
+		// Match the source's port too, since its media URLs carry it.
+		$source_port = URL_Validator::non_default_port( $source_site_url );
 		$authority   = preg_quote( $source_host, '~' )
-			. ( is_int( $source_port ) ? ':' . $source_port : '' );
+			. ( null !== $source_port ? ':' . $source_port : '' );
 
 		// Strip comments and script/style blocks so URLs inside them don't
 		// trigger false positives. The HTML API natively skips these during

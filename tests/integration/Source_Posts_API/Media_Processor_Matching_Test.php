@@ -574,6 +574,45 @@ class Media_Processor_Matching_Test extends Source_Posts_API_Test_Base {
 	}
 
 	/**
+	 * Verifies that a source URL naming a default port still records a missed
+	 * media URL that omits it.
+	 *
+	 * @dataProvider default_port_source_provider
+	 * @param string $source_site_url Source site URL with a default port.
+	 */
+	public function test_default_port_source_records_missed_url(
+		string $source_site_url
+	): void {
+		// ARRANGE: img with an unclosed quote and a URL without the port.
+		$url     = 'https://source.example.com/photo.jpg';
+		$content = '<img src="' . $url;
+
+		// ACT: Process content.
+		$this->content_media_processor->process_content(
+			$content,
+			$source_site_url
+		);
+
+		// ASSERT: Only that URL is recorded as unprocessable.
+		$this->assertSame(
+			array( $url => '' ),
+			$this->content_media_processor->get_unprocessable_media()
+		);
+	}
+
+	/**
+	 * Provides source URLs that name their scheme's default port.
+	 *
+	 * @return array<string, array{string}>
+	 */
+	public static function default_port_source_provider(): array {
+		return array(
+			'https on 443' => array( 'https://source.example.com:443' ),
+			'http on 80'   => array( 'http://source.example.com:80' ),
+		);
+	}
+
+	/**
 	 * Verifies that a media URL inside a script tag is not imported and the
 	 * script content is preserved exactly.
 	 */

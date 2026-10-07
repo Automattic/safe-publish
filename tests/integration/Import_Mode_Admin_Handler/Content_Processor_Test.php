@@ -505,6 +505,68 @@ class Content_Processor_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that a source URL naming a default port still matches links
+	 * that omit it, as a site's own URLs do.
+	 *
+	 * @dataProvider default_port_source_provider
+	 * @param string $source_site_url Source site URL with a default port.
+	 */
+	public function test_replace_source_urls_treats_default_port_as_none(
+		string $source_site_url
+	): void {
+		// ARRANGE: A link that omits the port the source URL names.
+		$current_url = get_site_url();
+		$content     = '<a href="https://source.example.com/page">L</a>';
+
+		// ACT: Call replace_source_urls() directly.
+		$processed = $this->processor->replace_source_urls(
+			$content,
+			$source_site_url
+		);
+
+		// ASSERT: The link now points at the destination.
+		$this->assertSame(
+			'<a href="' . $current_url . '/page">L</a>',
+			$processed
+		);
+	}
+
+	/**
+	 * Provides source URLs that name their scheme's default port.
+	 *
+	 * @return array<string, array{string}>
+	 */
+	public static function default_port_source_provider(): array {
+		return array(
+			'https on 443' => array( 'https://source.example.com:443' ),
+			'http on 80'   => array( 'http://source.example.com:80' ),
+		);
+	}
+
+	/**
+	 * Verifies that a destination URL naming a default port is the same site
+	 * as a source on its host without one, so the content is left alone.
+	 */
+	public function test_replace_source_urls_skips_same_site_with_default_port(): void {
+		// ARRANGE: The destination names port 80, and the source omits it.
+		$host = (string) wp_parse_url( get_site_url(), PHP_URL_HOST );
+		add_filter(
+			'option_siteurl',
+			static fn (): string => 'http://' . $host . ':80'
+		);
+		$content = '<a href="http://' . $host . '/page">L</a>';
+
+		// ACT: Call replace_source_urls() directly.
+		$processed = $this->processor->replace_source_urls(
+			$content,
+			'http://' . $host
+		);
+
+		// ASSERT: The content is unchanged.
+		$this->assertSame( $content, $processed );
+	}
+
+	/**
 	 * Verifies that a domain that starts with the source domain but continues
 	 * with more characters is not replaced.
 	 */
