@@ -799,7 +799,7 @@ class Media_Importer {
 	 * @param string $mime_group       Media type group: image, audio, or video.
 	 * @param string $source_site_url  Source site URL.
 	 * @param array  $auth_credentials Optional. Authentication credentials. Default empty array.
-	 * @param bool   $fetch_succeeded  Optional. Whether the set was fetched successfully.
+	 * @param ?bool  $fetch_succeeded  Optional. Whether the fetch succeeded.
 	 * @return list<array{id: int, menu_order: int}> Ordered set, or empty.
 	 */
 	public function fetch_referenced_media_set(
@@ -847,34 +847,17 @@ class Media_Importer {
 			return array();
 		}
 
-		$status = wp_remote_retrieve_response_code( $response );
-		if ( 200 !== $status ) {
-			$this->logger->source_media_fetch_failed(
-				$source_post_id,
-				$source_site_url,
-				'Source post returned HTTP ' . $status . '.'
-			);
-			return array();
-		}
-
 		$data  = json_decode( wp_remote_retrieve_body( $response ), true );
 		$field = is_array( $data )
 			? ( $data[ Source_Media_REST_Field::REFERENCED_FIELD_NAME ] ?? null )
 			: null;
-		if ( ! is_array( $field )
-			|| ( array_key_exists( $mime_group, $field )
-				&& ! is_array( $field[ $mime_group ] ) ) ) {
-			$this->logger->source_media_fetch_failed(
-				$source_post_id,
-				$source_site_url,
-				'Source post returned a malformed referenced media set.'
-			);
-			return array();
-		}
-
-		$items = $field[ $mime_group ] ?? array();
-		$set   = Source_Media_REST_Field::normalize_menu_order_set( $items );
-		if ( ! array_is_list( $items ) || count( $set ) !== count( $items ) ) {
+		$items = is_array( $field )
+			? ( $field[ $mime_group ] ?? array() )
+			: null;
+		$set   = is_array( $items ) && array_is_list( $items )
+			? Source_Media_REST_Field::normalize_menu_order_set( $items )
+			: null;
+		if ( null === $set || count( $set ) !== count( $items ) ) {
 			$this->logger->source_media_fetch_failed(
 				$source_post_id,
 				$source_site_url,
