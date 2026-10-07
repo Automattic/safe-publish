@@ -472,7 +472,7 @@ class Source_Media_REST_Field {
 		$urls    = array_merge(
 			$urls,
 			$this->line_broken_attribute_urls( $content, $host ),
-			$this->line_broken_block_urls( $content, $host ),
+			$this->block_attribute_urls( $content, $host ),
 			$this->line_broken_shortcode_urls( $content, $host )
 		);
 
@@ -568,31 +568,25 @@ class Source_Media_REST_Field {
 	}
 
 	/**
-	 * Reads line-broken URLs from parsed Gutenberg attributes, including nested
-	 * attributes and child blocks. Escaped JSON newlines become real characters
-	 * only after parsing the block comment.
+	 * Reads media URLs from parsed Gutenberg attributes, including nested attrs
+	 * and child blocks. Parsing restores JSON-escaped slashes that the raw scan
+	 * cannot match.
 	 *
 	 * @param string $content Raw post content.
 	 * @param string $host    Source site host.
-	 * @return list<string> Normalized same-host block attribute URLs.
+	 * @return list<string> Absolute same-host block attribute URLs.
 	 */
-	private function line_broken_block_urls( string $content, string $host ): array {
-		// JSON encodes line breaks with backslashes, so most blocks need no parse.
-		if (
-			false === strpos( $content, '<!-- wp:' )
-			|| false === strpos( $content, '\\' )
-		) {
+	private function block_attribute_urls( string $content, string $host ): array {
+		if ( false === strpos( $content, '<!-- wp:' ) ) {
 			return array();
 		}
 
-		$pattern = '#^https?://' . preg_quote( $host, '#' )
-			. '/[^\s"\'<>()]+$#i';
-		$urls    = array();
+		$urls = array();
 
 		foreach ( parse_blocks( $content ) as $block ) {
 			$urls = array_merge(
 				$urls,
-				$this->line_broken_urls_in_block( $block, $pattern )
+				$this->urls_in_block( $block, $host )
 			);
 		}
 
@@ -600,26 +594,26 @@ class Source_Media_REST_Field {
 	}
 
 	/**
-	 * Collects line-broken URL attributes from a block and its child blocks.
+	 * Collects media URL attributes from a block and its child blocks.
 	 *
 	 * @param array  $block   Parsed block.
-	 * @param string $pattern Same-host URL pattern.
-	 * @return list<string> Normalized URLs.
+	 * @param string $host  Source site host.
+	 * @return list<string> Absolute URLs.
 	 */
-	private function line_broken_urls_in_block(
+	private function urls_in_block(
 		array $block,
-		string $pattern
+		string $host
 	): array {
 		$attrs = $block['attrs'] ?? array();
 		$urls  = is_array( $attrs )
-			? $this->line_broken_urls_in_values( $attrs, $pattern )
+			? $this->urls_in_block_values( $attrs, $host )
 			: array();
 
 		foreach ( $block['innerBlocks'] ?? array() as $child ) {
 			if ( is_array( $child ) ) {
 				$urls = array_merge(
 					$urls,
-					$this->line_broken_urls_in_block( $child, $pattern )
+					$this->urls_in_block( $child, $host )
 				);
 			}
 		}
@@ -628,15 +622,15 @@ class Source_Media_REST_Field {
 	}
 
 	/**
-	 * Collects line-broken URL strings from nested block attribute values.
+	 * Collects media URL strings from nested block attribute values.
 	 *
 	 * @param array  $values  Attribute values.
-	 * @param string $pattern Same-host URL pattern.
-	 * @return list<string> Normalized URLs.
+	 * @param string $host   Source site host.
+	 * @return list<string> Absolute URLs.
 	 */
-	private function line_broken_urls_in_values(
+	private function urls_in_block_values(
 		array $values,
-		string $pattern
+		string $host
 	): array {
 		$urls = array();
 
@@ -644,12 +638,12 @@ class Source_Media_REST_Field {
 			if ( is_array( $value ) ) {
 				$urls = array_merge(
 					$urls,
-					$this->line_broken_urls_in_values( $value, $pattern )
+					$this->urls_in_block_values( $value, $host )
 				);
 				continue;
 			}
 
-			$url = $this->normalized_line_broken_url( $value, $pattern );
+			$url = $this->normalized_block_url( $value, $host );
 
 			if ( null !== $url ) {
 				$urls[] = $url;
@@ -657,6 +651,35 @@ class Source_Media_REST_Field {
 		}
 
 		return $urls;
+	}
+
+	/**
+	 * Resolves a block attribute media URL against the source site and keeps
+	 * only HTTP URLs on that site's host.
+	 *
+	 * @param mixed  $value Block attribute value.
+	 * @param string $host  Source site host.
+	 * @return string|null Absolute URL, or null when not eligible.
+	 */
+	private function normalized_block_url( mixed $value, string $host ): ?string {
+		if ( ! is_string( $value ) ) {
+			return null;
+		}
+
+		$url = URL_Validator::normalize_url_whitespace( $value );
+		if (
+			! URL_Validator::is_absolute_http_url( $url )
+			&& ! str_starts_with( $url, '/' )
+		) {
+			return null;
+		}
+
+		$url      = URL_Validator::resolve_relative_url( $url, home_url() );
+		$url_host = wp_parse_url( $url, PHP_URL_HOST );
+
+		return is_string( $url_host ) && 0 === strcasecmp( $url_host, $host )
+			? $url
+			: null;
 	}
 
 	/**
