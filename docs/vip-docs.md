@@ -368,6 +368,12 @@ The notice "Post restored with some values retained. Review the Audit Log for de
 
 Open the Audit Log and find the warning for the rollback. It names each value that was kept. Recreate the missing item on the destination and change the field in the editor, or accept the imported value.
 
+### A rollback kept some media
+
+The notice "Post permanently deleted, with some media retained. Review the Audit Log for details." means Safe Publish deleted the post but kept some of the media its import created. Either Safe Publish could not determine whether another post still shows that media, or WordPress failed to delete it.
+
+Open the Audit Log and find the warning for the rollback. It lists the ID of each attachment kept for one of these reasons. When WordPress fails to delete a video, its poster image is kept too, but the warning does not list it. Delete each kept attachment, including such a poster, from the media library once no post shows it.
+
 ### An update cannot be rolled back from Safe Publish
 
 The warning "The post was updated, but its rollback history could not be saved. This update cannot be rolled back from Safe Publish." appears after a single import or a Compare **Update**. Bulk import results show only "rollback history unavailable" for the affected item. Either way, the import succeeded and the post holds the imported content, but no history record exists for it, so the row offers no rollback.
