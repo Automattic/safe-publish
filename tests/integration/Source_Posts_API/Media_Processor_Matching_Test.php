@@ -565,11 +565,36 @@ class Media_Processor_Matching_Test extends Source_Posts_API_Test_Base {
 			$source_site_url
 		);
 
-		// ASSERT: The ported URL is recorded as unprocessable.
-		$this->assertArrayHasKey(
-			$url,
+		// ASSERT: Only the ported URL is recorded as unprocessable.
+		$this->assertSame(
+			array( $url => '' ),
 			$this->content_media_processor->get_unprocessable_media(),
 			'Missed ported URL should be in unprocessable_media'
+		);
+	}
+
+	/**
+	 * Verifies that destination media on a ported source's host is not
+	 * reported as unprocessable.
+	 */
+	public function test_ported_source_ignores_destination_media(): void {
+		// ARRANGE: Imported media already points at the destination, which
+		// shares the source's host without its port.
+		$host      = (string) wp_parse_url( get_site_url(), PHP_URL_HOST );
+		$local_url = wp_get_upload_dir()['baseurl'] . '/2026/10/photo.jpg';
+		$content   = '<img src="' . $local_url . '">';
+
+		// ACT: Process content from a source on that host's port 8889.
+		$this->content_media_processor->process_content(
+			$content,
+			'http://' . $host . ':8889'
+		);
+
+		// ASSERT: Nothing is reported as unprocessable.
+		$this->assertSame(
+			array(),
+			$this->content_media_processor->get_unprocessable_media(),
+			'Destination media on the source host must not be flagged'
 		);
 	}
 
