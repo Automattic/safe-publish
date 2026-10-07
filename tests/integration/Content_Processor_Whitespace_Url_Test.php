@@ -342,6 +342,50 @@ class Content_Processor_Whitespace_Url_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Provides the other media attributes that import source URLs.
+	 *
+	 * @return array<string, array{string, string}>
+	 */
+	public static function line_broken_media_attribute_provider(): array {
+		return array(
+			'video poster' => array( 'video', 'poster' ),
+			'audio src'    => array( 'audio', 'src' ),
+			'source src'   => array( 'source', 'src' ),
+			'embed src'    => array( 'embed', 'src' ),
+			'object data'  => array( 'object', 'data' ),
+		);
+	}
+
+	/**
+	 * Verifies that a failed line-broken media URL is reported only once.
+	 *
+	 * @dataProvider line_broken_media_attribute_provider
+	 *
+	 * @param string $tag  Media element name.
+	 * @param string $attr Media URL attribute name.
+	 */
+	public function test_line_broken_media_attribute_failure_is_not_malformed(
+		string $tag,
+		string $attr
+	): void {
+		// ARRANGE: The parsed attribute's URL contains a line break.
+		$missing = self::SOURCE . '/missing.png';
+		$html    = '<' . $tag . ' ' . $attr . '="' . self::SOURCE
+			. "/missing\n.png\">";
+
+		// ACT: Process the media tag.
+		$this->processor->process_content( $html, self::SOURCE );
+
+		// ASSERT: The download failed, without a duplicate markup report.
+		$this->assertSame( array( $missing ), $this->requested );
+		$this->assertSame(
+			array( $missing ),
+			array_keys( $this->processor->get_failed_media() )
+		);
+		$this->assertSame( array(), $this->processor->get_unprocessable_media() );
+	}
+
+	/**
 	 * Verifies that a parsed, failed src does not hide a separate malformed tag.
 	 */
 	public function test_line_broken_failure_preserves_malformed_report(): void {
@@ -378,9 +422,55 @@ class Content_Processor_Whitespace_Url_Test extends Integration_Test_Case {
 		$this->processor->process_content( $html, self::SOURCE );
 
 		// ASSERT: The original URL remains visible as unprocessable media.
-		$this->assertArrayHasKey(
-			$broken,
-			$this->processor->get_unprocessable_media()
+		$this->assertSame(
+			array( $broken ),
+			array_keys( $this->processor->get_unprocessable_media() )
+		);
+		$this->assertSame(
+			array( $broken . ' alt=' ),
+			array_keys( $this->processor->get_failed_media() )
+		);
+	}
+
+	/**
+	 * Verifies that markup swallowed by a broken quote still reports its URL.
+	 */
+	public function test_broken_quote_swallowing_markup_is_unprocessable(): void {
+		// ARRANGE: The closing quote is in paragraph text after the broken tag.
+		$broken = self::SOURCE . '/broken.jpg';
+		$html   = '<img src="' . $broken . '><p>She said "hi".</p>';
+
+		// ACT: Process the malformed image and following paragraph.
+		$this->processor->process_content( $html, self::SOURCE );
+
+		// ASSERT: The original URL gets markup guidance too.
+		$this->assertSame(
+			array( $broken ),
+			array_keys( $this->processor->get_unprocessable_media() )
+		);
+		$this->assertSame(
+			array( $broken . '><p>She said' ),
+			array_keys( $this->processor->get_failed_media() )
+		);
+	}
+
+	/**
+	 * Verifies that a skipped source host with different case remains reported.
+	 */
+	public function test_case_mismatched_source_host_is_unprocessable(): void {
+		// ARRANGE: The importer's host guard skips a source URL with other case.
+		$url  = 'https://SOURCE.example.com/a.jpg';
+		$html = '<img src="' . $url . '">';
+
+		// ACT: Process the image without a download attempt.
+		$this->processor->process_content( $html, self::SOURCE );
+
+		// ASSERT: The loose check keeps the skipped source URL visible.
+		$this->assertSame( array(), $this->requested );
+		$this->assertSame( array(), $this->processor->get_failed_media() );
+		$this->assertSame(
+			array( $url ),
+			array_keys( $this->processor->get_unprocessable_media() )
 		);
 	}
 
@@ -395,10 +485,14 @@ class Content_Processor_Whitespace_Url_Test extends Integration_Test_Case {
 		// ACT: Process the malformed image.
 		$this->processor->process_content( $html, self::SOURCE );
 
-		// ASSERT: Report the browser-visible URL, not the garbled value.
-		$this->assertArrayHasKey(
-			$broken,
-			$this->processor->get_unprocessable_media()
+		// ASSERT: The URL before the stray quote is malformed markup.
+		$this->assertSame(
+			array( $broken ),
+			array_keys( $this->processor->get_unprocessable_media() )
+		);
+		$this->assertSame(
+			array( $broken . '"' ),
+			array_keys( $this->processor->get_failed_media() )
 		);
 	}
 
@@ -422,7 +516,7 @@ class Content_Processor_Whitespace_Url_Test extends Integration_Test_Case {
 	/**
 	 * Verifies that a parsed but unsupported media attribute remains reported.
 	 */
-	public function test_video_srcset_still_reports_unprocessed_media(): void {
+	public function test_video_srcset_still_reports_unprocessable_media(): void {
 		// ARRANGE: The media importer does not process video srcset.
 		$unprocessed = self::SOURCE . '/missing.png';
 		$html        = '<video srcset="' . $unprocessed . '"></video>';
@@ -431,9 +525,9 @@ class Content_Processor_Whitespace_Url_Test extends Integration_Test_Case {
 		$this->processor->process_content( $html, self::SOURCE );
 
 		// ASSERT: The URL is reported rather than silently rewritten.
-		$this->assertArrayHasKey(
-			$unprocessed,
-			$this->processor->get_unprocessable_media()
+		$this->assertSame(
+			array( $unprocessed ),
+			array_keys( $this->processor->get_unprocessable_media() )
 		);
 	}
 

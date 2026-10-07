@@ -460,34 +460,27 @@ class Content_Media_Processor {
 			$content
 		) ?? $content;
 
-		// Remove media attributes from tags the HTML API parsed. The regex
-		// below should inspect only markup the processor could not reach.
+		// Keep unhandled URLs and malformed values for the loose regex below.
 		$check_processor = new WP_HTML_Tag_Processor( $check_content );
 
 		while ( $check_processor->next_tag() ) {
-			$processed_attrs = match ( $check_processor->get_tag() ) {
-				'IMG', 'SOURCE' => array( 'src', 'srcset' ),
-				'VIDEO' => array( 'src', 'poster' ),
-				'AUDIO', 'EMBED' => array( 'src' ),
-				'OBJECT' => array( 'data' ),
-				default => array(),
-			};
-
-			if ( array() === $processed_attrs ) {
-				continue;
-			}
-
-			foreach ( $processed_attrs as $attr ) {
+			foreach ( array( 'src', 'poster', 'data' ) as $attr ) {
 				$value = $check_processor->get_attribute( $attr );
 
-				// Malformed quoting can leave extra markup in the parsed value.
-				// Keep that attribute for the loose URL detection pass.
-				if ( is_string( $value )
-					&& 1 === preg_match( '/(?:["\']|\s+[a-z][a-z0-9:-]*=)$/i', $value ) ) {
+				// Keep values whose quoting swallowed other markup.
+				if ( ! is_string( $value )
+					|| 1 === preg_match( '/[<>]|(?:["\']|\s[a-z][a-z0-9:-]*=)$/i', $value ) ) {
 					continue;
 				}
 
-				$check_processor->remove_attribute( $attr );
+				$download_url = Media_Importer::get_download_url(
+					$value,
+					$source_site_url
+				);
+
+				if ( array_key_exists( $download_url, $this->failed_media ) ) {
+					$check_processor->remove_attribute( $attr );
+				}
 			}
 		}
 
