@@ -1036,8 +1036,7 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 	 */
 	public function test_deferred_child_url_retries_after_ancestor_publish(): void {
 		// ARRANGE: The child is published below a pending parent.
-		global $wp_rewrite;
-		$wp_rewrite->set_permalink_structure( '/%postname%/' );
+		$this->set_permalink_structure( '/%postname%/' );
 		$parent = self::factory()->post->create(
 			array(
 				'post_type'   => 'page',
