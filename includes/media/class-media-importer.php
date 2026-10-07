@@ -156,7 +156,7 @@ class Media_Importer {
 		}
 
 		// Strip query parameters for consistency with import_source_media_as_attachment().
-		$media_url = strtok( $media_url, '?' );
+		$media_url = self::get_download_url( $media_url, $source_site_url );
 
 		// Check if we already imported this media.
 		$existing_attachment = self::get_attachment_by_url( $media_url );
@@ -167,7 +167,7 @@ class Media_Importer {
 
 		if ( $this->resolve_only ) {
 			if ( ! $skip_if_not_media ) {
-				$this->unresolved_urls[ (string) $media_url ] = true;
+				$this->unresolved_urls[ $media_url ] = true;
 			}
 
 			return null;
@@ -370,7 +370,7 @@ class Media_Importer {
 		string $source_site_url,
 		bool $skip_if_not_media = false
 	): int|false|null {
-		$media_url = strtok( $media_url, '?' ); // Remove query parameters.
+		$media_url = self::get_download_url( $media_url, $source_site_url );
 
 		// Check if we already imported this media.
 		$existing_attachment = self::get_attachment_by_url( $media_url );
@@ -380,7 +380,7 @@ class Media_Importer {
 
 		if ( $this->resolve_only ) {
 			if ( ! $skip_if_not_media ) {
-				$this->unresolved_urls[ (string) $media_url ] = true;
+				$this->unresolved_urls[ $media_url ] = true;
 			}
 
 			return null;
@@ -1036,6 +1036,19 @@ class Media_Importer {
 		parse_str( $query, $params );
 
 		return $clean_url . '?' . http_build_query( $params );
+	}
+
+	/**
+	 * Returns the resolved URL used for a media download.
+	 *
+	 * @param string $media_url       Source media URL.
+	 * @param string $source_site_url Source site URL for relative URLs.
+	 * @return string URL without query parameters.
+	 */
+	public static function get_download_url( string $media_url, string $source_site_url ): string {
+		$resolved_url = URL_Validator::resolve_relative_url( $media_url, $source_site_url );
+
+		return (string) strtok( $resolved_url, '?' );
 	}
 
 	/**
