@@ -106,7 +106,7 @@ Ignore is reversible with Un-ignore. A fresh failed attempt creates a new open f
 
 Rollback eligibility comes from a post's latest active import-history row, and only `success` and `updated` rows qualify.
 
-Rolling back a successful new import deletes the destination post and the media that import created. Media another post still shows is kept: as a featured image, inline in content, or by ID in a gallery or playlist shortcode. The holding post counts whatever its post type or status, trashed and hidden included. Media whose usage cannot be determined is kept too, with the omission recorded in the Audit Log.
+Rolling back a successful new import deletes the destination post and the media that import created. Media another post still shows is kept: as a featured image, inline in content, or by ID in a gallery or playlist shortcode. The holding post counts whatever its post type or status, trashed and hidden included. Media whose usage cannot be determined, or that WordPress fails to delete, is kept too, with the omission recorded in the Audit Log.
 
 Rolling back an update restores the captured post fields, author, parent, post type, featured image, editor and tracking metadata, and previous assignments for the taxonomies the import payload carried. Restored content passes through WordPress' normal save filters for the acting user. If a filter changes the content or excerpt, rollback reports an error and does not mark the item rolled back, since WordPress may already have persisted the filtered value.
 

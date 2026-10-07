@@ -200,7 +200,7 @@ The Compare action on **Manage → Posts** fetches fresh source content and comp
 
 Rollback reverses a single import:
 
-- If the post was newly created by the import, the post is deleted, along with the media that import created. Media another post still shows — as its featured image, inline in its content, or by ID in a gallery or playlist shortcode — is kept, whatever that post's type or status, trashed and otherwise hidden posts included. Media whose usage cannot be determined is kept and the omission recorded in the Audit Log.
+- If the post was newly created by the import, the post is deleted, along with the media that import created. Media another post still shows — as its featured image, inline in its content, or by ID in a gallery or playlist shortcode — is kept, whatever that post's type or status, trashed and otherwise hidden posts included. Media whose usage cannot be determined, or that WordPress fails to delete, is kept and the omission recorded in the Audit Log.
 - If the post was an update of an existing post, the captured post fields, author, parent, post type, featured image, editor and tracking metadata, and previous assignments for taxonomies carried in the import payload are restored. Restored content passes through WordPress' normal save filters for the acting user. If a filter changes the content or excerpt, rollback reports an error, reopens the history item so it stays retryable, and warns that WordPress may already have persisted the filtered value. If a captured author, parent, post type, featured image, taxonomy, or term is no longer available, rollback retains the imported value for that field and records the omission in the Audit Log; a taxonomy's assignments are retained together if any part is unavailable. Imported custom metadata is not restored or removed, and created terms and changes to shared term fields are retained. When an update changes the post type, WordPress may add a default category or another taxonomy's default term outside the import payload; those assignments are not currently removed by rollback.
 
 It's important to note that the roll-back rolls back the specific changes from that single import. If a post has gone through a series of changes, each change can be rolled back sequentially.
@@ -367,6 +367,12 @@ These rollback errors point at a listing that no longer matches the destination:
 The notice "Post restored with some values retained. Review the Audit Log for details." means Safe Publish restored the post, but a saved author, parent, post type, featured image, taxonomy, or term no longer exists on the destination, so the imported value stays for that field.
 
 Open the Audit Log and find the warning for the rollback. It names each value that was kept. Recreate the missing item on the destination and change the field in the editor, or accept the imported value.
+
+### A rollback kept some media
+
+The notice "Post permanently deleted, with some media retained. Review the Audit Log for details." means Safe Publish deleted the post but kept some of the media its import created. Either Safe Publish could not determine whether another post still shows that media, or WordPress failed to delete it.
+
+Open the Audit Log and find the warning for the rollback. It lists the ID of each attachment kept for one of these reasons. When WordPress fails to delete a video, its poster image is kept too, but the warning does not list it. Delete each kept attachment, including such a poster, from the media library once no post shows it.
 
 ### An update cannot be rolled back from Safe Publish
 
