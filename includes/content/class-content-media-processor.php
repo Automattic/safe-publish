@@ -427,9 +427,9 @@ class Content_Media_Processor {
 	}
 
 	/**
-	 * Detects source-domain URLs in media and embed element attributes that the
-	 * processor could not match, typically due to malformed HTML (e.g. unclosed
-	 * quotes).
+	 * Detects URLs on the source's host and port in media and embed element
+	 * attributes that the processor could not match, typically due to
+	 * malformed HTML (e.g. unclosed quotes).
 	 *
 	 * Uses a loose regex anchored to media and embed tag names and attribute
 	 * names. This catches URLs the HTML API skipped (because the tag was

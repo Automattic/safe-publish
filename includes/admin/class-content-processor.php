@@ -1720,7 +1720,8 @@ class Content_Processor {
 	 * Two-pass: Collect unresolved IDs, bulk-lookup per kind, apply on a
 	 * second walk. Unmapped IDs stay in place with a warning. For nav-link and
 	 * submenu blocks the link url is re-derived from the resolved destination
-	 * id; replace_source_urls still swaps the host for any url left untouched.
+	 * id; replace_source_urls still swaps the source's host and port for any
+	 * url left untouched.
 	 *
 	 * @param array<array<string, mixed>> $blocks          Parsed block tree.
 	 * @param string                      $source_site_url Source site URL.
