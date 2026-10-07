@@ -201,6 +201,137 @@ class Import_Rollback_Test extends Source_Posts_API_Test_Base {
 	}
 
 	/**
+	 * Verifies that an inline-media download abort names the media its
+	 * cleanup could not delete, and keeps the freshly fetched title.
+	 */
+	public function test_media_download_abort_names_media_it_could_not_delete(): void {
+		// ARRANGE: Content with two images — first succeeds, second fails
+		// (nonexistent). The fresh title differs from the request title, and
+		// attachment deletion is blocked so the cleanup leaves it behind.
+		$good_url   = 'https://source.example.com/real-image.jpg';
+		$broken_url = 'https://source.example.com/nonexistent-partial.jpg';
+
+		$this->mock_post_overrides = array(
+			'title'   => 'Fresh Title From Source',
+			'content' => '<p>'
+				. '<img src="' . $good_url . '" alt="good">'
+				. '<img src="' . $broken_url . '" alt="broken">'
+				. '</p>',
+		);
+
+		$block_deletion = static fn() => false;
+		add_filter( 'pre_delete_attachment', $block_deletion, 10, 3 );
+
+		$session_id = $this->repository->create_session( 'https://source.example.com', 'bulk' );
+
+		// ACT: Attempt the import with a stale request title.
+		$result = $this->import_service->import_post(
+			array(
+				'id'        => 8305,
+				'title'     => 'Stale Request Title',
+				'content'   => '<p>Stale content.</p>',
+				'link'      => 'https://source.example.com/download-abort-survivor',
+				'post_type' => 'posts',
+			),
+			$session_id
+		);
+
+		remove_filter( 'pre_delete_attachment', $block_deletion, 10 );
+
+		// ASSERT: The download failure aborted the import, and the surviving
+		// attachment is named in both the message and the result payload.
+		$this->assertFalse( $result['success'], 'The import should fail.' );
+		$this->assertSame(
+			'media_download_failed',
+			$result['original_error_code'] ?? null,
+			'The download failure should be the reported cause.'
+		);
+
+		$this->assert_survivor_reported( $result, $good_url );
+
+		// ASSERT: The result keeps the freshly fetched title, not the stale
+		// request copy the cleanup error used to fall back to.
+		$this->assertSame(
+			'Fresh Title From Source',
+			$result['title'],
+			'The result must carry the freshly fetched title.'
+		);
+	}
+
+	/**
+	 * Verifies that a content-processing abort names the media its cleanup
+	 * could not delete.
+	 */
+	public function test_content_processing_abort_names_media_it_could_not_delete(): void {
+		// ARRANGE: One downloadable inline image, a URL replacement that fails
+		// after the image is sideloaded, and attachment deletion blocked so
+		// the cleanup leaves it behind.
+		$inline_url                = 'https://source.example.com/processing-survivor.jpg';
+		$this->mock_post_overrides = array(
+			'content' => '<p><img src="' . $inline_url . '" alt="inline"></p>',
+		);
+
+		$media_importer    = new Media_Importer( new HTTP_Client() );
+		$content_processor = new class(
+			$media_importer,
+			new Content_Media_Processor( $media_importer ),
+			new Shortcode_ID_Rewriter()
+		) extends Content_Processor {
+			/**
+			 * Fails as a PCRE error in the replacement would.
+			 *
+			 * @param string $content         Content (unused).
+			 * @param string $source_site_url Source site URL (unused).
+			 * @return WP_Error Always a replacement failure.
+			 */
+			#[\Override]
+			public function replace_source_urls(
+				string $content,
+				string $source_site_url
+			): WP_Error {
+				unset( $content, $source_site_url );
+				return new WP_Error( 'url_replacement_failed', 'Replacement failed.' );
+			}
+		};
+
+		$property = new \ReflectionProperty(
+			Post_Import_Service::class,
+			'content_processor'
+		);
+		$property->setValue( $this->import_service, $content_processor );
+
+		$block_deletion = static fn() => false;
+		add_filter( 'pre_delete_attachment', $block_deletion, 10, 3 );
+
+		$session_id = $this->repository->create_session( 'https://source.example.com', 'bulk' );
+
+		// ACT: Attempt the import.
+		$result = $this->import_service->import_post(
+			array(
+				'id'        => 8306,
+				'title'     => 'Processing Abort Survivor',
+				'content'   => '<p>Stale content.</p>',
+				'link'      => 'https://source.example.com/processing-abort-survivor',
+				'post_type' => 'posts',
+			),
+			$session_id
+		);
+
+		remove_filter( 'pre_delete_attachment', $block_deletion, 10 );
+
+		// ASSERT: The processing failure aborted the import, and the surviving
+		// attachment is named in both the message and the result payload.
+		$this->assertFalse( $result['success'], 'The import should fail.' );
+		$this->assertSame(
+			'content_processing_failed',
+			$result['original_error_code'] ?? null,
+			'The processing failure should be the reported cause.'
+		);
+
+		$this->assert_survivor_reported( $result, $inline_url );
+	}
+
+	/**
 	 * Verifies that sideloaded attachments (including featured image) are
 	 * deleted when the import fails at the terms-update step on the create
 	 * path.
