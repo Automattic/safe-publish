@@ -467,20 +467,20 @@ class Source_Media_REST_Field {
 			return array();
 		}
 
-		$port                = wp_parse_url( $site_url, PHP_URL_PORT );
-		$authority           = $host . ( is_int( $port ) ? ':' . $port : '' );
-		$url_pattern         = '(?:(?:https?:)?//'
+		$port              = wp_parse_url( $site_url, PHP_URL_PORT );
+		$authority         = $host . ( is_int( $port ) ? ':' . $port : '' );
+		$url_pattern       = '(?:(?:https?:)?//'
 			. preg_quote( $authority, '#' )
 			. '/|/(?!/))[^\s"\'<>()]+';
-		$pattern             = '#(?<![a-z0-9:/<])(?<!<!-- )' . $url_pattern . '#i';
-		$line_broken_pattern = '#^' . $url_pattern . '$#i';
-		$count               = preg_match_all( $pattern, $content, $matches );
-		$urls                = is_int( $count ) && 0 < $count ? $matches[0] : array();
-		$urls                = array_merge(
+		$pattern           = '#(?<![a-z0-9:/<])(?<!<!-- )' . $url_pattern . '#i';
+		$attribute_pattern = '#^' . $url_pattern . '$#i';
+		$count             = preg_match_all( $pattern, $content, $matches );
+		$urls              = is_int( $count ) && 0 < $count ? $matches[0] : array();
+		$urls              = array_merge(
 			$urls,
-			$this->line_broken_attribute_urls( $content, $line_broken_pattern ),
-			$this->line_broken_block_urls( $content, $line_broken_pattern ),
-			$this->line_broken_shortcode_urls( $content, $line_broken_pattern )
+			$this->line_broken_attribute_urls( $content, $attribute_pattern ),
+			$this->block_attribute_urls( $content, $attribute_pattern ),
+			$this->line_broken_shortcode_urls( $content, $attribute_pattern )
 		);
 
 		if ( array() === $urls ) {
@@ -579,23 +579,16 @@ class Source_Media_REST_Field {
 	}
 
 	/**
-	 * Reads line-broken URLs from parsed Gutenberg attributes, including nested
-	 * attributes and child blocks. Escaped JSON newlines become real characters
-	 * only after parsing the block comment.
+	 * Reads media URLs from parsed Gutenberg attributes, including nested attrs
+	 * and child blocks. Parsing restores JSON-escaped slashes that the raw scan
+	 * cannot match.
 	 *
 	 * @param string $content Raw post content.
 	 * @param string $pattern Accepted source media URL pattern.
 	 * @return list<string> Normalized same-host block attribute URLs.
 	 */
-	private function line_broken_block_urls(
-		string $content,
-		string $pattern
-	): array {
-		// JSON encodes line breaks with backslashes, so most blocks need no parse.
-		if (
-			false === strpos( $content, '<!-- wp:' )
-			|| false === strpos( $content, '\\' )
-		) {
+	private function block_attribute_urls( string $content, string $pattern ): array {
+		if ( false === strpos( $content, '<!-- wp:' ) ) {
 			return array();
 		}
 
@@ -604,7 +597,7 @@ class Source_Media_REST_Field {
 		foreach ( parse_blocks( $content ) as $block ) {
 			$urls = array_merge(
 				$urls,
-				$this->line_broken_urls_in_block( $block, $pattern )
+				$this->urls_in_block( $block, $pattern )
 			);
 		}
 
@@ -612,26 +605,26 @@ class Source_Media_REST_Field {
 	}
 
 	/**
-	 * Collects line-broken URL attributes from a block and its child blocks.
+	 * Collects media URL attributes from a block and its child blocks.
 	 *
 	 * @param array  $block   Parsed block.
-	 * @param string $pattern Same-host URL pattern.
+	 * @param string $pattern Accepted source media URL pattern.
 	 * @return list<string> Normalized URLs.
 	 */
-	private function line_broken_urls_in_block(
+	private function urls_in_block(
 		array $block,
 		string $pattern
 	): array {
 		$attrs = $block['attrs'] ?? array();
 		$urls  = is_array( $attrs )
-			? $this->line_broken_urls_in_values( $attrs, $pattern )
+			? $this->urls_in_block_values( $attrs, $pattern )
 			: array();
 
 		foreach ( $block['innerBlocks'] ?? array() as $child ) {
 			if ( is_array( $child ) ) {
 				$urls = array_merge(
 					$urls,
-					$this->line_broken_urls_in_block( $child, $pattern )
+					$this->urls_in_block( $child, $pattern )
 				);
 			}
 		}
@@ -640,13 +633,13 @@ class Source_Media_REST_Field {
 	}
 
 	/**
-	 * Collects line-broken URL strings from nested block attribute values.
+	 * Collects media URL strings from nested block attribute values.
 	 *
 	 * @param array  $values  Attribute values.
-	 * @param string $pattern Same-host URL pattern.
+	 * @param string $pattern Accepted source media URL pattern.
 	 * @return list<string> Normalized URLs.
 	 */
-	private function line_broken_urls_in_values(
+	private function urls_in_block_values(
 		array $values,
 		string $pattern
 	): array {
@@ -656,12 +649,12 @@ class Source_Media_REST_Field {
 			if ( is_array( $value ) ) {
 				$urls = array_merge(
 					$urls,
-					$this->line_broken_urls_in_values( $value, $pattern )
+					$this->urls_in_block_values( $value, $pattern )
 				);
 				continue;
 			}
 
-			$url = $this->normalized_line_broken_url( $value, $pattern );
+			$url = $this->normalized_block_url( $value, $pattern );
 
 			if ( null !== $url ) {
 				$urls[] = $url;
@@ -669,6 +662,23 @@ class Source_Media_REST_Field {
 		}
 
 		return $urls;
+	}
+
+	/**
+	 * Normalizes a block attribute URL accepted by the source media pattern.
+	 *
+	 * @param mixed  $value Block attribute value.
+	 * @param string $pattern Accepted source media URL pattern.
+	 * @return string|null Normalized URL, or null when not eligible.
+	 */
+	private function normalized_block_url( mixed $value, string $pattern ): ?string {
+		if ( ! is_string( $value ) ) {
+			return null;
+		}
+
+		$url = URL_Validator::normalize_url_whitespace( $value );
+
+		return 1 === preg_match( $pattern, $url ) ? $url : null;
 	}
 
 	/**

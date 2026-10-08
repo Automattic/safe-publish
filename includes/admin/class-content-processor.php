@@ -1607,7 +1607,13 @@ class Content_Processor {
 				);
 			} elseif (
 				is_string( $value ) &&
-				URL_Validator::is_absolute_http_url( $value ) &&
+				(
+					URL_Validator::is_absolute_http_url( $value ) ||
+					str_starts_with(
+						URL_Validator::normalize_url_whitespace( $value ),
+						'/'
+					)
+				) &&
 				$this->content_media_processor
 					->has_uploadable_file_extension( $value )
 			) {
