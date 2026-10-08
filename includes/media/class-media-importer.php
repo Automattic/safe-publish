@@ -791,8 +791,8 @@ class Media_Importer {
 	 * Fetches a source post's attached media set of a given type: The ordered
 	 * { id, menu_order } list a cross-post [gallery id="B"]/[playlist id="B"]
 	 * renders. Reads the source's referenced-media enrichment field, since the
-	 * media REST omits menu_order. Any fetch or shape failure yields an empty
-	 * set so the caller degrades rather than aborts.
+	 * media REST omits menu_order. Any fetch or shape failure is logged and
+	 * yields an empty set so the caller degrades rather than aborts.
 	 *
 	 * @param int    $source_post_id   Referenced source post ID.
 	 * @param string $source_post_type Its post type slug, to resolve the REST base.
@@ -815,6 +815,11 @@ class Media_Importer {
 			$auth_credentials
 		);
 		if ( is_wp_error( $rest_base ) ) {
+			$this->logger->source_media_fetch_failed(
+				$source_post_id,
+				$source_site_url,
+				$rest_base->get_error_message()
+			);
 			return array();
 		}
 
@@ -831,6 +836,11 @@ class Media_Importer {
 		);
 
 		if ( is_wp_error( $response ) ) {
+			$this->logger->source_media_fetch_failed(
+				$source_post_id,
+				$source_site_url,
+				$response->get_error_message()
+			);
 			return array();
 		}
 
@@ -838,10 +848,19 @@ class Media_Importer {
 		$field = is_array( $data )
 			? ( $data[ Source_Media_REST_Field::REFERENCED_FIELD_NAME ] ?? null )
 			: null;
+		$items = is_array( $field )
+			? ( $field[ $mime_group ] ?? array() )
+			: null;
+		if ( ! is_array( $items ) ) {
+			$this->logger->source_media_fetch_failed(
+				$source_post_id,
+				$source_site_url,
+				'Source post returned a malformed referenced media set.'
+			);
+			return array();
+		}
 
-		return Source_Media_REST_Field::normalize_menu_order_set(
-			is_array( $field ) ? ( $field[ $mime_group ] ?? null ) : null
-		);
+		return Source_Media_REST_Field::normalize_menu_order_set( $items );
 	}
 
 	/**
