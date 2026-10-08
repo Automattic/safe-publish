@@ -805,8 +805,7 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 	 */
 	public function test_deferred_navigation_url_retries_after_publish(): void {
 		// ARRANGE: A draft import collides with an existing published path.
-		global $wp_rewrite;
-		$wp_rewrite->set_permalink_structure( '/%postname%/' );
+		$this->set_permalink_structure( '/%postname%/' );
 		self::factory()->post->create(
 			array(
 				'post_type' => 'page',
@@ -832,14 +831,6 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 
 		// ASSERT: The ID is mapped, the URL is deferred, and Retry stays open.
 		$this->assertSame( array( $target ), $this->nav_link_ids( $post_id ) );
-		$this->assertNotNull(
-			$this->attention->get_issue(
-				$post_id,
-				'deferred_navigation_url',
-				9701,
-				'post'
-			)
-		);
 		$issue_row = $this->attention->get_issue(
 			$post_id,
 			'deferred_navigation_url',
@@ -855,7 +846,7 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 			)
 		);
 		$this->assertSame(
-			Reconcile_Outcome::UNRESOLVED,
+			Reconcile_Outcome::DEFERRED_URL,
 			$this->import_service->retry_deferred_navigation_url(
 				$post_id,
 				9701,
@@ -910,8 +901,7 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 	 */
 	public function test_deferred_navigation_url_retries_after_type_registration(): void {
 		// ARRANGE: The target is a draft in a registered custom post type.
-		global $wp_rewrite;
-		$wp_rewrite->set_permalink_structure( '/%postname%/' );
+		$this->set_permalink_structure( '/%postname%/' );
 		register_post_type( 'sp_missing', array( 'public' => true ) );
 		$target = $this->seed_target_post( 9705, self::BLOG_URL, 'sp_missing' );
 		wp_update_post(
@@ -947,7 +937,7 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 			)
 		);
 		$this->assertSame(
-			Reconcile_Outcome::UNRESOLVED,
+			Reconcile_Outcome::DEFERRED_URL,
 			$this->import_service->retry_deferred_navigation_url(
 				$post_id,
 				9705,
@@ -978,7 +968,6 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 				'post'
 			)
 		);
-		unregister_post_type( 'sp_missing' );
 	}
 
 	/**
@@ -1010,7 +999,7 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 		);
 
 		// ASSERT: The ID changed, but the outcome and new issue show deferral.
-		$this->assertSame( Reconcile_Outcome::UNRESOLVED, $outcome->type );
+		$this->assertSame( Reconcile_Outcome::DEFERRED_URL, $outcome->type );
 		$this->assertSame( array( $target ), $this->nav_link_ids( $post_id ) );
 		$this->assertNull(
 			$this->attention->get_issue(
@@ -1078,7 +1067,7 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 		);
 
 		// ASSERT: The URL waited for the ancestor, then matched the child.
-		$this->assertSame( Reconcile_Outcome::UNRESOLVED, $before->type );
+		$this->assertSame( Reconcile_Outcome::DEFERRED_URL, $before->type );
 		$this->assertSame( Reconcile_Outcome::RESOLVED, $after->type );
 		$this->assertSame( array( $child ), $this->nav_link_ids( $post_id ) );
 		$this->assertStringContainsString(

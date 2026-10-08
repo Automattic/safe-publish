@@ -286,8 +286,8 @@ describe( 'NeedsAttentionInbox', () => {
 		).toBeInTheDocument();
 	} );
 
-	it( 'Verifies that a deferred URL waits for a final path', async () => {
-		// ARRANGE: The target is imported but its path can still change.
+	it( 'Verifies that a deferred URL waits for its target', async () => {
+		// ARRANGE: The target is imported but its URL is not final.
 		mockListResponse( [
 			{
 				...DEGRADATION,
@@ -304,9 +304,9 @@ describe( 'NeedsAttentionInbox', () => {
 			/>
 		);
 
-		// ASSERT: The hint names the final path as the missing prerequisite.
+		// ASSERT: The hint names the URL as the missing prerequisite.
 		expect(
-			await screen.findByText( 'Waiting on final path' )
+			await screen.findByText( 'Waiting on final URL' )
 		).toBeInTheDocument();
 	} );
 

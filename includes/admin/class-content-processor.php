@@ -1770,9 +1770,9 @@ class Content_Processor {
 	 * @param int    $target_ref       Source id to repoint.
 	 * @param string $target_kind      'post' or 'term'.
 	 * @param string $source_site_url  Source identity scoping the lookup.
-	 * @return Reconcile_Outcome Resolved when every match repointed;
-	 *                           target_absent, write_failed, or unresolved
-	 *                           otherwise.
+	 * @return Reconcile_Outcome Resolved when every match and URL is repaired;
+	 *                           deferred_url while a mapped URL awaits its path,
+	 *                           or another failure outcome otherwise.
 	 */
 	public function repoint_block_reference(
 		int $affected_post_id,
@@ -1854,7 +1854,7 @@ class Content_Processor {
 			);
 		}
 		if ( $deferred ) {
-			return Reconcile_Outcome::unresolved( self::DEFERRED_URL_DETAIL );
+			return Reconcile_Outcome::deferred_url( self::DEFERRED_URL_DETAIL );
 		}
 
 		if ( ! $changed ) {
@@ -1907,7 +1907,7 @@ class Content_Processor {
 			$pending
 		);
 		if ( $pending ) {
-			return Reconcile_Outcome::unresolved( self::DEFERRED_URL_DETAIL );
+			return Reconcile_Outcome::deferred_url( self::DEFERRED_URL_DETAIL );
 		}
 		if ( ! $found ) {
 			return Reconcile_Outcome::unresolved(
@@ -1956,7 +1956,11 @@ class Content_Processor {
 					|| ! self::gate_passes( $rule, $attrs ) ) {
 					continue;
 				}
-				$dest_id = self::select_candidate( $candidates, 'post', $attrs );
+				$dest_id = self::select_candidate(
+					$candidates,
+					'post',
+					$attrs
+				);
 				if ( $dest_id <= 0
 					|| (int) ( $attrs[ $rule['attr'] ] ?? 0 ) !== $dest_id
 					|| ! is_string( $attrs[ $rule['url_attr'] ] ?? null )
@@ -2945,8 +2949,8 @@ class Content_Processor {
 	 * The source url's query is carried over with post/term identity vars
 	 * removed (so a plain-permalink source's stale id cannot override the new
 	 * path) and its fragment preserved. A post target with an unsettled path or
-	 * unregistered type is left alone, since re-deriving would store a temporary
-	 * url.
+	 * unregistered type is left alone, since re-deriving would store a
+	 * temporary url.
 	 *
 	 * @param array<string, mixed> $attrs    Block attrs.
 	 * @param string               $url_attr Attr holding the link url.

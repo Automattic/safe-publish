@@ -117,7 +117,7 @@ const resolvabilityLabel = ( item: AttentionIssue ): string => {
 		return __( 'Resolvable now', 'safe-publish' );
 	}
 	if ( item.issue_type === 'deferred_navigation_url' ) {
-		return __( 'Waiting on final path', 'safe-publish' );
+		return __( 'Waiting on final URL', 'safe-publish' );
 	}
 	return __( 'Waiting on import', 'safe-publish' );
 };

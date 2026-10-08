@@ -1340,10 +1340,9 @@ class Post_Import_Service {
 	}
 
 	/**
-	 * Reports per open degradation whether its target is imported, so a Retry
-	 * would reconcile it now. Batched, reusing each type's Retry lookup; a true
-	 * is a hint, not a guarantee, since Retry can still return write_failed, or
-	 * leave a term ref open when no claim matches a block's declared taxonomy.
+	 * Reports whether each open degradation can be retried now. Deferred URLs
+	 * also need a final target path. A true value is a hint, not a guarantee:
+	 * Retry can still fail to write or leave a mismatched term open.
 	 *
 	 * @param array[] $issue_rows      Open degradation rows, each carrying
 	 *                                 issue_type, target_ref, and target_kind.
@@ -1411,9 +1410,10 @@ class Post_Import_Service {
 			list( $bucket, $ref ) = $class;
 			$resolvable[ $index ] = 'none' !== $bucket
 				&& isset( $maps[ $bucket ][ $ref ] );
+			$issue_type           = $issue_rows[ $index ]['issue_type'];
 			if (
 				$resolvable[ $index ]
-				&& 'deferred_navigation_url' === $issue_rows[ $index ]['issue_type']
+				&& 'deferred_navigation_url' === $issue_type
 			) {
 				$resolvable[ $index ] = $this->content_processor
 					->is_post_path_final( $maps['post'][ $ref ] );
@@ -2114,7 +2114,8 @@ class Post_Import_Service {
 	 * success.
 	 *
 	 * Self-verifying: The issue clears only when the target now resolves and the
-	 * post was repointed; otherwise the row stays, with last_seen refreshed.
+	 * post was repointed. A mapped link awaiting its final URL moves to a
+	 * deferred-URL row; other unresolved rows stay open.
 	 *
 	 * @param int    $affected_post_id Post holding the reference.
 	 * @param int    $target_ref       Source id to repoint.
@@ -2134,7 +2135,7 @@ class Post_Import_Service {
 			$target_kind,
 			$source_site_url
 		);
-		if ( Content_Processor::DEFERRED_URL_DETAIL === $outcome->detail ) {
+		if ( Reconcile_Outcome::DEFERRED_URL === $outcome->type ) {
 			$this->attention_issues->upsert_issue(
 				$affected_post_id,
 				'deferred_navigation_url',

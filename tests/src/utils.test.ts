@@ -745,6 +745,24 @@ function makeIssue( overrides: Partial< AttentionIssue > ): AttentionIssue {
 }
 
 describe( 'renderIssueMessage', () => {
+	it( 'explains all remedies for a deferred navigation URL', () => {
+		// ARRANGE: A mapped link whose target is not yet ready.
+		const issue = makeIssue( {
+			issue_type: 'deferred_navigation_url',
+			target_ref: 703,
+		} );
+
+		// ACT: Render its issue guidance.
+		const message = renderIssueMessage( issue );
+
+		// ASSERT: Missing targets, unregistered types, and paths are covered.
+		expect( message ).toContain( '703' );
+		expect( message ).toContain( 'Import' );
+		expect( message ).toContain( 'register' );
+		expect( message ).toContain( 'path' );
+		expect( message.length ).toBeGreaterThanOrEqual( 62 );
+		expect( message.length ).toBeLessThanOrEqual( 82 );
+	} );
 	it( 'renders retry-oriented copy for an unmapped post reference', () => {
 		// ARRANGE: An unmapped post-reference issue.
 		const issue = makeIssue( {

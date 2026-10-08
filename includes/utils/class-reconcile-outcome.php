@@ -19,8 +19,8 @@ if ( ! defined( 'ABSPATH' ) ) {
  *
  * Names what a retry actually did so the audit log records the true outcome
  * rather than inferring it from the issue's severity. The write_failed,
- * target_absent, and unresolved outcomes carry a detail string naming the
- * specific cause.
+ * target_absent, unresolved, and deferred_url outcomes carry a detail string
+ * naming the specific cause.
  */
 final class Reconcile_Outcome {
 
@@ -29,6 +29,7 @@ final class Reconcile_Outcome {
 	public const TARGET_ABSENT = 'target_absent';
 	public const WRITE_FAILED  = 'write_failed';
 	public const UNRESOLVED    = 'unresolved';
+	public const DEFERRED_URL  = 'deferred_url';
 
 	/**
 	 * Outcome type; one of the class constants.
@@ -38,8 +39,7 @@ final class Reconcile_Outcome {
 	public readonly string $type;
 
 	/**
-	 * Cause detail for write_failed, target_absent, and unresolved; empty
-	 * otherwise.
+	 * Cause detail for non-resolved outcomes; empty for resolved.
 	 *
 	 * @var string
 	 */
@@ -94,6 +94,16 @@ final class Reconcile_Outcome {
 	 */
 	public static function unresolved( string $reason = '' ): self {
 		return new self( self::UNRESOLVED, $reason );
+	}
+
+	/**
+	 * Builds an outcome for a mapped link awaiting its final URL.
+	 *
+	 * @param string $detail Why the URL is deferred.
+	 * @return self
+	 */
+	public static function deferred_url( string $detail ): self {
+		return new self( self::DEFERRED_URL, $detail );
 	}
 
 	/**

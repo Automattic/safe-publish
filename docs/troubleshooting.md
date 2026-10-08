@@ -300,9 +300,9 @@ This is a known limitation of WordPress' embed cache when imported posts referen
 
 Links inside post body content are migrated by host swap only, preserving the path, so a link can break when the target's destination slug or permalink differs from the source. See [Internal body links may 404 or open the wrong page](concepts/import-process.md#internal-body-links-may-404-or-open-the-wrong-page) for the cause and what to review.
 
-#### Navigation links to draft targets or their children 404 or open the wrong page
+#### Navigation links have a deferred URL
 
-A navigation link or submenu whose target was a draft at import, or sat under a draft or trashed parent, keeps the host-swapped source path instead of being re-derived, so it can break under a slug collision or a different permalink structure. See [Navigation links to draft targets or their children may 404 or open the wrong page](concepts/import-process.md#navigation-links-to-draft-targets-or-their-children-may-404-or-open-the-wrong-page) for the fix.
+A navigation link or submenu keeps a temporary URL when the destination target or an ancestor lacks a final path, or the target's post type is unregistered. The link can 404 or open the wrong page. Needs attention records the deferred URL. Import or restore a missing target, register its type, or finalize its path, then Retry to repair the URL. See [Navigation links with deferred URLs](concepts/import-process.md#navigation-links-with-deferred-urls).
 
 #### A navigation link to a term stays on the Needs attention tab
 

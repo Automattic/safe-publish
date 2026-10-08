@@ -231,7 +231,12 @@ export interface SetIgnoredResponse {
  */
 export interface RetryAttentionIssueResponse {
 	resolved: boolean;
-	outcome: 'resolved' | 'target_absent' | 'write_failed' | 'unresolved';
+	outcome:
+		| 'resolved'
+		| 'target_absent'
+		| 'write_failed'
+		| 'unresolved'
+		| 'deferred_url';
 	detail: string;
 }
 
@@ -244,6 +249,7 @@ export interface BulkRetryAttentionResponse {
 	target_absent: number;
 	write_failed: number;
 	unresolved: number;
+	deferred_url: number;
 	skipped: number;
 }
 
@@ -319,7 +325,8 @@ export interface UnmappedBlockReferenceWarning {
 
 /**
  * Surfaced when a mapped navigation link keeps its source path until the
- * destination target and its ancestors have final slugs.
+ * destination target and its ancestors have final slugs and its post type is
+ * registered.
  */
 export interface DeferredNavigationUrlWarning {
 	type: 'deferred_navigation_url';

@@ -393,7 +393,7 @@ export function renderWarningMessage( warning: Warning ): string {
 			return sprintf(
 				/* translators: %d: source target post ID */
 				__(
-					'Link to source post %d keeps its temporary URL. Finalize its target path, then Retry from Needs attention.',
+					'Link to source post %d keeps its temporary URL. Import, register, or fix its target path, then Retry from Needs attention.',
 					'safe-publish'
 				),
 				warning.source_id
@@ -516,7 +516,7 @@ export function renderIssueMessage( issue: AttentionIssue ): string {
 			return sprintf(
 				/* translators: %d: source target post ID */
 				__(
-					'Link to source post %d has a deferred URL. Finalize its path, then Retry.',
+					'Post %d link awaits its URL. Import, register, or fix its path, then Retry.',
 					'safe-publish'
 				),
 				issue.target_ref

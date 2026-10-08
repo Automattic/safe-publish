@@ -996,8 +996,13 @@ class Content_Processor_Block_ID_Remap_Test extends Integration_Test_Case {
 			$this->first_nav_link_url( (string) $result )
 		);
 		$this->assertSame(
-			'deferred_navigation_url',
-			$this->processor->get_warnings()[0]['type']
+			array(
+				array(
+					'type'      => 'deferred_navigation_url',
+					'source_id' => 99050,
+				),
+			),
+			$this->processor->get_warnings()
 		);
 	}
 
@@ -1041,8 +1046,13 @@ class Content_Processor_Block_ID_Remap_Test extends Integration_Test_Case {
 			$this->first_nav_link_url( (string) $result )
 		);
 		$this->assertSame(
-			'deferred_navigation_url',
-			$this->processor->get_warnings()[0]['type'] ?? null
+			array(
+				array(
+					'type'      => 'deferred_navigation_url',
+					'source_id' => 99053,
+				),
+			),
+			$this->processor->get_warnings()
 		);
 	}
 
