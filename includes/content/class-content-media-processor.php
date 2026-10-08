@@ -34,6 +34,11 @@ if ( ! defined( 'ABSPATH' ) ) {
 class Content_Media_Processor {
 
 	/**
+	 * Matches an attribute value whose quoting swallowed other markup.
+	 */
+	private const SWALLOWED_MARKUP = '/[<>]|(?:["\']|\s[a-z][a-z0-9:-]*=)$/i';
+
+	/**
 	 * Media Importer instance.
 	 *
 	 * @var Media_Importer
@@ -465,6 +470,33 @@ class Content_Media_Processor {
 					: '',
 			$content
 		) ?? $content;
+
+		// Skip values already reported as failed downloads: The regex below
+		// would report a line-broken URL again under a truncated key.
+		$check_processor = new WP_HTML_Tag_Processor( $check_content );
+
+		while ( $check_processor->next_tag() ) {
+			foreach ( array( 'src', 'poster', 'data' ) as $attr ) {
+				$value = $check_processor->get_attribute( $attr );
+
+				// Keep values whose quoting swallowed other markup.
+				if ( ! is_string( $value )
+					|| 1 === preg_match( self::SWALLOWED_MARKUP, $value ) ) {
+					continue;
+				}
+
+				$download_url = Media_Importer::get_download_url(
+					$value,
+					$source_site_url
+				);
+
+				if ( array_key_exists( $download_url, $this->failed_media ) ) {
+					$check_processor->remove_attribute( $attr );
+				}
+			}
+		}
+
+		$check_content = $check_processor->get_updated_html();
 
 		// Loose regex: Anchored to a media/embed tag, then looks for
 		// src/poster/srcset/data within the same tag. Uses [^<>]*? (stops at
