@@ -529,6 +529,7 @@ class Content_Processor_Whitespace_Url_Test extends Integration_Test_Case {
 			array( $unprocessed ),
 			array_keys( $this->processor->get_unprocessable_media() )
 		);
+		$this->assertSame( array(), $this->processor->get_failed_media() );
 	}
 
 	/**

@@ -34,6 +34,11 @@ if ( ! defined( 'ABSPATH' ) ) {
 class Content_Media_Processor {
 
 	/**
+	 * Matches an attribute value whose quoting swallowed other markup.
+	 */
+	private const SWALLOWED_MARKUP = '/[<>]|(?:["\']|\s[a-z][a-z0-9:-]*=)$/i';
+
+	/**
 	 * Media Importer instance.
 	 *
 	 * @var Media_Importer
@@ -466,7 +471,8 @@ class Content_Media_Processor {
 			$content
 		) ?? $content;
 
-		// Keep unhandled URLs and malformed values for the loose regex below.
+		// Skip values already reported as failed downloads: The regex below
+		// would report a line-broken URL again under a truncated key.
 		$check_processor = new WP_HTML_Tag_Processor( $check_content );
 
 		while ( $check_processor->next_tag() ) {
@@ -475,7 +481,7 @@ class Content_Media_Processor {
 
 				// Keep values whose quoting swallowed other markup.
 				if ( ! is_string( $value )
-					|| 1 === preg_match( '/[<>]|(?:["\']|\s[a-z][a-z0-9:-]*=)$/i', $value ) ) {
+					|| 1 === preg_match( self::SWALLOWED_MARKUP, $value ) ) {
 					continue;
 				}
 
