@@ -249,6 +249,18 @@ class Import_Rollback_Test extends Source_Posts_API_Test_Base {
 
 		$this->assert_survivor_reported( $result, $good_url );
 
+		// ASSERT: The history record stores the surviving attachment too.
+		$items       = $this->repository->get_session_items( $session_id );
+		$stored_item = $this->repository->get_item( (int) $items[0]['id'] );
+		$this->assertNotNull( $stored_item );
+		$this->assertSame(
+			$result['media_ids'],
+			History_Repository::decode_item_changes(
+				$stored_item['content_changes']
+			)['media_ids'] ?? null,
+			'The history record must carry the surviving attachment ID.'
+		);
+
 		// ASSERT: The result keeps the freshly fetched title, not the stale
 		// request copy the cleanup error used to fall back to.
 		$this->assertSame(

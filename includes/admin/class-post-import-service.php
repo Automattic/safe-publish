@@ -1461,7 +1461,10 @@ class Post_Import_Service {
 				$prepared->get_error_message(),
 				$this->merge_parent_detail(
 					$prepared,
-					array( 'action' => $prepared->get_error_code() )
+					$this->build_failure_changes(
+						$prepared,
+						$prepared->get_error_code()
+					)
 				)
 			);
 
@@ -1661,7 +1664,10 @@ class Post_Import_Service {
 				$prepared->get_error_message(),
 				$this->merge_parent_detail(
 					$prepared,
-					array( 'action' => $prepared->get_error_code() )
+					$this->build_failure_changes(
+						$prepared,
+						$prepared->get_error_code()
+					)
 				)
 			);
 
