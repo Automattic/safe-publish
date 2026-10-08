@@ -1977,6 +1977,9 @@ class Content_Processor {
 		int $dest_post_id,
 		string $source_site_url
 	): void {
+		// Start a new media pass so earlier media failures are retried.
+		$this->media_importer->reset_failed_media();
+
 		$auth = Auth_Credential_Provider::get_credentials();
 
 		$references = $this->shortcode_id_rewriter->collect_cross_post_references(
