@@ -216,6 +216,83 @@ class Content_Processor {
 		string $source_site_url,
 		array $context = array()
 	): string|WP_Error {
+		return $this->replace_source_urls(
+			$this->run_content_passes(
+				$content,
+				$source_site_url,
+				$context,
+				true
+			),
+			$source_site_url
+		);
+	}
+
+	/**
+	 * Reports the content process_content() would store, importing nothing.
+	 *
+	 * Runs the same passes as the import, so a caller compares against what an
+	 * update would produce. The cross-post and attached media-set passes are
+	 * skipped, as they exist to write; media downloads are avoided by
+	 * injecting a resolve-only Media_Importer. Media this site has not imported
+	 * keeps its source URL, as the copy an update would create does not exist.
+	 *
+	 * @param string               $content         Post content to preview.
+	 * @param string               $source_site_url Source site URL.
+	 * @param array<string, mixed> $context         Optional. As process_content(),
+	 *                                              except `attached_media`, which
+	 *                                              only the skipped pass reads.
+	 * @return string|WP_Error Previewed content, or WP_Error on failure.
+	 */
+	public function preview_content(
+		string $content,
+		string $source_site_url,
+		array $context = array()
+	): string|WP_Error {
+		$preview = $this->run_content_passes(
+			$content,
+			$source_site_url,
+			$context,
+			false
+		);
+
+		// Media state collected here describes no import, so it is dropped.
+		$this->failed_media        = array();
+		$this->unprocessable_media = array();
+		$this->warnings            = array();
+
+		// Hold media this site has no file for out of the URL swap, so it
+		// keeps its source URL and a local copy at the same path keeps its own.
+		$placeholders = array_map(
+			static fn ( int $i ): string => "\0" . $i . "\0",
+			array_flip( $this->media_importer->take_unresolved_urls() )
+		);
+
+		$preview = $this->replace_source_urls(
+			strtr( $preview, $placeholders ),
+			$source_site_url
+		);
+
+		return is_string( $preview )
+			? strtr( $preview, array_flip( $placeholders ) )
+			: $preview;
+	}
+
+	/**
+	 * Runs the content passes shared by the import and its preview.
+	 *
+	 * @param string               $content           Post content to process.
+	 * @param string               $source_site_url   Source site URL.
+	 * @param array<string, mixed> $context           process_content() context.
+	 * @param bool                 $import_media_sets Import the cross-post and
+	 *                                                attached media sets.
+	 * @return string Processed content, before the source URL swap.
+	 */
+	private function run_content_passes(
+		string $content,
+		string $source_site_url,
+		array $context,
+		bool $import_media_sets
+	): string {
 		$this->failed_media        = array();
 		$this->unprocessable_media = array();
 		$this->warnings            = array();
@@ -274,16 +351,18 @@ class Content_Processor {
 			$context
 		);
 
-		// Pull each referenced post's rendered set so the remapped shortcode
-		// fills on the destination.
-		$this->import_referenced_media_sets(
-			$referenced,
-			$source_site_url,
-			$context
-		);
+		if ( $import_media_sets ) {
+			// Pull each referenced post's rendered set so the remapped
+			// shortcode fills on the destination.
+			$this->import_referenced_media_sets(
+				$referenced,
+				$source_site_url,
+				$context
+			);
 
-		// Import the bare [gallery]/[playlist] attached set (no rewrite).
-		$this->import_attached_media_set( $context, $source_site_url );
+			// Import the bare [gallery]/[playlist] attached set (no rewrite).
+			$this->import_attached_media_set( $context, $source_site_url );
+		}
 
 		// Import [audio]/[video] shortcode media before replace_source_urls(),
 		// so download failures are recorded rather than masked by the swap.
@@ -327,7 +406,7 @@ class Content_Processor {
 		$this->shortcode_media_rewriter->reset_failed_media();
 		$this->media_importer->reset_failed_media();
 
-		return $this->replace_source_urls( $processed_content, $source_site_url );
+		return $processed_content;
 	}
 
 	/**

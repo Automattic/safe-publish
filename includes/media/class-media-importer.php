@@ -28,6 +28,10 @@ if ( ! defined( 'ABSPATH' ) ) {
  *
  * Handles importing media files from the source site into the WordPress media
  * library.
+ *
+ * A resolve-only instance downloads nothing, so a caller can preview an import:
+ * It returns media an earlier import already sideloaded and yields null for
+ * anything else. A source ID is still looked up, as a preview, for its URL.
  */
 class Media_Importer {
 
@@ -72,13 +76,36 @@ class Media_Importer {
 	private array $library_metadata_map = array();
 
 	/**
+	 * Whether this instance resolves already-imported media only, never
+	 * downloading.
+	 *
+	 * @var bool
+	 */
+	private bool $resolve_only;
+
+	/**
+	 * Source media URLs a resolve-only instance found no earlier import of,
+	 * keyed by query-stripped URL. An ambiguous URL is left out, since the
+	 * import may keep it as a link.
+	 *
+	 * @var array<string, true>
+	 */
+	private array $unresolved_urls = array();
+
+	/**
 	 * Constructs the Media_Importer instance.
 	 *
-	 * @param HTTP_Client $http_client HTTP client for downloading files.
+	 * @param HTTP_Client $http_client  HTTP client for downloading files.
+	 * @param bool        $resolve_only Optional. Resolve already-imported media
+	 *                                  without downloading. Default false.
 	 */
-	public function __construct( HTTP_Client $http_client ) {
-		$this->http_client = $http_client;
-		$this->logger      = new Media_Logger();
+	public function __construct(
+		HTTP_Client $http_client,
+		bool $resolve_only = false
+	) {
+		$this->http_client  = $http_client;
+		$this->logger       = new Media_Logger();
+		$this->resolve_only = $resolve_only;
 	}
 
 	/**
@@ -95,8 +122,9 @@ class Media_Importer {
 	 *                                    otherwise. Meaningful only on a string
 	 *                                    return.
 	 * @return string|false|null New media URL on success, false on failure, null
-	 *                           when the URL belongs to a third-party domain, or
-	 *                           when it is not media and $skip_if_not_media is set.
+	 *                           when the URL belongs to a third-party domain, when
+	 *                           it is not media and $skip_if_not_media is set, or
+	 *                           when a resolve-only instance has not imported it.
 	 */
 	public function import_source_media(
 		string $media_url,
@@ -135,6 +163,14 @@ class Media_Importer {
 		if ( $existing_attachment ) {
 			$imported_id = $existing_attachment;
 			return wp_get_attachment_url( $existing_attachment );
+		}
+
+		if ( $this->resolve_only ) {
+			if ( ! $skip_if_not_media ) {
+				$this->unresolved_urls[ $media_url ] = true;
+			}
+
+			return null;
 		}
 
 		if ( isset( $this->failed_media[ $media_url ] ) ) {
@@ -252,8 +288,9 @@ class Media_Importer {
 	 *                                  an allowed upload type, for ambiguous URLs
 	 *                                  that may be a page link rather than media.
 	 * @return int|false|null Attachment ID on success, false on failure, null
-	 *                        when the URL belongs to a third-party domain, or
-	 *                        when it is not media and $skip_if_not_media is set.
+	 *                        when the URL belongs to a third-party domain, when
+	 *                        it is not media and $skip_if_not_media is set, or
+	 *                        when a resolve-only instance has not imported it.
 	 */
 	public function import_source_media_as_attachment(
 		string $media_url,
@@ -300,18 +337,19 @@ class Media_Importer {
 	 *
 	 * @param string $media_url       Source media URL.
 	 * @param string $source_site_url Source site URL for resolving relative URLs.
-	 * @return int|false Attachment ID on success, false on failure.
+	 * @return int|false|null Attachment ID on success, false on failure, null
+	 *                        when a resolve-only instance has not imported it.
 	 */
 	public function import_owned_media_as_attachment(
 		string $media_url,
 		string $source_site_url
-	): int|false {
+	): int|false|null {
 		$media_url = URL_Validator::resolve_relative_url(
 			$media_url,
 			$source_site_url
 		);
 
-		return $this->sideload_media( $media_url, $source_site_url ) ?? false;
+		return $this->sideload_media( $media_url, $source_site_url );
 	}
 
 	/**
@@ -324,7 +362,8 @@ class Media_Importer {
 	 * @param bool   $skip_if_not_media Return null instead of false when the
 	 *                                  download is not an allowed media type.
 	 * @return int|false|null Attachment ID on success, false on failure, null
-	 *                        when it is not media and $skip_if_not_media is set.
+	 *                        when it is not media and $skip_if_not_media is set,
+	 *                        or when a resolve-only instance has not imported it.
 	 */
 	private function sideload_media(
 		string $media_url,
@@ -337,6 +376,14 @@ class Media_Importer {
 		$existing_attachment = self::get_attachment_by_url( $media_url );
 		if ( $existing_attachment ) {
 			return $existing_attachment;
+		}
+
+		if ( $this->resolve_only ) {
+			if ( ! $skip_if_not_media ) {
+				$this->unresolved_urls[ $media_url ] = true;
+			}
+
+			return null;
 		}
 
 		if ( isset( $this->failed_media[ $media_url ] ) ) {
@@ -539,6 +586,19 @@ class Media_Importer {
 	}
 
 	/**
+	 * Returns the source media URLs this resolve-only instance found no earlier
+	 * import of, then forgets them.
+	 *
+	 * @return list<string> Query-stripped source media URLs.
+	 */
+	public function take_unresolved_urls(): array {
+		$urls                  = array_keys( $this->unresolved_urls );
+		$this->unresolved_urls = array();
+
+		return $urls;
+	}
+
+	/**
 	 * Applies a source menu_order to an attachment this run freshly sideloaded,
 	 * so a bare [gallery]/[playlist] renders its set in the source order. The
 	 * media REST omits menu_order, so the caller supplies it. A dedup hit from a
@@ -721,8 +781,9 @@ class Media_Importer {
 	 * @param array  $auth_credentials Optional. Authentication credentials. Default empty array.
 	 * @return int|false|null Destination attachment ID on success, null when the
 	 *                        source record is unreachable or carries no
-	 *                        source_url (a dangling reference), false when the
-	 *                        resolved URL fails to sideload.
+	 *                        source_url (a dangling reference) or when a
+	 *                        resolve-only instance has not imported it, false
+	 *                        when the resolved URL fails to sideload.
 	 */
 	public function import_source_media_by_id(
 		int $source_id,
@@ -734,9 +795,12 @@ class Media_Importer {
 			$media_api_url = add_query_arg( 'context', 'edit', $media_api_url );
 		}
 
+		// A preview imports nothing, so the source must not log an export.
 		$response = $this->http_client->make_request(
 			$media_api_url,
-			Request_Actions::MEDIA_IMPORT,
+			$this->resolve_only
+				? Request_Actions::PREVIEW
+				: Request_Actions::MEDIA_IMPORT,
 			$auth_credentials
 		);
 

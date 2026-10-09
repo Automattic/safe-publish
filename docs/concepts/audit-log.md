@@ -32,7 +32,7 @@ Every event belongs to one channel — the producer subsystem that logged it —
 | `dispatch` | Non-export REST calls (list, preview, probe) that errored or returned a bad status. |
 | `export` | Content served to destination sites via REST. |
 | `import` | Import session lifecycle, per-item failures and rollbacks, and history deletions. |
-| `media` | Media fetch, download, and sideload outcomes during import. |
+| `media` | Media fetch, download, and sideload outcomes during import, and failed attachment lookups during Compare. |
 | `reconcile` | Retry outcomes for degraded references (resolved, unresolved, absent, failed). |
 | `settings` | Security-relevant settings changes (connected URL, Basic Auth, sync mode). |
 
