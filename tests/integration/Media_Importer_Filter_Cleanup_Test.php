@@ -28,6 +28,20 @@ class Media_Importer_Filter_Cleanup_Test extends WP_UnitTestCase {
 	private const SOURCE_URL = 'https://source.example.com';
 
 	/**
+	 * Importer under test, so the download mocks can observe its filters.
+	 *
+	 * @var Media_Importer|null
+	 */
+	private ?Media_Importer $importer = null;
+
+	/**
+	 * True once the importer's WebP mime filter was seen registered mid-run.
+	 *
+	 * @var bool
+	 */
+	private bool $webp_mime_filter_seen = false;
+
+	/**
 	 * Runs as administrator so the sideload reaches the download step.
 	 */
 	#[\Override]
@@ -36,6 +50,38 @@ class Media_Importer_Filter_Cleanup_Test extends WP_UnitTestCase {
 		wp_set_current_user(
 			self::factory()->user->create( array( 'role' => 'administrator' ) )
 		);
+	}
+
+	/**
+	 * Drops WebP from the allowed upload types, so the importer has a reason
+	 * to register the mime filter this test asserts on.
+	 *
+	 * @param array $mime_types Allowed mime types.
+	 * @return array Allowed mime types without WebP.
+	 */
+	public function disallow_webp_uploads( array $mime_types ): array {
+		unset( $mime_types['webp'] );
+		return $mime_types;
+	}
+
+	/**
+	 * Records whether the importer's WebP mime filter is registered right now.
+	 *
+	 * Called from the download mocks, which run inside the importer's try
+	 * block, so the post-run absence assertion cannot pass vacuously.
+	 */
+	private function observe_webp_mime_filter(): void {
+		if ( null === $this->importer ) {
+			return;
+		}
+
+		$registered = has_filter(
+			'upload_mimes',
+			array( $this->importer, 'add_webp_mime_type' )
+		);
+		if ( false !== $registered ) {
+			$this->webp_mime_filter_seen = true;
+		}
 	}
 
 	/**
@@ -52,6 +98,7 @@ class Media_Importer_Filter_Cleanup_Test extends WP_UnitTestCase {
 		string $url
 	): false|array|\WP_Error {
 		if ( str_contains( $url, 'broken.jpg' ) ) {
+			$this->observe_webp_mime_filter();
 			return new \WP_Error( 'http_request_failed', 'Simulated download failure' );
 		}
 
@@ -59,31 +106,39 @@ class Media_Importer_Filter_Cleanup_Test extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Verifies that a failed sideload removes the WebP filetype filter it
+	 * Verifies that a failed sideload removes the WebP mime filter it
 	 * registered, leaving no hook behind for later uploads in the request.
 	 */
-	public function test_failed_sideload_removes_webp_filetype_filter(): void {
-		// ARRANGE: A same-host media URL whose download will fail.
+	public function test_failed_sideload_removes_webp_mime_filter(): void {
+		// ARRANGE: A destination that disallows WebP, so the importer has a
+		// filter to register, and a same-host media URL whose download fails.
+		// phpcs:ignore WordPressVIPMinimum.Hooks.RestrictedHooks.upload_mimes
+		add_filter( 'upload_mimes', array( $this, 'disallow_webp_uploads' ), 5 );
 		add_filter( 'pre_http_request', array( $this, 'fail_download' ), 1, 3 );
-		$importer  = new Media_Importer( new HTTP_Client() );
-		$media_url = self::SOURCE_URL . '/wp-content/uploads/2025/01/broken.jpg';
+		$this->importer = new Media_Importer( new HTTP_Client() );
+		$media_url      = self::SOURCE_URL . '/wp-content/uploads/2025/01/broken.jpg';
 
 		// ACT: Attempt the sideload, which aborts at the download step.
 		try {
-			$result = $importer->import_source_media_as_attachment(
+			$result = $this->importer->import_source_media_as_attachment(
 				$media_url,
 				self::SOURCE_URL
 			);
 		} finally {
 			remove_filter( 'pre_http_request', array( $this, 'fail_download' ), 1 );
+			remove_filter( 'upload_mimes', array( $this, 'disallow_webp_uploads' ), 5 );
 		}
 
-		// ASSERT: The sideload failed and its filetype filter was removed.
+		// ASSERT: The filter really was registered during the run, so the
+		// absence assertion below cannot pass for the wrong reason.
+		$this->assertTrue( $this->webp_mime_filter_seen );
+
+		// ASSERT: The sideload failed and its mime filter was removed.
 		$this->assertFalse( $result );
 		$this->assertFalse(
 			has_filter(
-				'wp_check_filetype_and_ext',
-				array( $importer, 'handle_webp_filetype' )
+				'upload_mimes',
+				array( $this->importer, 'add_webp_mime_type' )
 			)
 		);
 	}
@@ -103,6 +158,7 @@ class Media_Importer_Filter_Cleanup_Test extends WP_UnitTestCase {
 		string $url
 	): false|array|\WP_Error {
 		if ( str_contains( $url, 'report.xyz' ) ) {
+			$this->observe_webp_mime_filter();
 			return array(
 				'response' => array(
 					'code'    => 200,
@@ -117,32 +173,40 @@ class Media_Importer_Filter_Cleanup_Test extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Verifies that an unsupported file type removes the WebP filetype filter it
+	 * Verifies that an unsupported file type removes the WebP mime filter it
 	 * registered, closing the leak the previous success-only removal left on
 	 * that branch.
 	 */
-	public function test_unsupported_file_type_removes_webp_filetype_filter(): void {
-		// ARRANGE: A same-host URL that downloads but is not an allowed type.
+	public function test_unsupported_file_type_removes_webp_mime_filter(): void {
+		// ARRANGE: A destination that disallows WebP, and a same-host URL that
+		// downloads but is not an allowed type.
+		// phpcs:ignore WordPressVIPMinimum.Hooks.RestrictedHooks.upload_mimes
+		add_filter( 'upload_mimes', array( $this, 'disallow_webp_uploads' ), 5 );
 		add_filter( 'pre_http_request', array( $this, 'succeed_download' ), 1, 3 );
-		$importer  = new Media_Importer( new HTTP_Client() );
-		$media_url = self::SOURCE_URL . '/wp-content/uploads/2025/01/report.xyz';
+		$this->importer = new Media_Importer( new HTTP_Client() );
+		$media_url      = self::SOURCE_URL . '/wp-content/uploads/2025/01/report.xyz';
 
 		// ACT: Attempt the sideload, which aborts at the file-type check.
 		try {
-			$result = $importer->import_source_media_as_attachment(
+			$result = $this->importer->import_source_media_as_attachment(
 				$media_url,
 				self::SOURCE_URL
 			);
 		} finally {
 			remove_filter( 'pre_http_request', array( $this, 'succeed_download' ), 1 );
+			remove_filter( 'upload_mimes', array( $this, 'disallow_webp_uploads' ), 5 );
 		}
 
-		// ASSERT: The sideload failed and its filetype filter was removed.
+		// ASSERT: The filter really was registered during the run, so the
+		// absence assertion below cannot pass for the wrong reason.
+		$this->assertTrue( $this->webp_mime_filter_seen );
+
+		// ASSERT: The sideload failed and its mime filter was removed.
 		$this->assertFalse( $result );
 		$this->assertFalse(
 			has_filter(
-				'wp_check_filetype_and_ext',
-				array( $importer, 'handle_webp_filetype' )
+				'upload_mimes',
+				array( $this->importer, 'add_webp_mime_type' )
 			)
 		);
 	}
