@@ -430,6 +430,143 @@ class Content_Processor_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that a source served on a port has the port replaced along with
+	 * the host, rather than left behind after the destination's URL.
+	 */
+	public function test_replace_source_urls_consumes_the_source_port(): void {
+		// ARRANGE: A link to a source site that answers on a port.
+		$source_site_url = 'https://source.example.com:8889';
+		$current_url     = get_site_url();
+		$content         = '<a href="' . $source_site_url . '/page">L</a>';
+
+		// ACT: Call replace_source_urls() directly.
+		$processed = $this->processor->replace_source_urls(
+			$content,
+			$source_site_url
+		);
+
+		// ASSERT: The whole origin was replaced, port included.
+		$this->assertSame(
+			'<a href="' . $current_url . '/page">L</a>',
+			$processed,
+			'The source port must be consumed by the replacement'
+		);
+	}
+
+	/**
+	 * Verifies that a source sharing the destination's host on another port is
+	 * treated as a separate site, so its URLs are replaced and the
+	 * destination's own URLs are left alone.
+	 *
+	 * @dataProvider shared_host_sites_provider
+	 * @param string $source_suffix      Source port after the shared host.
+	 * @param string $destination_suffix Destination port or path after it.
+	 */
+	public function test_replace_source_urls_separates_sites_by_port(
+		string $source_suffix,
+		string $destination_suffix
+	): void {
+		// ARRANGE: A source on the destination's host but another port, and an
+		// image the media import already pointed at the destination.
+		$host = (string) wp_parse_url( get_site_url(), PHP_URL_HOST );
+		add_filter(
+			'option_siteurl',
+			static fn (): string => 'http://' . $host . $destination_suffix
+		);
+		$current_url     = get_site_url();
+		$source_site_url = 'http://' . $host . $source_suffix;
+		$image           = '<img src="' . $current_url . '/a.jpg">';
+		$link            = '<a href="' . $source_site_url . '/p">L</a>';
+
+		// ACT: Call replace_source_urls() directly.
+		$processed = $this->processor->replace_source_urls(
+			$image . $link,
+			$source_site_url
+		);
+
+		// ASSERT: Only the source link moved to the destination.
+		$this->assertSame(
+			$image . '<a href="' . $current_url . '/p">L</a>',
+			$processed,
+			'A different port on the same host is a different site'
+		);
+	}
+
+	/**
+	 * Provides source and destination sites that share a host.
+	 *
+	 * @return array<string, array{string, string}>
+	 */
+	public static function shared_host_sites_provider(): array {
+		return array(
+			'destination on a port'         => array( '', ':8888' ),
+			'destination in a subdirectory' => array( ':8889', '/sub' ),
+		);
+	}
+
+	/**
+	 * Verifies that a source URL naming a default port still matches links
+	 * that omit it, as a site's own URLs do.
+	 *
+	 * @dataProvider default_port_source_provider
+	 * @param string $source_site_url Source site URL with a default port.
+	 */
+	public function test_replace_source_urls_treats_default_port_as_none(
+		string $source_site_url
+	): void {
+		// ARRANGE: A link that omits the port the source URL names.
+		$current_url = get_site_url();
+		$content     = '<a href="https://source.example.com/page">L</a>';
+
+		// ACT: Call replace_source_urls() directly.
+		$processed = $this->processor->replace_source_urls(
+			$content,
+			$source_site_url
+		);
+
+		// ASSERT: The link now points at the destination.
+		$this->assertSame(
+			'<a href="' . $current_url . '/page">L</a>',
+			$processed
+		);
+	}
+
+	/**
+	 * Provides source URLs that name their scheme's default port.
+	 *
+	 * @return array<string, array{string}>
+	 */
+	public static function default_port_source_provider(): array {
+		return array(
+			'https on 443' => array( 'https://source.example.com:443' ),
+			'http on 80'   => array( 'http://source.example.com:80' ),
+		);
+	}
+
+	/**
+	 * Verifies that a destination URL naming a default port is the same site
+	 * as a source on its host without one, so the content is left alone.
+	 */
+	public function test_replace_source_urls_skips_same_site_with_default_port(): void {
+		// ARRANGE: The destination names port 80, and the source omits it.
+		$host = (string) wp_parse_url( get_site_url(), PHP_URL_HOST );
+		add_filter(
+			'option_siteurl',
+			static fn (): string => 'http://' . $host . ':80'
+		);
+		$content = '<a href="http://' . $host . '/page">L</a>';
+
+		// ACT: Call replace_source_urls() directly.
+		$processed = $this->processor->replace_source_urls(
+			$content,
+			'http://' . $host
+		);
+
+		// ASSERT: The content is unchanged.
+		$this->assertSame( $content, $processed );
+	}
+
+	/**
 	 * Verifies that a domain that starts with the source domain but continues
 	 * with more characters is not replaced.
 	 */

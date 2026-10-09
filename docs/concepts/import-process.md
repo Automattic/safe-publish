@@ -98,7 +98,7 @@ An inline `<img>` carries two attachment-ID references alongside its URL — the
 
 ### URL Replacement
 
-After media processing, all remaining source-domain URLs in the content are replaced with the destination site URL. This catches URLs outside media elements, such as normal links, block comment attributes, and text references.
+After media processing, all remaining URLs on the source site's host and port are replaced with the destination site URL. This catches URLs outside media elements, such as normal links, block comment attributes, and text references.
 
 ### Content and Excerpt Filtering
 

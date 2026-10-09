@@ -810,7 +810,8 @@ class Content_Processor {
 	 * markup (entity encoding, self-closing tags, whitespace, etc.).
 	 *
 	 * @param string $content         Content to process.
-	 * @param string $source_site_url Source site URL (scheme://host).
+	 * @param string $source_site_url Source site URL, with its port and path
+	 *                                when it has them.
 	 * @return string|WP_Error Content with URLs replaced, or WP_Error on failure.
 	 */
 	public function replace_source_urls( string $content, string $source_site_url ): string|WP_Error {
@@ -821,9 +822,16 @@ class Content_Processor {
 		$current_site_url = get_site_url();
 		$source_host      = wp_parse_url( $source_site_url, PHP_URL_HOST );
 		$current_host     = wp_parse_url( $current_site_url, PHP_URL_HOST );
+		$source_port      = URL_Validator::non_default_port( $source_site_url );
+		$current_port     = URL_Validator::non_default_port(
+			$current_site_url
+		);
 
-		// Skip if URLs are the same.
-		if ( $source_host === $current_host ) {
+		// Skip if both sites share a host and port.
+		if (
+			$source_host === $current_host
+			&& $source_port === $current_port
+		) {
 			return $content;
 		}
 
@@ -835,9 +843,13 @@ class Content_Processor {
 		// Match both http and https variants of the source URL so that legacy
 		// http:// references are also replaced. The lookahead prevents partial
 		// domain matches (e.g., "source.example.com" must not match inside
-		// "source.example.company.com").
-		$pattern = '/https?:\/\/' . preg_quote( $source_host, '/' )
-			. '(?=[^a-zA-Z0-9.]|$)/';
+		// "source.example.company.com"). A source on a non-default port matches
+		// only with that port, and the lookahead rejects any other. The same
+		// host on another port is another site, such as the destination itself
+		// when both share a host.
+		$authority = preg_quote( $source_host, '/' )
+			. ( null !== $source_port ? ':' . $source_port : '' );
+		$pattern   = '/https?:\/\/' . $authority . '(?=[^a-zA-Z0-9.:]|$)/';
 
 		$result = preg_replace( $pattern, $current_site_url, $content );
 
@@ -1708,7 +1720,8 @@ class Content_Processor {
 	 * Two-pass: Collect unresolved IDs, bulk-lookup per kind, apply on a
 	 * second walk. Unmapped IDs stay in place with a warning. For nav-link and
 	 * submenu blocks the link url is re-derived from the resolved destination
-	 * id; replace_source_urls still swaps the host for any url left untouched.
+	 * id; replace_source_urls still swaps the source's host and port for any
+	 * url left untouched.
 	 *
 	 * @param array<array<string, mixed>> $blocks          Parsed block tree.
 	 * @param string                      $source_site_url Source site URL.

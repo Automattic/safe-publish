@@ -241,4 +241,23 @@ class URL_Validator {
 
 		return $identity . untrailingslashit( $path );
 	}
+
+	/**
+	 * Returns the port a URL names, or null when it names none or a default
+	 * one.
+	 *
+	 * A site's own URLs usually omit a default port, so matching them by port
+	 * has to treat 80 and 443 as no port. The stored site identity keeps the
+	 * port, so normalize_site_url() leaves it as is.
+	 *
+	 * @param string $url URL to read.
+	 * @return int|null Port, or null for none, 80, or 443.
+	 */
+	public static function non_default_port( string $url ): ?int {
+		$port = wp_parse_url( $url, PHP_URL_PORT );
+
+		return is_int( $port ) && ! in_array( $port, array( 80, 443 ), true )
+			? $port
+			: null;
+	}
 }

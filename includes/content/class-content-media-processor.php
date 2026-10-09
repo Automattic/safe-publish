@@ -432,9 +432,9 @@ class Content_Media_Processor {
 	}
 
 	/**
-	 * Detects source-domain URLs in media and embed element attributes that the
-	 * processor could not match, typically due to malformed HTML (e.g. unclosed
-	 * quotes).
+	 * Detects URLs on the source's host and port in media and embed element
+	 * attributes that the processor could not match, typically due to
+	 * malformed HTML (e.g. unclosed quotes).
 	 *
 	 * Uses a loose regex anchored to media and embed tag names and attribute
 	 * names. This catches URLs the HTML API skipped (because the tag was
@@ -455,6 +455,11 @@ class Content_Media_Processor {
 		if ( ! is_string( $source_host ) ) {
 			return;
 		}
+
+		// Match the source's port too, since its media URLs carry it.
+		$source_port = URL_Validator::non_default_port( $source_site_url );
+		$authority   = preg_quote( $source_host, '~' )
+			. ( null !== $source_port ? ':' . $source_port : '' );
 
 		// Strip comments and script/style blocks so URLs inside them don't
 		// trigger false positives. The HTML API natively skips these during
@@ -506,7 +511,7 @@ class Content_Media_Processor {
 		$pattern = '~<(?:img|video|audio|source|embed|object)\b'
 			. '[^<>]*?\s(?:src|poster|srcset|data)\s*=\s*'
 			. '["\']?\s*(https?://'
-			. preg_quote( $source_host, '~' )
+			. $authority
 			. '/[^\s"\'<>]*)~i';
 
 		if ( ! preg_match_all( $pattern, $check_content, $matches ) ) {
