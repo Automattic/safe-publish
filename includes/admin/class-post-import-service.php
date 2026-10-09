@@ -1461,7 +1461,10 @@ class Post_Import_Service {
 				$prepared->get_error_message(),
 				$this->merge_parent_detail(
 					$prepared,
-					array( 'action' => $prepared->get_error_code() )
+					$this->build_failure_changes(
+						$prepared,
+						$prepared->get_error_code()
+					)
 				)
 			);
 
@@ -1661,7 +1664,10 @@ class Post_Import_Service {
 				$prepared->get_error_message(),
 				$this->merge_parent_detail(
 					$prepared,
-					array( 'action' => $prepared->get_error_code() )
+					$this->build_failure_changes(
+						$prepared,
+						$prepared->get_error_code()
+					)
 				)
 			);
 
@@ -2621,21 +2627,19 @@ class Post_Import_Service {
 		);
 
 		if ( is_wp_error( $processed_content ) ) {
-			$this->content_processor->delete_newly_created_media();
-
-			return new WP_Error(
-				'content_processing_failed',
-				$processed_content->get_error_message(),
-				array( 'fields' => $fields )
+			return $this->cleanup_aborted_import_media(
+				new WP_Error(
+					'content_processing_failed',
+					$processed_content->get_error_message(),
+					array( 'fields' => $fields )
+				)
 			);
 		}
 
 		$media_error = $this->get_media_processing_error( $fields );
 
 		if ( null !== $media_error ) {
-			$this->content_processor->delete_newly_created_media();
-
-			return $media_error;
+			return $this->cleanup_aborted_import_media( $media_error );
 		}
 
 		$fields['warnings'] = array_merge(
@@ -3267,6 +3271,10 @@ class Post_Import_Service {
 	/**
 	 * Reports an import failure plus any items cleanup could not remove.
 	 *
+	 * Carries the original field set through so callers logging from the
+	 * error data keep the enriched copy (fresh title and slug) instead of
+	 * falling back to the pre-enrichment one.
+	 *
 	 * @param WP_Error $original_error      Failure that aborted the import.
 	 * @param int|null $surviving_post_id   Post ID when the mapped post remains.
 	 * @param int[]    $surviving_media_ids Attachment IDs that remain.
@@ -3295,6 +3303,19 @@ class Post_Import_Service {
 			);
 		}
 
+		$error_data = array(
+			'action'              => 'content_cleanup_failed',
+			'original_error_code' => $original_error->get_error_code(),
+			'post_id'             => $surviving_post_id,
+			'media_ids'           => $surviving_media_ids,
+		);
+
+		$original_data = $original_error->get_error_data();
+
+		if ( is_array( $original_data ) && isset( $original_data['fields'] ) ) {
+			$error_data['fields'] = $original_data['fields'];
+		}
+
 		return new WP_Error(
 			'content_cleanup_failed',
 			sprintf(
@@ -3306,12 +3327,7 @@ class Post_Import_Service {
 				$original_error->get_error_message(),
 				implode( ', ', $survivors )
 			),
-			array(
-				'action'              => 'content_cleanup_failed',
-				'original_error_code' => $original_error->get_error_code(),
-				'post_id'             => $surviving_post_id,
-				'media_ids'           => $surviving_media_ids,
-			)
+			$error_data
 		);
 	}
 
