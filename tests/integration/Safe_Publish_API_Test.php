@@ -501,6 +501,65 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that the rendered previews in the diff payload are filtered
+	 * with wp_kses_post, the same filtering the block-level rendered output
+	 * receives, so the response carries no markup the filter removes.
+	 */
+	public function test_diff_renderer_filters_rendered_previews(): void {
+		// ARRANGE: Source content whose rendered form carries markup that
+		// wp_kses_post removes.
+		// phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
+		$mock_http_callable = static function ( $url, $_action, $_credentials ) {
+			return self::mock_diff_response(
+				(string) $url,
+				array(
+					'title'   => array( 'raw' => 'Updated External Title' ),
+					'content' => array(
+						'raw' => '<p>Updated source content.</p>'
+							. '<script>window.spProbe = 1;</script>',
+					),
+					'excerpt' => array( 'raw' => 'Updated source excerpt.' ),
+				)
+			);
+		};
+
+		$request = new WP_REST_Request( 'POST', '/safe-publish/v1/diff-preview' );
+		$request->set_param( 'postId', self::SOURCE_POST_ID );
+		$request->set_param( 'postType', 'post' );
+
+		// ACT: Render the diff.
+		$result = ( new Diff_Renderer() )->render_diff(
+			$request,
+			$mock_http_callable,
+			array()
+		);
+
+		// ASSERT: The incoming preview still carries the rendered content, so
+		// the filtering has not emptied the field.
+		$this->assertIsArray( $result );
+		$this->assertIsString( $result['incomingRenderedHtml'] );
+		$this->assertStringContainsString(
+			'Updated source content.',
+			$result['incomingRenderedHtml'],
+			'The incoming preview should carry the rendered source content.'
+		);
+
+		// ASSERT: Both previews survive wp_kses_post unchanged, so neither
+		// carries markup the filter would have removed.
+		$this->assertSame(
+			wp_kses_post( $result['incomingRenderedHtml'] ),
+			$result['incomingRenderedHtml'],
+			'The incoming preview should be filtered for safe output.'
+		);
+		$this->assertIsString( $result['currentRenderedHtml'] );
+		$this->assertSame(
+			wp_kses_post( $result['currentRenderedHtml'] ),
+			$result['currentRenderedHtml'],
+			'The current preview should be filtered for safe output.'
+		);
+	}
+
+	/**
 	 * Verifies that current-side title extraction returns the raw post_title,
 	 * not get_the_title()'s filtered form. Without this, wptexturize turns a
 	 * stored `--` into `&#8211;`, producing a spurious diff against title.raw.
