@@ -134,6 +134,7 @@ export interface SyncStatusBatchResponse {
  */
 export type AttentionIssueType =
 	| 'unmapped_block_reference'
+	| 'deferred_navigation_url'
 	| 'unmapped_gallery_reference'
 	| 'nav_ref_rewrite_failed'
 	| 'parent_orphaned'
@@ -230,7 +231,12 @@ export interface SetIgnoredResponse {
  */
 export interface RetryAttentionIssueResponse {
 	resolved: boolean;
-	outcome: 'resolved' | 'target_absent' | 'write_failed' | 'unresolved';
+	outcome:
+		| 'resolved'
+		| 'target_absent'
+		| 'write_failed'
+		| 'unresolved'
+		| 'deferred_url';
 	detail: string;
 }
 
@@ -243,6 +249,7 @@ export interface BulkRetryAttentionResponse {
 	target_absent: number;
 	write_failed: number;
 	unresolved: number;
+	deferred_url: number;
 	skipped: number;
 }
 
@@ -317,6 +324,16 @@ export interface UnmappedBlockReferenceWarning {
 }
 
 /**
+ * Surfaced when a mapped navigation link keeps its source path until the
+ * destination target and its ancestors have final slugs and its post type is
+ * registered.
+ */
+export interface DeferredNavigationUrlWarning {
+	type: 'deferred_navigation_url';
+	source_id: number;
+}
+
+/**
  * Surfaced when a navigation menu was imported but one or more destination
  * posts that reference it by the source ID could not be updated automatically.
  * The listed posts keep their stale ref until the menu is re-imported, which
@@ -387,6 +404,7 @@ export type Warning =
 	| AuthorFallbackWarning
 	| ParentOrphanedWarning
 	| UnmappedBlockReferenceWarning
+	| DeferredNavigationUrlWarning
 	| NavRefRewriteFailedWarning
 	| UnmappedShortcodeReferenceWarning
 	| UnmappedGalleryReferenceWarning

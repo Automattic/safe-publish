@@ -127,6 +127,7 @@ class Post_Import_Service {
 	 */
 	private const ATTENTION_POST_ISSUE_TYPES = array(
 		'unmapped_block_reference',
+		'deferred_navigation_url',
 		'unmapped_gallery_reference',
 		'parent_orphaned',
 		'unregistered_taxonomy',
@@ -1339,10 +1340,9 @@ class Post_Import_Service {
 	}
 
 	/**
-	 * Reports per open degradation whether its target is imported, so a Retry
-	 * would reconcile it now. Batched, reusing each type's Retry lookup; a true
-	 * is a hint, not a guarantee, since Retry can still return write_failed, or
-	 * leave a term ref open when no claim matches a block's declared taxonomy.
+	 * Reports whether each open degradation can be retried now. Deferred URLs
+	 * also need a final target path. A true value is a hint, not a guarantee:
+	 * Retry can still fail to write or leave a mismatched term open.
 	 *
 	 * @param array[] $issue_rows      Open degradation rows, each carrying
 	 *                                 issue_type, target_ref, and target_kind.
@@ -1410,6 +1410,14 @@ class Post_Import_Service {
 			list( $bucket, $ref ) = $class;
 			$resolvable[ $index ] = 'none' !== $bucket
 				&& isset( $maps[ $bucket ][ $ref ] );
+			$issue_type           = $issue_rows[ $index ]['issue_type'];
+			if (
+				$resolvable[ $index ]
+				&& 'deferred_navigation_url' === $issue_type
+			) {
+				$resolvable[ $index ] = $this->content_processor
+					->is_post_path_final( $maps['post'][ $ref ] );
+			}
 		}
 
 		return $resolvable;
@@ -1966,6 +1974,14 @@ class Post_Import_Service {
 				),
 			);
 		}
+		if ( 'deferred_navigation_url' === $type ) {
+			return array(
+				'issue_type'  => $type,
+				'target_ref'  => (int) $warning['source_id'],
+				'target_kind' => 'post',
+				'severity'    => 'warning',
+			);
+		}
 
 		if ( 'unmapped_gallery_reference' === $type ) {
 			return array(
@@ -2104,7 +2120,8 @@ class Post_Import_Service {
 	 * success.
 	 *
 	 * Self-verifying: The issue clears only when the target now resolves and the
-	 * post was repointed; otherwise the row stays, with last_seen refreshed.
+	 * post was repointed. A mapped link awaiting its final URL moves to a
+	 * deferred-URL row; other unresolved rows stay open.
 	 *
 	 * @param int    $affected_post_id Post holding the reference.
 	 * @param int    $target_ref       Source id to repoint.
@@ -2124,6 +2141,24 @@ class Post_Import_Service {
 			$target_kind,
 			$source_site_url
 		);
+		if ( Reconcile_Outcome::DEFERRED_URL === $outcome->type ) {
+			$this->attention_issues->upsert_issue(
+				$affected_post_id,
+				'deferred_navigation_url',
+				$target_ref,
+				'post',
+				'warning',
+				$source_site_url
+			);
+			$this->resolve_or_touch(
+				true,
+				$affected_post_id,
+				'unmapped_block_reference',
+				$target_ref,
+				$target_kind
+			);
+			return $outcome;
+		}
 
 		$this->resolve_or_touch(
 			$outcome->is_resolved(),
@@ -2133,6 +2168,34 @@ class Post_Import_Service {
 			$target_kind
 		);
 
+		return $outcome;
+	}
+
+	/**
+	 * Repairs a mapped navigation URL once the target path is final.
+	 *
+	 * @param int    $affected_post_id Post holding the link.
+	 * @param int    $target_ref       Source target post id.
+	 * @param string $source_site_url  Source identity for lookup.
+	 * @return Reconcile_Outcome Result of the URL-only repair.
+	 */
+	public function retry_deferred_navigation_url(
+		int $affected_post_id,
+		int $target_ref,
+		string $source_site_url
+	): Reconcile_Outcome {
+		$outcome = $this->content_processor->repair_deferred_link_url(
+			$affected_post_id,
+			$target_ref,
+			$source_site_url
+		);
+		$this->resolve_or_touch(
+			$outcome->is_resolved(),
+			$affected_post_id,
+			'deferred_navigation_url',
+			$target_ref,
+			'post'
+		);
 		return $outcome;
 	}
 

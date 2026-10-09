@@ -96,7 +96,7 @@ The tab is scoped to the connected source site. Changing the connection hides th
 | Ignore    | Hides an item from Open without deleting its record. |
 | Un-ignore | Restores an ignored item to Open.                    |
 
-These actions support bulk selection where applicable. Degradations show **Resolvable now** when the referenced target has been imported and **Waiting on import** while it is still missing. Importing the target does not automatically retry existing degradations. A bulk Retry reports how many issues resolved, are still waiting on an import, or failed. Remove remains available for failures in the Ignored view.
+These actions support bulk selection where applicable. Degradations show **Resolvable now** when their target is ready, **Waiting on import** when it is missing, or **Waiting on final URL** when a mapped navigation link still needs its target's path or post type. Importing the target does not automatically retry existing degradations. A bulk Retry reports how many issues resolved, await import, await a final URL, or failed. Remove remains available for failures in the Ignored view.
 
 Removing a failure affects only its history record. To recover, fix the cause and import the source post again from the Posts tab. Any later import attempt for the same source supersedes its previous failure. If the later attempt also fails, the new failure appears instead.
 

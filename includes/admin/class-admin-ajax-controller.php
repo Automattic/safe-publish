@@ -402,7 +402,7 @@ final class Admin_Ajax_Controller {
 
 		$outcome = $this->dispatch_retry( $issue );
 
-		$resolved = null === $this->attention_issues->get_issue(
+		$resolved = $outcome->is_resolved() && null === $this->attention_issues->get_issue(
 			$affected_post_id,
 			$issue_type,
 			$target_ref,
@@ -471,6 +471,7 @@ final class Admin_Ajax_Controller {
 			'target_absent' => 0,
 			'write_failed'  => 0,
 			'unresolved'    => 0,
+			'deferred_url'  => 0,
 			'skipped'       => 0,
 		);
 
@@ -585,6 +586,13 @@ final class Admin_Ajax_Controller {
 					$target_kind,
 					$source_site_url
 				);
+			case 'deferred_navigation_url':
+				return $this->post_import_service
+					->retry_deferred_navigation_url(
+						$affected_post_id,
+						$target_ref,
+						$source_site_url
+					);
 			case 'unmapped_gallery_reference':
 				return $this->post_import_service->retry_gallery_ref_remap(
 					$affected_post_id,

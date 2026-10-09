@@ -800,6 +800,463 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 	}
 
 	/**
+	 * Verifies that a deferred navigation URL remains visible until its target
+	 * path is final, then Retry repairs the URL without changing the mapped ID.
+	 */
+	public function test_deferred_navigation_url_retries_after_publish(): void {
+		// ARRANGE: A draft import collides with an existing published path.
+		$this->set_permalink_structure( '/%postname%/' );
+		self::factory()->post->create(
+			array(
+				'post_type' => 'page',
+				'post_name' => 'about',
+			)
+		);
+		$target = $this->seed_target_post( 9701, self::BLOG_URL );
+		wp_update_post(
+			array(
+				'ID'          => $target,
+				'post_status' => 'draft',
+				'post_name'   => 'about',
+			)
+		);
+
+		// ACT: Import a page with a navigation link to that target.
+		$result  = $this->import_under(
+			self::BLOG_URL,
+			7201,
+			array( 'content' => $this->post_link_content( 9701 ) )
+		);
+		$post_id = (int) $result['post_id'];
+
+		// ASSERT: The ID is mapped, the URL is deferred, and Retry stays open.
+		$this->assertSame( array( $target ), $this->nav_link_ids( $post_id ) );
+		$issue_row = $this->attention->get_issue(
+			$post_id,
+			'deferred_navigation_url',
+			9701,
+			'post'
+		);
+		$this->assertIsArray( $issue_row );
+		$this->assertSame(
+			array( false ),
+			$this->import_service->degradation_resolvability(
+				array( $issue_row ),
+				self::BLOG_URL
+			)
+		);
+		$this->assertSame(
+			Reconcile_Outcome::DEFERRED_URL,
+			$this->import_service->retry_deferred_navigation_url(
+				$post_id,
+				9701,
+				self::BLOG_URL
+			)->type
+		);
+
+		// ACT: Publishing finalizes the collision, then Retry repairs the URL.
+		wp_update_post(
+			array(
+				'ID'          => $target,
+				'post_status' => 'publish',
+			)
+		);
+		$this->assertSame(
+			array( true ),
+			$this->import_service->degradation_resolvability(
+				array( $issue_row ),
+				self::BLOG_URL
+			)
+		);
+		$modified  = get_post_field( 'post_modified', $post_id );
+		$revisions = count( wp_get_post_revisions( $post_id ) );
+		$outcome   = $this->import_service->retry_deferred_navigation_url(
+			$post_id,
+			9701,
+			self::BLOG_URL
+		);
+
+		// ASSERT: The issue clears and the link points to the mapped target.
+		$this->assertSame( Reconcile_Outcome::RESOLVED, $outcome->type );
+		$this->assertSame( array( $target ), $this->nav_link_ids( $post_id ) );
+		$this->assertSame( $modified, get_post_field( 'post_modified', $post_id ) );
+		$this->assertSame( $revisions, count( wp_get_post_revisions( $post_id ) ) );
+		$this->assertStringContainsString(
+			(string) get_permalink( $target ),
+			(string) get_post_field( 'post_content', $post_id )
+		);
+		$this->assertNull(
+			$this->attention->get_issue(
+				$post_id,
+				'deferred_navigation_url',
+				9701,
+				'post'
+			)
+		);
+	}
+
+	/**
+	 * Verifies that a link to an unregistered target type remains retryable
+	 * until the type is registered again.
+	 */
+	public function test_deferred_navigation_url_retries_after_type_registration(): void {
+		// ARRANGE: The target is a draft in a registered custom post type.
+		$this->set_permalink_structure( '/%postname%/' );
+		register_post_type( 'sp_missing', array( 'public' => true ) );
+		$target = $this->seed_target_post( 9705, self::BLOG_URL, 'sp_missing' );
+		wp_update_post(
+			array(
+				'ID'          => $target,
+				'post_status' => 'draft',
+			)
+		);
+
+		// ACT: Import a link, then publish its target without its post type.
+		$result  = $this->import_under(
+			self::BLOG_URL,
+			7205,
+			array( 'content' => $this->post_link_content( 9705, 'sp_missing' ) )
+		);
+		$post_id = (int) $result['post_id'];
+		wp_update_post(
+			array(
+				'ID'          => $target,
+				'post_status' => 'publish',
+			)
+		);
+		unregister_post_type( 'sp_missing' );
+
+		// ASSERT: The mapped ID is retained and the URL still awaits the type.
+		$this->assertSame( array( $target ), $this->nav_link_ids( $post_id ) );
+		$this->assertNotNull(
+			$this->attention->get_issue(
+				$post_id,
+				'deferred_navigation_url',
+				9705,
+				'post'
+			)
+		);
+		$this->assertSame(
+			Reconcile_Outcome::DEFERRED_URL,
+			$this->import_service->retry_deferred_navigation_url(
+				$post_id,
+				9705,
+				self::BLOG_URL
+			)->type
+		);
+
+		// ACT: Restore the type and retry the URL repair.
+		register_post_type( 'sp_missing', array( 'public' => true ) );
+		$outcome = $this->import_service->retry_deferred_navigation_url(
+			$post_id,
+			9705,
+			self::BLOG_URL
+		);
+
+		// ASSERT: The final permalink replaces the temporary URL.
+		$this->assertSame( Reconcile_Outcome::RESOLVED, $outcome->type );
+		$this->assertSame( array( $target ), $this->nav_link_ids( $post_id ) );
+		$this->assertStringContainsString(
+			(string) get_permalink( $target ),
+			(string) get_post_field( 'post_content', $post_id )
+		);
+		$this->assertNull(
+			$this->attention->get_issue(
+				$post_id,
+				'deferred_navigation_url',
+				9705,
+				'post'
+			)
+		);
+	}
+
+	/**
+	 * Verifies that repointing an initially unmapped draft link transfers its
+	 * issue to URL repair without reporting the whole reference resolved.
+	 */
+	public function test_unmapped_retry_records_deferred_navigation_url(): void {
+		// ARRANGE: Import a link before its target, then add the target as draft.
+		$result  = $this->import_under(
+			self::BLOG_URL,
+			7202,
+			array( 'content' => $this->post_link_content( 9702 ) )
+		);
+		$post_id = (int) $result['post_id'];
+		$target  = $this->seed_target_post( 9702, self::BLOG_URL );
+		wp_update_post(
+			array(
+				'ID'          => $target,
+				'post_status' => 'draft',
+			)
+		);
+
+		// ACT: Retry the stale source ID while its URL cannot be final.
+		$outcome = $this->import_service->retry_block_ref_repoint(
+			$post_id,
+			9702,
+			'post',
+			self::BLOG_URL
+		);
+
+		// ASSERT: The ID changed, but the outcome and new issue show deferral.
+		$this->assertSame( Reconcile_Outcome::DEFERRED_URL, $outcome->type );
+		$this->assertSame( array( $target ), $this->nav_link_ids( $post_id ) );
+		$this->assertNull(
+			$this->attention->get_issue(
+				$post_id,
+				'unmapped_block_reference',
+				9702,
+				'post'
+			)
+		);
+		$this->assertNotNull(
+			$this->attention->get_issue(
+				$post_id,
+				'deferred_navigation_url',
+				9702,
+				'post'
+			)
+		);
+	}
+
+	/**
+	 * Verifies that Retry repairs a published child's URL after its pending
+	 * ancestor receives a final slug.
+	 */
+	public function test_deferred_child_url_retries_after_ancestor_publish(): void {
+		// ARRANGE: The child is published below a pending parent.
+		$this->set_permalink_structure( '/%postname%/' );
+		$parent = self::factory()->post->create(
+			array(
+				'post_type'   => 'page',
+				'post_status' => 'pending',
+				'post_name'   => 'section',
+			)
+		);
+		self::assertIsInt( $parent );
+		$child = $this->seed_target_post( 9703, self::BLOG_URL );
+		wp_update_post(
+			array(
+				'ID'          => $child,
+				'post_parent' => $parent,
+			)
+		);
+		$result  = $this->import_under(
+			self::BLOG_URL,
+			7203,
+			array( 'content' => $this->post_link_content( 9703 ) )
+		);
+		$post_id = (int) $result['post_id'];
+
+		// ACT: Retry before and after the ancestor path becomes final.
+		$before = $this->import_service->retry_deferred_navigation_url(
+			$post_id,
+			9703,
+			self::BLOG_URL
+		);
+		wp_update_post(
+			array(
+				'ID'          => $parent,
+				'post_status' => 'publish',
+			)
+		);
+		$after = $this->import_service->retry_deferred_navigation_url(
+			$post_id,
+			9703,
+			self::BLOG_URL
+		);
+
+		// ASSERT: The URL waited for the ancestor, then matched the child.
+		$this->assertSame( Reconcile_Outcome::DEFERRED_URL, $before->type );
+		$this->assertSame( Reconcile_Outcome::RESOLVED, $after->type );
+		$this->assertSame( array( $child ), $this->nav_link_ids( $post_id ) );
+		$this->assertStringContainsString(
+			(string) get_permalink( $child ),
+			(string) get_post_field( 'post_content', $post_id )
+		);
+	}
+
+	/**
+	 * Verifies that a deferred submenu URL is repaired after its target publishes.
+	 */
+	public function test_deferred_submenu_url_retries_after_publish(): void {
+		// ARRANGE: Import a submenu pointing at a draft destination page.
+		$this->set_permalink_structure( '/%postname%/' );
+		$target = $this->seed_target_post( 9707, self::BLOG_URL );
+		wp_update_post(
+			array(
+				'ID'          => $target,
+				'post_status' => 'draft',
+				'post_name'   => 'about',
+			)
+		);
+		$content = str_replace(
+			'wp:navigation-link',
+			'wp:navigation-submenu',
+			$this->post_link_content( 9707 )
+		);
+		$result  = $this->import_under(
+			self::BLOG_URL,
+			7207,
+			array( 'content' => $content )
+		);
+		$post_id = (int) $result['post_id'];
+		$this->assertNotNull(
+			$this->attention->get_issue(
+				$post_id,
+				'deferred_navigation_url',
+				9707,
+				'post'
+			)
+		);
+
+		// ACT: Publish the target and retry the submenu URL.
+		wp_update_post(
+			array(
+				'ID'          => $target,
+				'post_status' => 'publish',
+			)
+		);
+		$outcome = $this->import_service->retry_deferred_navigation_url(
+			$post_id,
+			9707,
+			self::BLOG_URL
+		);
+
+		// ASSERT: The submenu keeps its mapped ID and gains the final URL.
+		$blocks  = parse_blocks( (string) get_post_field( 'post_content', $post_id ) );
+		$submenu = $blocks[0]['innerBlocks'][0];
+		$this->assertSame( Reconcile_Outcome::RESOLVED, $outcome->type );
+		$this->assertSame( 'core/navigation-submenu', $submenu['blockName'] );
+		$this->assertSame( $target, $submenu['attrs']['id'] );
+		$this->assertSame(
+			get_permalink( $target ),
+			$submenu['attrs']['url']
+		);
+		$this->assertNull(
+			$this->attention->get_issue(
+				$post_id,
+				'deferred_navigation_url',
+				9707,
+				'post'
+			)
+		);
+	}
+
+	/**
+	 * Verifies that a failed URL repair preserves the content and open issue.
+	 */
+	public function test_deferred_navigation_url_write_failure_keeps_issue(): void {
+		// ARRANGE: Open a deferred issue and make the target path final.
+		$this->set_permalink_structure( '/%postname%/' );
+		$target = $this->seed_target_post( 9708, self::BLOG_URL );
+		wp_update_post(
+			array(
+				'ID'          => $target,
+				'post_status' => 'draft',
+			)
+		);
+		$result  = $this->import_under(
+			self::BLOG_URL,
+			7208,
+			array( 'content' => $this->post_link_content( 9708 ) )
+		);
+		$post_id = (int) $result['post_id'];
+		$before  = (string) get_post_field( 'post_content', $post_id );
+		wp_update_post(
+			array(
+				'ID'          => $target,
+				'post_status' => 'publish',
+			)
+		);
+		$service = $this->build_import_service(
+			new Navigation_Ref_Rewriter(),
+			$this->failing_content_processor()
+		);
+
+		// ACT: Retry with a processor whose direct content write fails.
+		$outcome = $service->retry_deferred_navigation_url(
+			$post_id,
+			9708,
+			self::BLOG_URL
+		);
+
+		// ASSERT: The failed write changes neither content nor issue state.
+		$this->assertSame( Reconcile_Outcome::WRITE_FAILED, $outcome->type );
+		$this->assertSame(
+			$before,
+			(string) get_post_field( 'post_content', $post_id )
+		);
+		$this->assertNotNull(
+			$this->attention->get_issue(
+				$post_id,
+				'deferred_navigation_url',
+				9708,
+				'post'
+			)
+		);
+	}
+
+	/**
+	 * Verifies that re-importing after publication clears a deferred URL issue.
+	 */
+	public function test_reimport_repairs_deferred_navigation_url(): void {
+		// ARRANGE: Import a link while the mapped target is still draft.
+		$this->set_permalink_structure( '/%postname%/' );
+		$target = $this->seed_target_post( 9709, self::BLOG_URL );
+		wp_update_post(
+			array(
+				'ID'          => $target,
+				'post_status' => 'draft',
+			)
+		);
+		$result  = $this->import_under(
+			self::BLOG_URL,
+			7209,
+			array( 'content' => $this->post_link_content( 9709 ) )
+		);
+		$post_id = (int) $result['post_id'];
+		$this->assertNotNull(
+			$this->attention->get_issue(
+				$post_id,
+				'deferred_navigation_url',
+				9709,
+				'post'
+			)
+		);
+
+		// ACT: Publish the target and update the existing imported post.
+		wp_update_post(
+			array(
+				'ID'          => $target,
+				'post_status' => 'publish',
+			)
+		);
+		$updated = $this->import_under(
+			self::BLOG_URL,
+			7209,
+			array( 'content' => $this->post_link_content( 9709 ) )
+		);
+
+		// ASSERT: The update repairs the URL and clears the stale issue.
+		$this->assertTrue( $updated['existing'] );
+		$this->assertSame( $post_id, (int) $updated['post_id'] );
+		$this->assertSame( array(), $updated['warnings'] );
+		$this->assertSame(
+			array( (string) get_permalink( $target ) ),
+			$this->nav_link_urls( $post_id )
+		);
+		$this->assertNull(
+			$this->attention->get_issue(
+				$post_id,
+				'deferred_navigation_url',
+				9709,
+				'post'
+			)
+		);
+	}
+
+	/**
 	 * Verifies that retrying an unmapped post nav-link re-derives its url to the
 	 * destination permalink, without bumping post_modified.
 	 */

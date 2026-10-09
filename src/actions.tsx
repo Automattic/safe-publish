@@ -300,6 +300,11 @@ const retryOutcomeNotice = (
 	issue: AttentionIssue
 ): ActionNotice => {
 	switch ( outcome ) {
+		case 'deferred_url':
+			return {
+				status: 'warning',
+				message: __( 'The target ID is mapped, but its URL is still waiting. Import, register, or fix the target path, then Retry.', 'safe-publish' ),
+			};
 		case 'write_failed':
 			return {
 				status: 'error',
@@ -570,13 +575,14 @@ const bulkRetryNotice = (
 ): ActionNotice => {
 	const skipped = counts.skipped + skippedNonRetryable;
 	let message = sprintf(
-		/* translators: 1: resolved count, 2: waiting-on-import count, 3: failed count */
+		/* translators: 1: resolved, 2: awaiting import, 3: awaiting URL, 4: failed */
 		__(
-			'%1$d resolved, %2$d waiting on import, %3$d failed.',
+			'%1$d resolved, %2$d waiting on import, %3$d waiting on URL, %4$d failed.',
 			'safe-publish'
 		),
 		counts.resolved,
 		counts.target_absent,
+		counts.deferred_url,
 		counts.write_failed + counts.unresolved
 	);
 
@@ -592,7 +598,7 @@ const bulkRetryNotice = (
 	if ( counts.write_failed > 0 ) {
 		return { status: 'error', message };
 	}
-	if ( counts.target_absent + counts.unresolved + skipped > 0 ) {
+	if ( counts.target_absent + counts.deferred_url + counts.unresolved + skipped > 0 ) {
 		return { status: 'warning', message };
 	}
 	return { status: 'success', message };
@@ -623,6 +629,7 @@ const postBulkRetryBatches = async (
 		target_absent: 0,
 		write_failed: 0,
 		unresolved: 0,
+		deferred_url: 0,
 		skipped: 0,
 	};
 
@@ -670,6 +677,7 @@ const postBulkRetryBatches = async (
 		totals.target_absent += result.data.target_absent;
 		totals.write_failed += result.data.write_failed;
 		totals.unresolved += result.data.unresolved;
+		totals.deferred_url += result.data.deferred_url;
 		totals.skipped += result.data.skipped;
 	}
 	/* eslint-enable no-await-in-loop */

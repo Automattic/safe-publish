@@ -286,6 +286,30 @@ describe( 'NeedsAttentionInbox', () => {
 		).toBeInTheDocument();
 	} );
 
+	it( 'Verifies that a deferred URL waits for its target', async () => {
+		// ARRANGE: The target is imported but its URL is not final.
+		mockListResponse( [
+			{
+				...DEGRADATION,
+				issue_type: 'deferred_navigation_url',
+				resolvable: false,
+			},
+		] );
+
+		// ACT: Render the inbox.
+		render(
+			<NeedsAttentionInbox
+				ajaxurl="https://example.com/wp-admin/admin-ajax.php"
+				nonce="test-nonce"
+			/>
+		);
+
+		// ASSERT: The hint names the URL as the missing prerequisite.
+		expect(
+			await screen.findByText( 'Waiting on final URL' )
+		).toBeInTheDocument();
+	} );
+
 	it( 'Verifies that the resolvable badge is gated to the Open view', async () => {
 		// ARRANGE: A resolvable degradation, returned in either view.
 		mockListResponse( [ { ...DEGRADATION, resolvable: true } ] );

@@ -108,6 +108,169 @@ class Attention_Retry_Ajax_Test extends WP_Ajax_UnitTestCase {
 	}
 
 	/**
+	 * Verifies that retrying an unmapped draft link moves it to a deferred URL
+	 * row without claiming its temporary URL is resolved.
+	 */
+	public function test_retry_hands_off_to_deferred_url(): void {
+		// ARRANGE: A stale link whose imported target still has a draft path.
+		$this->set_permalink_structure( '/%postname%/' );
+		$content = $this->nav_link_content( 9701, 'post-type' );
+		$post_id = self::factory()->post->create(
+			array( 'post_content' => $content )
+		);
+		$target  = $this->seed_target_post( 9701 );
+		wp_update_post(
+			array(
+				'ID'          => $target,
+				'post_status' => 'draft',
+			)
+		);
+		$this->open_issue( $post_id, 'unmapped_block_reference', 9701, 'post' );
+
+		// ACT: Retry the unmapped row while its target is still draft.
+		$handoff = $this->retry(
+			array(
+				'affected_post_id' => (string) $post_id,
+				'issue_type'       => 'unmapped_block_reference',
+				'target_ref'       => '9701',
+				'target_kind'      => 'post',
+			)
+		);
+		// ASSERT: The mapped ID waits for URL repair in a new issue row.
+		$this->assertTrue( $handoff['success'] );
+		$this->assertFalse( $handoff['data']['resolved'] );
+		$this->assertSame( 'deferred_url', $handoff['data']['outcome'] );
+		$this->assertNull(
+			$this->attention->get_issue(
+				$post_id,
+				'unmapped_block_reference',
+				9701,
+				'post'
+			)
+		);
+		$this->assertNotNull(
+			$this->attention->get_issue(
+				$post_id,
+				'deferred_navigation_url',
+				9701,
+				'post'
+			)
+		);
+	}
+
+	/**
+	 * Verifies that the deferred URL endpoint leaves a draft target open.
+	 */
+	public function test_retry_deferred_url_still_waits_for_draft(): void {
+		// ARRANGE: A mapped navigation link to a draft destination target.
+		$target = $this->seed_target_post( 9701 );
+		wp_update_post(
+			array(
+				'ID'          => $target,
+				'post_status' => 'draft',
+			)
+		);
+		$content = $this->nav_link_content( $target, 'post-type' );
+		$post_id = self::factory()->post->create(
+			array( 'post_content' => $content )
+		);
+		$this->open_issue( $post_id, 'deferred_navigation_url', 9701, 'post' );
+
+		// ACT: Retry the deferred issue through the endpoint.
+		$response = $this->retry(
+			array(
+				'affected_post_id' => (string) $post_id,
+				'issue_type'       => 'deferred_navigation_url',
+				'target_ref'       => '9701',
+				'target_kind'      => 'post',
+			)
+		);
+
+		// ASSERT: The URL still waits and its issue remains open.
+		$this->assertTrue( $response['success'] );
+		$this->assertFalse( $response['data']['resolved'] );
+		$this->assertSame( 'deferred_url', $response['data']['outcome'] );
+		$this->assertNotNull(
+			$this->attention->get_issue(
+				$post_id,
+				'deferred_navigation_url',
+				9701,
+				'post'
+			)
+		);
+	}
+
+	/**
+	 * Verifies that deferred URL repair changes only the matching post link in
+	 * a menu with other post, taxonomy, and empty-URL links.
+	 */
+	public function test_retry_deferred_url_preserves_other_menu_links(): void {
+		// ARRANGE: A final target and three links that must remain untouched.
+		$this->set_permalink_structure( '/%postname%/' );
+		$target = $this->seed_target_post( 9706 );
+		$other  = self::factory()->post->create(
+			array( 'post_type' => 'page' )
+		);
+		$this->assertIsInt( $other );
+		$links   = array(
+			array(
+				'id'   => $target,
+				'kind' => 'post-type',
+				'url'  => self::SOURCE . '/old-target',
+			),
+			array(
+				'id'   => $other,
+				'kind' => 'post-type',
+				'url'  => self::SOURCE . '/other',
+			),
+			array(
+				'id'   => $target,
+				'kind' => 'taxonomy',
+				'url'  => self::SOURCE . '/category',
+			),
+			array(
+				'id'   => $target,
+				'kind' => 'post-type',
+				'url'  => '',
+			),
+		);
+		$content = '<!-- wp:navigation -->';
+		foreach ( $links as $link ) {
+			$content .= '<!-- wp:navigation-link '
+				. wp_json_encode( $link ) . ' /-->';
+		}
+		$content .= '<!-- /wp:navigation -->';
+		$post_id  = self::factory()->post->create(
+			array( 'post_content' => $content )
+		);
+		$this->open_issue( $post_id, 'deferred_navigation_url', 9706, 'post' );
+
+		// ACT: Repair the one deferred URL through Retry.
+		$response      = $this->retry(
+			array(
+				'affected_post_id' => (string) $post_id,
+				'issue_type'       => 'deferred_navigation_url',
+				'target_ref'       => '9706',
+				'target_kind'      => 'post',
+			)
+		);
+		$saved_content = (string) get_post_field( 'post_content', $post_id );
+		$blocks        = parse_blocks( $saved_content );
+		$actual        = array_map(
+			static fn ( array $block ): array => $block['attrs'],
+			$blocks[0]['innerBlocks']
+		);
+
+		// ASSERT: Only the matching link gains the final permalink.
+		$this->assertTrue( $response['data']['resolved'] );
+		$this->assertSame( 'resolved', $response['data']['outcome'] );
+		$this->assertSame( get_permalink( $target ), $actual[0]['url'] );
+		$this->assertSame( $links[1], $actual[1] );
+		$this->assertSame( $links[2], $actual[2] );
+		$this->assertSame( $links[3], $actual[3] );
+	}
+
+	/**
 	 * Verifies that retrying an unmapped gallery reference dispatches the
 	 * gallery remap, rewrites the shortcode id in place, and resolves the issue.
 	 */
@@ -641,6 +804,49 @@ class Attention_Retry_Ajax_Test extends WP_Ajax_UnitTestCase {
 		$this->assertSame( 0, $response['data']['write_failed'] );
 		$this->assertSame( 0, $response['data']['unresolved'] );
 		$this->assertSame( 0, $response['data']['skipped'] );
+	}
+
+	/**
+	 * Verifies that bulk Retry counts mapped links waiting on final URLs
+	 * separately from failures.
+	 */
+	public function test_bulk_retry_counts_deferred_urls(): void {
+		// ARRANGE: Two mapped links still targeting draft pages.
+		$items = array();
+		foreach ( array( 9711, 9712 ) as $source_id ) {
+			$target = $this->seed_target_post( $source_id );
+			wp_update_post(
+				array(
+					'ID'          => $target,
+					'post_status' => 'draft',
+				)
+			);
+			$content = $this->nav_link_content( $target, 'post-type' );
+			$post_id = self::factory()->post->create(
+				array( 'post_content' => $content )
+			);
+			$this->open_issue(
+				$post_id,
+				'deferred_navigation_url',
+				$source_id,
+				'post'
+			);
+			$items[] = array(
+				'affected_post_id' => $post_id,
+				'issue_type'       => 'deferred_navigation_url',
+				'target_ref'       => $source_id,
+				'target_kind'      => 'post',
+			);
+		}
+
+		// ACT: Retry both links.
+		$response = $this->bulk_retry( $items );
+
+		// ASSERT: Both URLs are deferred, without any failed or resolved count.
+		$this->assertTrue( $response['success'] );
+		$this->assertSame( 2, $response['data']['deferred_url'] );
+		$this->assertSame( 0, $response['data']['resolved'] );
+		$this->assertSame( 0, $response['data']['unresolved'] );
 	}
 
 	/**

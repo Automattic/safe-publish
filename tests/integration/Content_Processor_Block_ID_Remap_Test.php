@@ -932,6 +932,131 @@ class Content_Processor_Block_ID_Remap_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that an empty URL does not create an unrepairable deferral.
+	 */
+	public function test_does_not_defer_empty_navigation_url(): void {
+		// ARRANGE: A draft target and a link with no URL to repair.
+		$target  = self::factory()->post->create(
+			array(
+				'post_type'   => 'page',
+				'post_status' => 'draft',
+			)
+		);
+		$content = $this->nav_block_content(
+			array( $this->post_link( 99052, '' ) )
+		);
+
+		// ACT: Remap the target ID.
+		$result = $this->processor->process_content(
+			$content,
+			self::SOURCE_SITE_URL,
+			array( 'session_id_map' => array( 99052 => $target ) )
+		);
+
+		// ASSERT: The ID maps, but no deferred URL warning is recorded.
+		$this->assertStringContainsString( '"id":' . $target, (string) $result );
+		$this->assertSame( array(), $this->processor->get_warnings() );
+	}
+
+	/**
+	 * Verifies that a published child under a pending parent still defers its
+	 * URL because the ancestor can change the served path.
+	 */
+	public function test_defers_published_child_of_pending_parent(): void {
+		// ARRANGE: The child's own slug is final, but its parent's is not.
+		$this->set_permalink_structure( '/%postname%/' );
+		$parent  = self::factory()->post->create(
+			array(
+				'post_type'   => 'page',
+				'post_status' => 'pending',
+			)
+		);
+		$child   = self::factory()->post->create(
+			array(
+				'post_type'   => 'page',
+				'post_status' => 'publish',
+				'post_parent' => $parent,
+			)
+		);
+		$content = $this->nav_block_content(
+			array( $this->post_link( 99050, self::SOURCE_SITE_URL . '/child' ) )
+		);
+
+		// ACT: Import a link to the child.
+		$result = $this->processor->process_content(
+			$content,
+			self::SOURCE_SITE_URL,
+			array( 'session_id_map' => array( 99050 => $child ) )
+		);
+
+		// ASSERT: The ID is mapped while the URL and warning record deferral.
+		$this->assertStringContainsString( '"id":' . $child, (string) $result );
+		$this->assertSame(
+			'http://example.org/child',
+			$this->first_nav_link_url( (string) $result )
+		);
+		$this->assertSame(
+			array(
+				array(
+					'type'      => 'deferred_navigation_url',
+					'source_id' => 99050,
+				),
+			),
+			$this->processor->get_warnings()
+		);
+	}
+
+	/**
+	 * Verifies that a link to an unregistered post type waits for its type to
+	 * return before deriving a destination URL.
+	 */
+	public function test_defers_link_to_unregistered_post_type(): void {
+		// ARRANGE: The target exists, but its custom post type is unavailable.
+		$this->set_permalink_structure( '/%postname%/' );
+		register_post_type( 'sp_missing', array( 'public' => true ) );
+		$target = self::factory()->post->create(
+			array(
+				'post_type'   => 'sp_missing',
+				'post_status' => 'publish',
+				'post_name'   => 'target',
+			)
+		);
+		unregister_post_type( 'sp_missing' );
+		$content = $this->nav_block_content(
+			array(
+				$this->post_link(
+					99053,
+					self::SOURCE_SITE_URL . '/target',
+					'sp_missing'
+				),
+			)
+		);
+
+		// ACT: Process a link to the unavailable type.
+		$result = $this->processor->process_content(
+			$content,
+			self::SOURCE_SITE_URL,
+			array( 'session_id_map' => array( 99053 => $target ) )
+		);
+
+		// ASSERT: Preserve the mapped ID and defer URL repair.
+		$this->assertSame( $target, $this->first_nav_link_attrs( (string) $result )['id'] );
+		$this->assertSame(
+			'http://example.org/target',
+			$this->first_nav_link_url( (string) $result )
+		);
+		$this->assertSame(
+			array(
+				array(
+					'type'      => 'deferred_navigation_url',
+					'source_id' => 99053,
+				),
+			),
+			$this->processor->get_warnings()
+		);
+	}
+
+	/**
 	 * Verifies that a scheduled target's url is re-derived to the permalink it
 	 * will carry on publication, not the temporary plain form.
 	 */

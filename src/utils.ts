@@ -389,6 +389,15 @@ export function renderWarningMessage( warning: Warning ): string {
 					),
 					warning.source_id
 				);
+		case 'deferred_navigation_url':
+			return sprintf(
+				/* translators: %d: source target post ID */
+				__(
+					'Link to source post %d keeps its temporary URL. Import, register, or fix its target path, then Retry from Needs attention.',
+					'safe-publish'
+				),
+				warning.source_id
+			);
 		case 'nav_ref_rewrite_failed':
 			return sprintf(
 				/* translators: 1: number of posts, 2: comma-separated post IDs */
@@ -471,6 +480,8 @@ export function renderWarningShortLabel( warning: Warning ): string {
 			return warning.block === 'core/block'
 				? __( 'reusable block reference', 'safe-publish' )
 				: __( 'unmapped block reference', 'safe-publish' );
+		case 'deferred_navigation_url':
+			return __( 'deferred navigation URL', 'safe-publish' );
 		case 'nav_ref_rewrite_failed':
 			return __( 'nav reference update failed', 'safe-publish' );
 		case 'unmapped_shortcode_reference':
@@ -501,6 +512,15 @@ export function renderWarningShortLabel( warning: Warning ): string {
  */
 export function renderIssueMessage( issue: AttentionIssue ): string {
 	switch ( issue.issue_type ) {
+		case 'deferred_navigation_url':
+			return sprintf(
+				/* translators: %d: source target post ID */
+				__(
+					'Post %d link awaits its URL. Import, register, or fix its path, then Retry.',
+					'safe-publish'
+				),
+				issue.target_ref
+			);
 		case 'unmapped_block_reference':
 			if ( issue.target_is_reusable_block ) {
 				return sprintf(
