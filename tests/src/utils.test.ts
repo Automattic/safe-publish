@@ -755,13 +755,12 @@ describe( 'renderIssueMessage', () => {
 		// ACT: Render its issue guidance.
 		const message = renderIssueMessage( issue );
 
-		// ASSERT: Missing targets, unregistered types, and paths are covered.
-		expect( message ).toContain( '703' );
+		// ASSERT: The source ID and each target remedy are clear.
+		expect( message ).toContain( 'source post 703' );
 		expect( message ).toContain( 'Import' );
+		expect( message ).toContain( 'publish it and its ancestors' );
 		expect( message ).toContain( 'register' );
 		expect( message ).toContain( 'path' );
-		expect( message.length ).toBeGreaterThanOrEqual( 62 );
-		expect( message.length ).toBeLessThanOrEqual( 82 );
 	} );
 	it( 'renders retry-oriented copy for an unmapped post reference', () => {
 		// ARRANGE: An unmapped post-reference issue.

@@ -146,9 +146,10 @@ export type AttentionIssueType =
  * target_ref, target_kind, target_slug). An id-keyed issue carries
  * `target_ref`; a string-keyed one carries `target_slug` with `target_ref` 0.
  * `retryable` is the server's signal that the row's reconciliation can run;
- * `resolvable` is the batched hint that its target is imported, so a Retry
- * would reconcile it now. `target_terms` names the terms the issue left
- * unattached or unreconciled, empty for types that name none; `target_reason`
+ * `resolvable` is the batched hint that Retry can resolve the row now; a
+ * deferred URL also needs a final path and registered post type.
+ * `target_terms` names the terms the issue left unattached or unreconciled,
+ * empty for types that name none; `target_reason`
  * carries why, for types that distinguish several.
  */
 export interface AttentionIssue {

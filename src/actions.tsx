@@ -303,7 +303,7 @@ const retryOutcomeNotice = (
 		case 'deferred_url':
 			return {
 				status: 'warning',
-				message: __( 'The target ID is mapped, but its URL is still waiting. Import, register, or fix the target path, then Retry.', 'safe-publish' ),
+				message: __( 'The target ID is mapped but awaits its final URL. Publish the target and its ancestors, register its post type, or finalize its path, then Retry.', 'safe-publish' ),
 			};
 		case 'write_failed':
 			return {
@@ -577,7 +577,7 @@ const bulkRetryNotice = (
 	let message = sprintf(
 		/* translators: 1: resolved, 2: awaiting import, 3: awaiting URL, 4: failed */
 		__(
-			'%1$d resolved, %2$d waiting on import, %3$d waiting on URL, %4$d failed.',
+			'%1$d resolved, %2$d waiting on import, %3$d awaiting a final URL, %4$d failed.',
 			'safe-publish'
 		),
 		counts.resolved,

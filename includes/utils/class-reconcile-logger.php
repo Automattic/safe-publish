@@ -49,6 +49,33 @@ class Reconcile_Logger extends Logger {
 		string $target_kind
 	): void {
 		switch ( $outcome->type ) {
+			case Reconcile_Outcome::DEFERRED_URL:
+				if ( 'unmapped_block_reference' === $issue_type ) {
+					$this->log_event(
+						Log_Events::RECONCILE_RESOLVED,
+						array_merge(
+							$this->payload(
+								$issue_type,
+								$affected_post_id,
+								$target_ref,
+								$target_kind
+							),
+							array(
+								'deferred_issue_type' => 'deferred_navigation_url',
+								'reason'              => $outcome->detail,
+							)
+						)
+					);
+					return;
+				}
+				$this->unresolved(
+					$issue_type,
+					$affected_post_id,
+					$target_ref,
+					$target_kind,
+					$outcome->detail
+				);
+				return;
 			case Reconcile_Outcome::RESOLVED:
 				$this->resolved(
 					$issue_type,

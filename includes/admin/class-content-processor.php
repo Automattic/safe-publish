@@ -48,7 +48,7 @@ class Content_Processor {
 	 *
 	 * @var string
 	 */
-	public const DEFERRED_URL_DETAIL = 'Navigation URL awaits a final target path.';
+	public const DEFERRED_URL_DETAIL = 'Navigation URL awaits a final target path or registered post type.';
 
 	/**
 	 * Post meta recording the unix timestamp at which a stale gallery/playlist
@@ -1959,7 +1959,8 @@ class Content_Processor {
 	}
 
 	/**
-	 * Re-derives a deferred URL after the destination target path is final.
+	 * Re-derives a deferred URL after the destination target path and type
+	 * are final.
 	 *
 	 * @param int    $affected_post_id Post holding the link.
 	 * @param int    $target_ref       Source post id of its mapped target.

@@ -1340,8 +1340,9 @@ class Post_Import_Service {
 	}
 
 	/**
-	 * Reports whether each open degradation can be retried now. Deferred URLs
-	 * also need a final target path. A true value is a hint, not a guarantee:
+	 * Reports whether Retry would resolve each open degradation now. Deferred
+	 * URLs also need a final target path and registered type. A true value is a
+	 * hint, not a guarantee:
 	 * Retry can still fail to write or leave a mismatched term open.
 	 *
 	 * @param array[] $issue_rows      Open degradation rows, each carrying
@@ -2172,7 +2173,7 @@ class Post_Import_Service {
 	}
 
 	/**
-	 * Repairs a mapped navigation URL once the target path is final.
+	 * Repairs a mapped navigation URL once the target path and type are final.
 	 *
 	 * @param int    $affected_post_id Post holding the link.
 	 * @param int    $target_ref       Source target post id.

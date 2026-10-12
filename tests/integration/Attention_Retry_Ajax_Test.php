@@ -156,6 +156,60 @@ class Attention_Retry_Ajax_Test extends WP_Ajax_UnitTestCase {
 				'post'
 			)
 		);
+		$events = Audit_Log_Table::get_events(
+			array( 'channel' => 'reconcile' )
+		);
+		$this->assertCount( 1, $events );
+		$this->assertSame( Log_Events::RECONCILE_RESOLVED, $events[0]['event'] );
+		$this->assertSame(
+			'deferred_navigation_url',
+			$events[0]['data']['deferred_issue_type']
+		);
+	}
+
+	/**
+	 * Verifies that Retry does not defer an empty navigation URL.
+	 */
+	public function test_retry_empty_navigation_url_does_not_defer(): void {
+		// ARRANGE: A stale link with no URL and an imported draft target.
+		$content = $this->nav_link_content( 9702, 'post-type', '' );
+		$post_id = self::factory()->post->create(
+			array( 'post_content' => $content )
+		);
+		$target  = $this->seed_target_post( 9702 );
+		wp_update_post(
+			array(
+				'ID'          => $target,
+				'post_status' => 'draft',
+			)
+		);
+		$this->open_issue( $post_id, 'unmapped_block_reference', 9702, 'post' );
+
+		// ACT: Retry the stale reference.
+		$response = $this->retry(
+			array(
+				'affected_post_id' => (string) $post_id,
+				'issue_type'       => 'unmapped_block_reference',
+				'target_ref'       => '9702',
+				'target_kind'      => 'post',
+			)
+		);
+
+		// ASSERT: The ID maps without creating an unrepairable URL issue.
+		$this->assertTrue( $response['success'] );
+		$this->assertSame( 'resolved', $response['data']['outcome'] );
+		$this->assertNull(
+			$this->attention->get_issue(
+				$post_id,
+				'deferred_navigation_url',
+				9702,
+				'post'
+			)
+		);
+		$this->assertStringContainsString(
+			'"id":' . $target,
+			(string) get_post( $post_id )->post_content
+		);
 	}
 
 	/**
@@ -198,6 +252,11 @@ class Attention_Retry_Ajax_Test extends WP_Ajax_UnitTestCase {
 				'post'
 			)
 		);
+		$events = Audit_Log_Table::get_events(
+			array( 'channel' => 'reconcile' )
+		);
+		$this->assertCount( 1, $events );
+		$this->assertSame( Log_Events::RECONCILE_UNRESOLVED, $events[0]['event'] );
 	}
 
 	/**
@@ -799,11 +858,17 @@ class Attention_Retry_Ajax_Test extends WP_Ajax_UnitTestCase {
 
 		// ASSERT: Two resolved, one still waiting on its absent target.
 		$this->assertTrue( $response['success'] );
-		$this->assertSame( 2, $response['data']['resolved'] );
-		$this->assertSame( 1, $response['data']['target_absent'] );
-		$this->assertSame( 0, $response['data']['write_failed'] );
-		$this->assertSame( 0, $response['data']['unresolved'] );
-		$this->assertSame( 0, $response['data']['skipped'] );
+		$this->assertSame(
+			array(
+				'resolved'      => 2,
+				'target_absent' => 1,
+				'write_failed'  => 0,
+				'unresolved'    => 0,
+				'deferred_url'  => 0,
+				'skipped'       => 0,
+			),
+			$response['data']
+		);
 	}
 
 	/**
@@ -844,9 +909,17 @@ class Attention_Retry_Ajax_Test extends WP_Ajax_UnitTestCase {
 
 		// ASSERT: Both URLs are deferred, without any failed or resolved count.
 		$this->assertTrue( $response['success'] );
-		$this->assertSame( 2, $response['data']['deferred_url'] );
-		$this->assertSame( 0, $response['data']['resolved'] );
-		$this->assertSame( 0, $response['data']['unresolved'] );
+		$this->assertSame(
+			array(
+				'resolved'      => 0,
+				'target_absent' => 0,
+				'write_failed'  => 0,
+				'unresolved'    => 0,
+				'deferred_url'  => 2,
+				'skipped'       => 0,
+			),
+			$response['data']
+		);
 	}
 
 	/**
@@ -1228,17 +1301,22 @@ class Attention_Retry_Ajax_Test extends WP_Ajax_UnitTestCase {
 	/**
 	 * Builds a core/navigation block with a single nav-link of the given kind.
 	 *
-	 * @param int    $id   Source id in the nav-link.
-	 * @param string $kind 'post-type' or 'taxonomy'.
+	 * @param int         $id   Source id in the nav-link.
+	 * @param string      $kind 'post-type' or 'taxonomy'.
+	 * @param string|null $url  URL override, or null for the source URL.
 	 * @return string Block markup.
 	 */
-	private function nav_link_content( int $id, string $kind ): string {
+	private function nav_link_content(
+		int $id,
+		string $kind,
+		?string $url = null
+	): string {
 		$link = wp_json_encode(
 			array(
 				'id'    => $id,
 				'kind'  => $kind,
 				'label' => 'Link',
-				'url'   => self::SOURCE . '/item-' . $id,
+				'url'   => null === $url ? self::SOURCE . '/item-' . $id : $url,
 			)
 		);
 

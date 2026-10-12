@@ -743,7 +743,7 @@ describe( 'createNeedsAttentionActions', () => {
 		expect( onNotice ).toHaveBeenLastCalledWith( {
 			status: 'warning',
 			message:
-				'The target ID is mapped, but its URL is still waiting. Import, register, or fix the target path, then Retry.',
+				'The target ID is mapped but awaits its final URL. Publish the target and its ancestors, register its post type, or finalize its path, then Retry.',
 		} );
 	} );
 
@@ -936,7 +936,7 @@ describe( 'createNeedsAttentionActions', () => {
 		).toHaveLength( 2 );
 		expect( onNotice ).toHaveBeenLastCalledWith( {
 			status: 'warning',
-			message: '1 resolved, 1 waiting on import, 0 waiting on URL, 0 failed.',
+			message: '1 resolved, 1 waiting on import, 0 awaiting a final URL, 0 failed.',
 		} );
 	} );
 
@@ -966,7 +966,7 @@ describe( 'createNeedsAttentionActions', () => {
 		expect( onNotice ).toHaveBeenLastCalledWith( {
 			status: 'warning',
 			message:
-				'0 resolved, 0 waiting on import, 2 waiting on URL, 0 failed.',
+				'0 resolved, 0 waiting on import, 2 awaiting a final URL, 0 failed.',
 		} );
 	} );
 
@@ -1066,7 +1066,7 @@ describe( 'createNeedsAttentionActions', () => {
 		expect( batch( 1 ) ).toHaveLength( 1 );
 		expect( onNotice ).toHaveBeenLastCalledWith( {
 			status: 'success',
-			message: `${ RETRY_ATTENTION_BATCH_MAX + 1 } resolved, 0 waiting on import, 0 waiting on URL, 0 failed.`,
+			message: `${ RETRY_ATTENTION_BATCH_MAX + 1 } resolved, 0 waiting on import, 0 awaiting a final URL, 0 failed.`,
 		} );
 	} );
 
