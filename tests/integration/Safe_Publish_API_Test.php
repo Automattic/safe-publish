@@ -376,8 +376,16 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 		$this->assertArrayHasKey( 'nonContentDiffs', $result, 'Should have non-content diffs' );
 		$this->assertArrayHasKey( 'current', $result, 'Should have current data' );
 		$this->assertArrayHasKey( 'blockDiffs', $result, 'Should have block diffs' );
-		$this->assertArrayHasKey( 'incomingRenderedHtml', $result, 'Should have incoming rendered HTML' );
-		$this->assertArrayHasKey( 'currentRenderedHtml', $result, 'Should have current rendered HTML' );
+		$this->assertArrayNotHasKey(
+			'incomingRenderedHtml',
+			$result,
+			'The unused rendered preview should not be carried.'
+		);
+		$this->assertArrayNotHasKey(
+			'currentRenderedHtml',
+			$result,
+			'The unused rendered preview should not be carried.'
+		);
 
 		// ASSERT: Verify diff was generated.
 		$this->assertIsString( $result['contentDiffHtml'] );
