@@ -1,9 +1,8 @@
 /**
- * Tests for the BlockDiffViewer component's changes-only default and its
- * inline diff markers.
+ * Tests for the BlockDiffViewer component.
  */
-import { describe, expect, it } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { act, render, screen } from '@testing-library/react';
 
 import BlockDiffViewer from '@/components/BlockDiffViewer';
 import type { BlockDiff } from '@/api/diff';
@@ -723,5 +722,116 @@ describe( 'BlockDiffViewer', () => {
 		expect(
 			screen.getByText( /not visible in the preview/i )
 		).toBeInTheDocument();
+	} );
+} );
+
+describe( 'BlockDiffViewer keyboard scrolling', () => {
+	// Tests set the sizes and fire the observer by hand.
+	let observers: FakeResizeObserver[] = [];
+
+	class FakeResizeObserver {
+		callback: () => void;
+		targets: Element[] = [];
+
+		constructor( callback: () => void ) {
+			this.callback = callback;
+			observers.push( this );
+		}
+
+		observe( target: Element ): void {
+			this.targets.push( target );
+		}
+
+		disconnect(): void {
+			this.targets = [];
+		}
+	}
+
+	const resize = (
+		element: HTMLElement,
+		scrollWidth: number,
+		clientWidth: number
+	): void => {
+		Object.defineProperty( element, 'scrollWidth', {
+			configurable: true,
+			value: scrollWidth,
+		} );
+		Object.defineProperty( element, 'clientWidth', {
+			configurable: true,
+			value: clientWidth,
+		} );
+		act( () => {
+			observers
+				.filter( ( observer ) => observer.targets.includes( element ) )
+				.forEach( ( observer ) => observer.callback() );
+		} );
+	};
+
+	const renderAdded = (): HTMLElement => {
+		const { container } = render(
+			<BlockDiffViewer
+				blocks={ [ buildBlock( { status: 'added', current: null } ) ] }
+			/>
+		);
+		return container.querySelector(
+			'.safe-publish-block-diff__added'
+		) as HTMLElement;
+	};
+
+	beforeEach( () => {
+		observers = [];
+		vi.stubGlobal( 'ResizeObserver', FakeResizeObserver );
+	} );
+
+	afterEach( () => {
+		vi.unstubAllGlobals();
+	} );
+
+	it( 'makes an overflowing preview a labeled Tab stop', () => {
+		// ARRANGE: An added block.
+		const preview = renderAdded();
+
+		// ACT: Its content overflows.
+		resize( preview, 500, 200 );
+
+		// ASSERT: It is a named region in the Tab order.
+		expect(
+			screen.getByRole( 'region', { name: 'Incoming preview' } )
+		).toBe( preview );
+		expect( preview ).toHaveAttribute( 'tabindex', '0' );
+	} );
+
+	it( 'drops the Tab stop once the preview fits', () => {
+		// ARRANGE: An added block whose content overflows.
+		const preview = renderAdded();
+		resize( preview, 500, 200 );
+
+		// ACT: The preview widens to fit it.
+		resize( preview, 500, 500 );
+
+		// ASSERT: It is neither a region nor a Tab stop.
+		expect( screen.queryByRole( 'region' ) ).toBeNull();
+		expect( preview ).not.toHaveAttribute( 'tabindex' );
+	} );
+
+	it( 'names each overflowing column after the side it shows', () => {
+		// ARRANGE: A modified block.
+		const { container } = renderModified(
+			'<p>Old body.</p>',
+			'<p>New body.</p>'
+		);
+		const [ current, incoming ] = columns( container );
+
+		// ACT: Both columns overflow.
+		resize( current, 500, 200 );
+		resize( incoming, 500, 200 );
+
+		// ASSERT: Each region carries its side's name.
+		expect(
+			screen.getByRole( 'region', { name: 'Current preview' } )
+		).toBe( current );
+		expect(
+			screen.getByRole( 'region', { name: 'Incoming preview' } )
+		).toBe( incoming );
 	} );
 } );
