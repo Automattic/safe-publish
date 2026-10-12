@@ -2232,6 +2232,31 @@ class Content_Processor_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that an image block whose .webp src serves an HTML page records
+	 * a media failure instead of sideloading the page as a WebP attachment.
+	 */
+	public function test_webp_src_serving_html_is_a_media_failure(): void {
+		// ARRANGE: An image block whose .webp src serves an HTML page.
+		$source_site_url = 'https://source.example.com';
+		$image_url       = $source_site_url . '/serves-html/photo.webp';
+		$content         = '<!-- wp:image {"id":7} -->'
+			. '<figure class="wp-block-image"><img src="' . $image_url
+			. '" class="wp-image-7"/></figure><!-- /wp:image -->';
+
+		$attachments_before = $this->get_attachment_count();
+
+		// ACT: Process the block through the full Gutenberg path.
+		$this->processor->process_content( $content, $source_site_url );
+
+		// ASSERT: Nothing was sideloaded, and the src is a media failure.
+		$this->assert_no_new_attachments( $attachments_before );
+		$this->assertSame(
+			array( $image_url => 'core/image' ),
+			$this->processor->get_failed_media()
+		);
+	}
+
+	/**
 	 * Verifies that an extensionless <img> src resolving to a plain-text page is
 	 * not sideloaded as a bogus text attachment.
 	 *
