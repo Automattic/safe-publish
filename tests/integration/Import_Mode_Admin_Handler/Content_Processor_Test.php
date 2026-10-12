@@ -1454,11 +1454,15 @@ class Content_Processor_Test extends Integration_Test_Case {
 		string $media_url,
 		string $resolved_url
 	): void {
-		// ARRANGE: Store media only in attrs alongside a bare design token.
+		// ARRANGE: Store media in attrs alongside a bare design token.
 		$source_site_url    = 'https://source.example.com';
 		$content            = '<!-- wp:my-plugin/hero {"backgroundUrl":"'
-			. $serialized_url . '","icon":"star.svg"} -->'
-			. '<div class="wp-block-my-plugin-hero"></div>'
+			. $serialized_url . '","icon":"star.png"} -->'
+			. '<div class="wp-block-my-plugin-hero">'
+			. '<img src="' . $media_url . '">'
+			. '<img src="' . $resolved_url . '">'
+			. '<span data-alternate="' . $media_url . '.webp"></span>'
+			. '</div>'
 			. '<!-- /wp:my-plugin/hero -->';
 		$attachments_before = $this->get_attachment_count();
 		$this->assertSame( $media_url, parse_blocks( $content )[0]['attrs']['backgroundUrl'] );
@@ -1469,9 +1473,33 @@ class Content_Processor_Test extends Integration_Test_Case {
 		// ASSERT: Only the media URL is requested and localized.
 		$this->assertSame( array( $resolved_url ), $this->requested_urls );
 		$this->assertSame( $attachments_before + 1, $this->get_attachment_count() );
-		$this->assertStringNotContainsString( $media_url, $processed );
-		$this->assertStringContainsString( 'wp-content/uploads', $processed );
-		$this->assertStringContainsString( '"icon":"star.svg"', $processed );
+		$blocks      = parse_blocks( $processed );
+		$local_url   = $blocks[0]['attrs']['backgroundUrl'];
+		$attachments = get_posts(
+			array(
+				'post_type'      => 'attachment',
+				'post_status'    => 'inherit',
+				'posts_per_page' => 1,
+				'orderby'        => 'ID',
+				'order'          => 'DESC',
+			)
+		);
+		$this->assertCount( 1, $attachments );
+		$this->assertSame(
+			wp_get_attachment_url( $attachments[0]->ID ),
+			$local_url
+		);
+		$this->assertSame(
+			2,
+			substr_count( $processed, '<img src="' . $local_url . '">' )
+		);
+		$this->assertStringContainsString(
+			'<span data-alternate="' . $media_url . '.webp"></span>',
+			$processed
+		);
+		$this->assertStringContainsString( '"icon":"star.png"', $processed );
+		$this->assertStringNotContainsString( 'https:https://', $processed );
+		$this->assertStringNotContainsString( 'source.example.comhttps://', $processed );
 		$this->assertSame( array(), $this->processor->get_failed_media() );
 	}
 

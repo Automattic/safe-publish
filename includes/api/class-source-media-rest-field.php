@@ -580,14 +580,17 @@ class Source_Media_REST_Field {
 
 	/**
 	 * Reads media URLs from parsed Gutenberg attributes, including nested attrs
-	 * and child blocks. Parsing restores JSON-escaped slashes that the raw scan
-	 * cannot match.
+	 * and child blocks. Parsing restores JSON-escaped slashes and line breaks
+	 * that the raw scan cannot match.
 	 *
 	 * @param string $content Raw post content.
 	 * @param string $pattern Accepted source media URL pattern.
 	 * @return list<string> Normalized same-host block attribute URLs.
 	 */
-	private function block_attribute_urls( string $content, string $pattern ): array {
+	private function block_attribute_urls(
+		string $content,
+		string $pattern
+	): array {
 		if ( false === strpos( $content, '<!-- wp:' ) ) {
 			return array();
 		}
@@ -667,11 +670,14 @@ class Source_Media_REST_Field {
 	/**
 	 * Normalizes a block attribute URL accepted by the source media pattern.
 	 *
-	 * @param mixed  $value Block attribute value.
+	 * @param mixed  $value   Block attribute value.
 	 * @param string $pattern Accepted source media URL pattern.
 	 * @return string|null Normalized URL, or null when not eligible.
 	 */
-	private function normalized_block_url( mixed $value, string $pattern ): ?string {
+	private function normalized_block_url(
+		mixed $value,
+		string $pattern
+	): ?string {
 		if ( ! is_string( $value ) ) {
 			return null;
 		}

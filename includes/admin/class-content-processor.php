@@ -1729,10 +1729,10 @@ class Content_Processor {
 				$attrs[ $key ] = $new_url;
 
 				if ( isset( $block['innerHTML'] ) && '' !== $block['innerHTML'] ) {
-					$block['innerHTML'] = str_replace(
+					$block['innerHTML'] = $this->replace_standalone_media_url(
+						$block['innerHTML'],
 						$value,
-						$new_url,
-						$block['innerHTML']
+						$new_url
 					);
 				}
 
@@ -1743,11 +1743,12 @@ class Content_Processor {
 				) {
 					foreach ( $block['innerContent'] as $idx => $content ) {
 						if ( is_string( $content ) ) {
-							$block['innerContent'][ $idx ] = str_replace(
-								$value,
-								$new_url,
-								$content
-							);
+							$block['innerContent'][ $idx ] =
+								$this->replace_standalone_media_url(
+									$content,
+									$value,
+									$new_url
+								);
 						}
 					}
 				}
@@ -1755,6 +1756,31 @@ class Content_Processor {
 		}
 
 		return $attrs;
+	}
+
+	/**
+	 * Replaces a media URL without matching inside a longer URL.
+	 *
+	 * @param string $content Content containing the URL.
+	 * @param string $old_url Source media URL.
+	 * @param string $new_url Imported media URL.
+	 * @return string Updated content.
+	 */
+	private function replace_standalone_media_url(
+		string $content,
+		string $old_url,
+		string $new_url
+	): string {
+		$pattern = '/(?<![a-zA-Z0-9_\.\/:\-])'
+			. preg_quote( $old_url, '/' )
+			. '(?![a-zA-Z0-9_\.\/:?#%&=+\-])/';
+		$updated = preg_replace_callback(
+			$pattern,
+			static fn (): string => $new_url,
+			$content
+		);
+
+		return is_string( $updated ) ? $updated : $content;
 	}
 
 	/**
