@@ -161,8 +161,7 @@ final class History_Repository {
 			);
 		}
 
-		$encoded_changes      = null;
-		$has_previous_content = 0;
+		$encoded_changes = null;
 
 		if ( count( $changes ) > 0 ) {
 			$json = wp_json_encode( $changes );
@@ -170,10 +169,19 @@ final class History_Repository {
 			if ( false !== $json ) {
 				$encoded_changes = $json;
 			}
+		}
 
-			if ( '' !== ( $changes['previous_content'] ?? '' ) ) {
-				$has_previous_content = 1;
-			}
+		// Drives the delete-versus-restore prediction in the rollback
+		// confirmation, so it follows the condition rollback dispatches on and
+		// the payload that persisted, not the array assembled to store.
+		$has_previous_content = 0;
+
+		if (
+			'updated' === $status
+			&& null !== $encoded_changes
+			&& isset( $changes['previous_content'] )
+		) {
+			$has_previous_content = 1;
 		}
 
 		$encoded_warnings = null;
@@ -784,21 +792,167 @@ final class History_Repository {
 	}
 
 	/**
-	 * Marks a single item as rolled back and emits an audit log event.
+	 * Claims an item for rollback by flagging it, and reports whether this
+	 * caller won the claim.
+	 *
+	 * The write is the arbiter: A read-time check cannot refuse a request
+	 * whose read has gone stale, but only one caller can move the flag from 0
+	 * to 1. The predicate keeps that true where wpdb is connected with
+	 * CLIENT_FOUND_ROWS, which reports matched rows rather than changed ones.
+	 *
+	 * @param int $item_id Item ID.
+	 * @return true|WP_Error True when this caller holds the claim.
+	 */
+	public function claim_item_for_rollback( int $item_id ): true|WP_Error {
+		global $wpdb;
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$claimed = $wpdb->update(
+			Import_Items_Table::table_name(),
+			array( 'rolled_back' => 1 ),
+			array(
+				'id'          => $item_id,
+				'rolled_back' => 0,
+			),
+			array( '%d' ),
+			array( '%d', '%d' )
+		);
+		// Captured before the read below, which resets it.
+		$write_error = $wpdb->last_error;
+
+		if ( 1 === $claimed ) {
+			return true;
+		}
+
+		$parents = $this->item_audit_parents( $item_id );
+
+		if ( false === $claimed ) {
+			$this->logger->item_rollback_failed(
+				$item_id,
+				$parents['session_id'] ?? 0,
+				$parents['post_id'] ?? 0,
+				$write_error
+			);
+
+			return new WP_Error(
+				'rollback_not_started',
+				__(
+					'The rollback could not be started, so nothing was changed. Try again.',
+					'safe-publish'
+				)
+			);
+		}
+
+		// Zero rows means the predicate matched nothing: Another request holds
+		// the claim, or the row is gone.
+		if ( null === $parents ) {
+			return new WP_Error(
+				'item_not_found',
+				__( 'Import item not found', 'safe-publish' )
+			);
+		}
+
+		$this->logger->item_already_rolled_back(
+			$item_id,
+			$parents['session_id'],
+			$parents['post_id']
+		);
+
+		return new WP_Error(
+			'item_already_rolled_back',
+			__(
+				'This import was already rolled back. Reload the list.',
+				'safe-publish'
+			)
+		);
+	}
+
+	/**
+	 * Releases a rollback claim whose revert failed, keeping the item
+	 * retryable.
+	 *
+	 * @param int $item_id Item ID.
+	 * @return bool True when the claim was released.
+	 */
+	public function release_rollback_claim( int $item_id ): bool {
+		global $wpdb;
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$released    = $wpdb->update(
+			Import_Items_Table::table_name(),
+			array( 'rolled_back' => 0 ),
+			array(
+				'id'          => $item_id,
+				'rolled_back' => 1,
+			),
+			array( '%d' ),
+			array( '%d', '%d' )
+		);
+		$write_error = $wpdb->last_error;
+
+		if ( 1 === $released ) {
+			return true;
+		}
+
+		// The post was reverted but the row still reads as rolled back, so it
+		// drops out of every active-item query with no retry path.
+		$parents = $this->item_audit_parents( $item_id );
+		$this->logger->item_rollback_stuck(
+			$item_id,
+			$parents['session_id'] ?? 0,
+			$parents['post_id'] ?? 0,
+			$write_error
+		);
+
+		return false;
+	}
+
+	/**
+	 * Records a completed rollback in the audit log.
 	 *
 	 * @param int   $item_id   Item ID.
 	 * @param array $omissions References omitted from the rollback.
-	 * @return bool True when the row is flagged, false when the write failed.
 	 */
-	public function mark_item_rolled_back(
+	public function record_item_rolled_back(
 		int $item_id,
-		array $omissions = array()
-	): bool {
+		array $omissions
+	): void {
+		$parents = $this->item_audit_parents( $item_id );
+
+		$this->logger->item_rolled_back(
+			$item_id,
+			$parents['session_id'] ?? 0,
+			$parents['post_id'] ?? 0,
+			$omissions
+		);
+	}
+
+	/**
+	 * Records an item closed because its destination post no longer exists.
+	 *
+	 * @param int $item_id Item ID.
+	 */
+	public function record_item_closed_post_missing( int $item_id ): void {
+		$parents = $this->item_audit_parents( $item_id );
+
+		$this->logger->item_closed_post_missing(
+			$item_id,
+			$parents['session_id'] ?? 0,
+			$parents['post_id'] ?? 0
+		);
+	}
+
+	/**
+	 * Reads the parents an item's audit rows link to.
+	 *
+	 * @param int $item_id Item ID.
+	 * @return array{session_id: int, post_id: int}|null Parents, or null when
+	 *                                                   the row is gone.
+	 */
+	private function item_audit_parents( int $item_id ): ?array {
 		global $wpdb;
 
 		$table = Import_Items_Table::table_name();
-		// Snapshot session_id and post_id before the UPDATE so the audit row
-		// can link to both parents regardless of update outcome.
 		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 		$item = $wpdb->get_row(
 			$wpdb->prepare(
@@ -808,40 +962,15 @@ final class History_Repository {
 			ARRAY_A
 		);
 		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
-		$session_id = isset( $item['session_id'] ) ? (int) $item['session_id'] : 0;
-		$post_id    = isset( $item['post_id'] ) ? (int) $item['post_id'] : 0;
 
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
-		$updated = $wpdb->update(
-			$table,
-			array( 'rolled_back' => 1 ),
-			array( 'id' => $item_id ),
-			array( '%d' ),
-			array( '%d' )
+		if ( ! is_array( $item ) ) {
+			return null;
+		}
+
+		return array(
+			'session_id' => isset( $item['session_id'] ) ? (int) $item['session_id'] : 0,
+			'post_id'    => isset( $item['post_id'] ) ? (int) $item['post_id'] : 0,
 		);
-
-		if ( false === $updated ) {
-			$this->logger->item_rollback_failed(
-				$item_id,
-				$session_id,
-				$post_id,
-				$wpdb->last_error
-			);
-			return false;
-		}
-
-		if ( 0 === $updated ) {
-			$this->logger->item_already_rolled_back( $item_id, $session_id, $post_id );
-		} else {
-			$this->logger->item_rolled_back(
-				$item_id,
-				$session_id,
-				$post_id,
-				$omissions
-			);
-		}
-
-		return true;
 	}
 
 	/**

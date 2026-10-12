@@ -93,7 +93,7 @@ class Error_Handling_Test extends Source_Posts_API_Test_Base {
 	public function test_failed_media_with_encoded_ampersand_reported_once( string $encoded ): void {
 		// ARRANGE: Point an image at a 404 URL whose query carries an entity.
 		$source_site_url = 'https://example.com';
-		$decoded_url     = 'https://example.com/nonexistent-404.jpg?w=500&quality=70';
+		$download_url    = 'https://example.com/nonexistent-404.jpg';
 		$content         = sprintf(
 			'<p><img src="https://example.com/nonexistent-404.jpg?w=500%squality=70" alt="Broken"></p>',
 			$encoded
@@ -102,11 +102,11 @@ class Error_Handling_Test extends Source_Posts_API_Test_Base {
 		// ACT: Process content whose media download fails.
 		$this->content_media_processor->process_content( $content, $source_site_url );
 
-		// ASSERT: The failure is keyed by the decoded URL.
+		// ASSERT: The failure is keyed by the query-free download URL.
 		$this->assertSame(
-			array( $decoded_url ),
+			array( $download_url ),
 			array_keys( $this->content_media_processor->get_failed_media() ),
-			'Failed URL should be recorded once, keyed by the decoded value'
+			'Failed URL should be recorded once, keyed by the download URL'
 		);
 
 		// ASSERT: The same URL is not also reported as malformed markup.

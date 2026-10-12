@@ -60,11 +60,50 @@ const contentCell = ( item: NeedsAttentionRow ): JSX.Element => {
 		'failure' === item.kind ? item.edit_url : item.affected_edit_url;
 
 	return '' !== editUrl ? (
-		<a href={ editUrl } target="_blank" rel="noreferrer">
+		<a href={ editUrl } target="_blank" rel="noreferrer" title={ title }>
 			{ title }
 		</a>
 	) : (
-		<span>{ title }</span>
+		<span title={ title }>{ title }</span>
+	);
+};
+
+/**
+ * Renders the Detail column. The resolvable hint sits beside the message, not
+ * inside it, so truncating the message cannot hide it.
+ *
+ * @param {NeedsAttentionRow}  item     Inbox row.
+ * @param {NeedsAttentionView} viewMode Active list mode.
+ * @return {JSX.Element} Rendered detail cell.
+ */
+const detailCell = (
+	item: NeedsAttentionRow,
+	viewMode: NeedsAttentionView
+): JSX.Element => {
+	const message =
+		'failure' === item.kind
+			? item.error_message
+			: renderIssueMessage( item );
+
+	return (
+		<>
+			<span className="safe-publish-inbox-detail" title={ message }>
+				{ message }
+			</span>
+			{ 'degradation' === item.kind
+				&& 'open' === viewMode
+				&& item.retryable && (
+				<span
+					className={ `safe-publish-inbox-resolvable safe-publish-inbox-resolvable--${
+						item.resolvable ? 'ready' : 'waiting'
+					}` }
+				>
+					{ item.resolvable
+						? __( 'Resolvable now', 'safe-publish' )
+						: __( 'Waiting on import', 'safe-publish' ) }
+				</span>
+			) }
+		</>
 	);
 };
 
@@ -234,27 +273,7 @@ const NeedsAttentionInbox = ( {
 			id: 'detail',
 			label: __( 'Detail', 'safe-publish' ),
 			enableSorting: false,
-			render: ( { item } ) =>
-				'failure' === item.kind ? (
-					<span title={ item.error_message }>
-						{ item.error_message }
-					</span>
-				) : (
-					<span>
-						{ renderIssueMessage( item ) }
-						{ 'open' === viewMode && item.retryable && (
-							<span
-								className={ `safe-publish-inbox-resolvable safe-publish-inbox-resolvable--${
-									item.resolvable ? 'ready' : 'waiting'
-								}` }
-							>
-								{ item.resolvable
-									? __( 'Resolvable now', 'safe-publish' )
-									: __( 'Waiting on import', 'safe-publish' ) }
-							</span>
-						) }
-					</span>
-				),
+			render: ( { item } ) => detailCell( item, viewMode ),
 		},
 		{
 			id: 'severity',

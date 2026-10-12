@@ -1,5 +1,30 @@
 #!/bin/sh
 
+set -e
+
+# Abort unless a version is a single bare major.minor.patch number. Newlines
+# become spaces so a multi-line extraction fails the pattern.
+require_version() {
+	if ! printf '%s' "$1" | tr '\n' ' ' |
+		grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+		echo "Error: '$1' in $2 is not a major.minor.patch version" >&2
+		exit 1
+	fi
+}
+
+# Apply a sed expression to a file, and abort if nothing matched.
+replace_version() {
+	sed -i.bak "$2" "$1"
+
+	if cmp -s "$1" "$1.bak"; then
+		rm "$1.bak"
+		echo "Error: nothing matched '$2' in $1" >&2
+		exit 1
+	fi
+
+	rm "$1.bak"
+}
+
 # Function to increment version
 increment_version() {
 	version=$1
@@ -23,7 +48,7 @@ increment_version() {
 			patch=$((patch + 1))
 			;;
 		*)
-			echo "Invalid release type. Use 'major', 'minor', or 'patch'."
+			echo "Invalid release type. Use 'major', 'minor', or 'patch'." >&2
 			exit 1
 			;;
 	esac
@@ -33,7 +58,7 @@ increment_version() {
 
 # Check if an argument is provided
 if [ $# -eq 0 ]; then
-	echo "Please provide a release type: major, minor, or patch"
+	echo "Please provide a release type: major, minor, or patch" >&2
 	exit 1
 fi
 
@@ -42,19 +67,20 @@ release_type=$1
 # Get current version from safe-publish.php
 php_file="safe-publish.php"
 current_version=$(sed -n "s/.*Version: \([0-9.]*\).*/\1/p" "$php_file")
+require_version "$current_version" "$php_file"
 new_version=$(increment_version "$current_version" "$release_type")
 
 # Update safe-publish.php
-sed -i.bak "s/Version: $current_version/Version: $new_version/" "$php_file"
-sed -i.bak "s/define( 'SAFE_PUBLISH_VERSION', '$current_version' );/define( 'SAFE_PUBLISH_VERSION', '$new_version' );/" "$php_file"
-rm "${php_file}.bak"
+replace_version "$php_file" "s/Version: $current_version/Version: $new_version/"
+replace_version "$php_file" \
+	"s/define( 'SAFE_PUBLISH_VERSION', '$current_version' );/define( 'SAFE_PUBLISH_VERSION', '$new_version' );/"
 
 echo "Updated $php_file from $current_version to $new_version"
 
 # Update local development mu-plugin version header
 local_dev_file="mu-plugins/safe-publish-local-dev.php"
-sed -i.bak "s/Version:     $current_version/Version:     $new_version/" "$local_dev_file"
-rm "${local_dev_file}.bak"
+replace_version "$local_dev_file" \
+	"s/Version:     $current_version/Version:     $new_version/"
 
 echo "Updated $local_dev_file from $current_version to $new_version"
 
@@ -62,10 +88,11 @@ echo "Updated $local_dev_file from $current_version to $new_version"
 package_file="package.json"
 package_lock_file="package-lock.json"
 current_version_pkg=$(sed -n 's/.*"version": "\([0-9.]*\)".*/\1/p' "$package_file")
+require_version "$current_version_pkg" "$package_file"
 
 # Update package.json
-sed -i.bak "s/\"version\": \"$current_version_pkg\"/\"version\": \"$new_version\"/" "$package_file"
-rm "${package_file}.bak"
+replace_version "$package_file" \
+	"s/\"version\": \"$current_version_pkg\"/\"version\": \"$new_version\"/"
 
 echo "Updated $package_file from $current_version_pkg to $new_version"
 
@@ -80,10 +107,7 @@ echo "Updated package-lock.json with new version."
 git checkout -b release/v"$new_version"
 
 # Commit the changes
-git add "$php_file"
-git add "$local_dev_file"
-git add "$package_file"
-git add "$package_lock_file"
+git add "$php_file" "$local_dev_file" "$package_file" "$package_lock_file"
 git commit -m "v$new_version"
 
 echo "Changes committed to release/v$new_version branch. Push the branch to the remote repository and create a pull request."

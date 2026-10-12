@@ -37,6 +37,7 @@ use WP_Post;
 class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 
 	use Failing_Query_Trait;
+	use Unfiltered_Html_Trait;
 
 	/**
 	 * Post import service instance.
@@ -58,6 +59,8 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 	#[\Override]
 	protected function setUp(): void {
 		parent::setUp();
+
+		$this->grant_current_user_unfiltered_html();
 
 		// Intercept wp/v2/media JSON API calls at higher priority than the
 		// base-class image mock (priority 10) so the API endpoint returns
@@ -3895,6 +3898,71 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 			'Loser must be force-deleted, leaving only the winner.'
 		);
 		$this->assertSame( $winner_id, $siblings[0]->ID );
+	}
+
+	/**
+	 * Verifies that discarding a concurrent duplicate leaves its featured image
+	 * alone, since the sideload returns an existing attachment whenever the
+	 * file was already imported.
+	 */
+	public function test_persist_new_post_keeps_featured_image_of_discarded_duplicate(): void {
+		// ARRANGE: A winner for this source post ID, and a featured image the
+		// losing run did not create.
+		$source_id = 9401;
+		$winner_id = self::factory()->post->create(
+			array(
+				'post_title'  => 'Concurrent winner',
+				'post_status' => 'draft',
+				'meta_input'  => array(
+					Options::META_SOURCE_POST_ID  => $source_id,
+					Options::META_SOURCE_SITE_URL => 'https://source.example.com',
+				),
+			)
+		);
+
+		$featured_id = self::factory()->attachment->create_object(
+			array(
+				'file'           => 'shared-featured.jpg',
+				'post_mime_type' => 'image/jpeg',
+				'post_status'    => 'inherit',
+			)
+		);
+		set_post_thumbnail( $winner_id, $featured_id );
+
+		// ACT: Persist a losing duplicate holding that featured image.
+		$result = $this->import_service->persist_new_post(
+			array(
+				'post_title'   => 'Concurrent loser',
+				'post_content' => '',
+				'post_status'  => 'draft',
+				'post_type'    => 'post',
+				'meta_input'   => array(
+					Options::META_SOURCE_POST_ID  => $source_id,
+					Options::META_SOURCE_SITE_URL => 'https://source.example.com',
+					Options::META_SOURCE_LINK     => 'https://source.example.com/loser',
+					Options::META_IMPORTED_FROM   => Options::META_IMPORTED_FROM_VALUE,
+				),
+			),
+			$featured_id,
+			array(),
+			array(),
+			array(),
+			0
+		);
+
+		// ASSERT: The duplicate was discarded without taking the shared
+		// attachment or the winner's thumbnail with it.
+		$this->assertWPError( $result );
+		$this->assertSame( 'duplicate_import', $result->get_error_code() );
+		$this->assertNotNull(
+			get_post( $featured_id ),
+			'A featured image the losing run did not create must survive.'
+		);
+		$this->assertSame(
+			$featured_id,
+			get_post_thumbnail_id( $winner_id ),
+			"The winner's featured image must be intact."
+		);
 	}
 
 	/**

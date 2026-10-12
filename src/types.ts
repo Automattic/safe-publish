@@ -453,6 +453,11 @@ export type AuthStatus =
 	| 'url_unset';
 
 /**
+ * Auth states the banner renders, including the client-only probe_failed.
+ */
+export type AuthStatusView = AuthStatus | 'probe_failed';
+
+/**
  * Auth probe result returned by safe_publish_auth_status.
  */
 export interface AuthStatusData {

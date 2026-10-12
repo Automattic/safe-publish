@@ -29,6 +29,7 @@ class Telemetry_Rollback_Test extends WP_Ajax_UnitTestCase {
 
 	use Ajax_Die_Continue_Trait;
 	use Failing_Query_Trait;
+	use Unfiltered_Html_Trait;
 
 	/**
 	 * Queue that captures every telemetry event emitted by the handler.
@@ -59,6 +60,7 @@ class Telemetry_Rollback_Test extends WP_Ajax_UnitTestCase {
 			array( 'role' => 'administrator' )
 		);
 		wp_set_current_user( $admin_user_id );
+		$this->grant_unfiltered_html( $admin_user_id );
 
 		$this->queue      = new Telemetry_Event_Queue();
 		$this->repository = new History_Repository();
@@ -102,10 +104,10 @@ class Telemetry_Rollback_Test extends WP_Ajax_UnitTestCase {
 
 	/**
 	 * Verifies that a single-item rollback for a non-existent item fires
-	 * rollback_performed with failed_count=1 and outcome=failed, so a
-	 * broken undo doesn't go silent.
+	 * rollback_performed with outcome=refused, so declining a rollback is
+	 * not counted against the regret signal.
 	 */
-	public function test_item_rollback_failure_fires_with_failed_outcome(): void {
+	public function test_item_rollback_missing_item_fires_refused_outcome(): void {
 		// ARRANGE: An item_id that does not exist in the repository.
 		$_POST = array(
 			'nonce'   => wp_create_nonce( 'safe_publish_ajax_nonce' ),
@@ -115,7 +117,7 @@ class Telemetry_Rollback_Test extends WP_Ajax_UnitTestCase {
 		// ACT: Dispatch the item rollback against the missing item.
 		$this->dispatch_ajax_expecting_die( 'safe_publish_rollback_item' );
 
-		// ASSERT: Scope=item, failed_count=1, outcome=failed.
+		// ASSERT: Scope=item, every count zero, outcome=refused.
 		$events = $this->queue->events();
 		$this->assertCount( 1, $events );
 		$this->assertSame(
@@ -128,9 +130,9 @@ class Telemetry_Rollback_Test extends WP_Ajax_UnitTestCase {
 		);
 		$this->assertSame( 0, $events[0]['properties']['deleted_count'] );
 		$this->assertSame( 0, $events[0]['properties']['restored_count'] );
-		$this->assertSame( 1, $events[0]['properties']['failed_count'] );
+		$this->assertSame( 0, $events[0]['properties']['failed_count'] );
 		$this->assertSame(
-			Telemetry_Events::ROLLBACK_OUTCOME_FAILED,
+			Telemetry_Events::ROLLBACK_OUTCOME_REFUSED,
 			$events[0]['properties']['outcome']
 		);
 	}
@@ -186,8 +188,9 @@ class Telemetry_Rollback_Test extends WP_Ajax_UnitTestCase {
 	 */
 	public function test_item_rollback_with_omissions_returns_warning_message(): void {
 		// ARRANGE: An updated item whose previous author is no longer available.
-		$author_id = $this->factory()->user->create();
-		wp_delete_user( $author_id );
+		// Non-existent ID, not a deleted one: on multisite wp_delete_user()
+		// only unlinks the user from the site.
+		$author_id  = 999999;
 		$session_id = $this->repository->create_session(
 			'https://source.example.com',
 			'single'
@@ -228,10 +231,10 @@ class Telemetry_Rollback_Test extends WP_Ajax_UnitTestCase {
 
 	/**
 	 * Verifies that replaying a rolled-back item fires rollback_performed
-	 * with failed_count=1 and outcome=failed, rather than reporting a
-	 * restore that never happened.
+	 * with outcome=refused, rather than reporting a restore that never
+	 * happened or a failure that did not occur.
 	 */
-	public function test_item_rollback_replay_fires_with_failed_outcome(): void {
+	public function test_item_rollback_replay_fires_refused_outcome(): void {
 		// ARRANGE: An updated item, rolled back outside the handler so the
 		// queue holds only the replay's event.
 		$session_id = $this->repository->create_session(
@@ -269,7 +272,7 @@ class Telemetry_Rollback_Test extends WP_Ajax_UnitTestCase {
 		// ACT: Dispatch the item rollback against the same item again.
 		$this->dispatch_ajax_expecting_die( 'safe_publish_rollback_item' );
 
-		// ASSERT: Scope=item, failed_count=1, outcome=failed.
+		// ASSERT: Scope=item, every count zero, outcome=refused.
 		$events = $this->queue->events();
 		$this->assertCount( 1, $events );
 		$this->assertSame(
@@ -278,20 +281,20 @@ class Telemetry_Rollback_Test extends WP_Ajax_UnitTestCase {
 		);
 		$this->assertSame( 0, $events[0]['properties']['deleted_count'] );
 		$this->assertSame( 0, $events[0]['properties']['restored_count'] );
-		$this->assertSame( 1, $events[0]['properties']['failed_count'] );
+		$this->assertSame( 0, $events[0]['properties']['failed_count'] );
 		$this->assertSame(
-			Telemetry_Events::ROLLBACK_OUTCOME_FAILED,
+			Telemetry_Events::ROLLBACK_OUTCOME_REFUSED,
 			$events[0]['properties']['outcome']
 		);
 	}
 
 	/**
-	 * Verifies that a rollback whose flag write fails reports a failed
-	 * outcome rather than counting as a successful restore.
+	 * Verifies that a rollback whose claim write fails reports a failed
+	 * outcome, since a broken write is not a refusal.
 	 */
-	public function test_item_rollback_unrecorded_flag_fires_with_failed_outcome(): void {
+	public function test_item_rollback_unwritable_claim_fires_failed_outcome(): void {
 		// ARRANGE: An updated item, with the items table's UPDATEs forced to
-		// fail so only the flag write breaks.
+		// fail so the claim cannot be written.
 		$session_id = $this->repository->create_session(
 			'https://source.example.com',
 			'single'

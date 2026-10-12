@@ -69,6 +69,12 @@ npm run dev
 npm run test:integration
 ```
 
+Set `WP_MULTISITE=1` to install the network and run the same suites on multisite, which is how CI covers it. Cases gated on `is_multisite()` skip in the default single-site run.
+
+```bash
+WP_MULTISITE=1 npm run test:integration
+```
+
 ### Unit Tests with Coverage
 
 ```bash

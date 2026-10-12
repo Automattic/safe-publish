@@ -107,7 +107,7 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 			10
 		);
 		delete_option( Options::OPTION_CONNECTED_SITE_URL );
-		delete_site_transient( Admin_Ajax_Controller::AUTH_STATUS_TRANSIENT );
+		delete_transient( Admin_Ajax_Controller::AUTH_STATUS_TRANSIENT );
 		// Core keeps registered statuses in a global.
 		unset( $GLOBALS['wp_post_statuses'][ self::HIDDEN_STATUS ] );
 		parent::tearDown();
@@ -1571,7 +1571,7 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 	 */
 	public function test_ajax_auth_status_returns_cached_probe_result(): void {
 		// ARRANGE: Pre-populate the transient with an authorized probe result.
-		set_site_transient(
+		set_transient(
 			Admin_Ajax_Controller::AUTH_STATUS_TRANSIENT,
 			array(
 				'status' => VIP_Safe_Auth::STATUS_AUTHORIZED,
@@ -1621,7 +1621,7 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 		};
 		add_filter( 'pre_http_request', $probe_filter, 1, 3 );
 
-		delete_site_transient(
+		delete_transient(
 			Admin_Ajax_Controller::AUTH_STATUS_TRANSIENT
 		);
 
@@ -1645,7 +1645,7 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 			$response['data']['status']
 		);
 
-		$cached = get_site_transient(
+		$cached = get_transient(
 			Admin_Ajax_Controller::AUTH_STATUS_TRANSIENT
 		);
 		$this->assertIsArray( $cached );
@@ -1671,7 +1671,7 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 			)
 		);
 		$this->reset_auth_audit_log();
-		delete_site_transient( Admin_Ajax_Controller::AUTH_STATUS_TRANSIENT );
+		delete_transient( Admin_Ajax_Controller::AUTH_STATUS_TRANSIENT );
 
 		wp_set_current_user( $this->admin_user_id );
 		$_POST = array(
@@ -1714,7 +1714,7 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 			)
 		);
 		$this->reset_auth_audit_log();
-		delete_site_transient( Admin_Ajax_Controller::AUTH_STATUS_TRANSIENT );
+		delete_transient( Admin_Ajax_Controller::AUTH_STATUS_TRANSIENT );
 
 		wp_set_current_user( $this->admin_user_id );
 		$_POST = array(
@@ -1752,7 +1752,7 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 			new WP_Error( 'http_request_failed', 'Connection refused' )
 		);
 		$this->reset_auth_audit_log();
-		delete_site_transient( Admin_Ajax_Controller::AUTH_STATUS_TRANSIENT );
+		delete_transient( Admin_Ajax_Controller::AUTH_STATUS_TRANSIENT );
 
 		wp_set_current_user( $this->admin_user_id );
 		$_POST = array(
@@ -1791,7 +1791,7 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 			)
 		);
 		$this->reset_auth_audit_log();
-		delete_site_transient( Admin_Ajax_Controller::AUTH_STATUS_TRANSIENT );
+		delete_transient( Admin_Ajax_Controller::AUTH_STATUS_TRANSIENT );
 
 		wp_set_current_user( $this->admin_user_id );
 		$_POST = array(
@@ -1816,7 +1816,7 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 		// without a network call, and start cold.
 		delete_option( Options::OPTION_CONNECTED_SITE_URL );
 		$this->reset_auth_audit_log();
-		delete_site_transient( Admin_Ajax_Controller::AUTH_STATUS_TRANSIENT );
+		delete_transient( Admin_Ajax_Controller::AUTH_STATUS_TRANSIENT );
 
 		wp_set_current_user( $this->admin_user_id );
 		$_POST = array(
@@ -1849,7 +1849,7 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 		};
 		add_filter( 'pre_http_request', $probe_filter, 1, 3 );
 		$this->reset_auth_audit_log();
-		set_site_transient(
+		set_transient(
 			Admin_Ajax_Controller::AUTH_STATUS_TRANSIENT,
 			array(
 				'status' => VIP_Safe_Auth::STATUS_UNAUTHORIZED,
@@ -1988,7 +1988,7 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 		}
 
 		// ARRANGE: Seed the transient with a stale probe result.
-		set_site_transient(
+		set_transient(
 			Admin_Ajax_Controller::AUTH_STATUS_TRANSIENT,
 			array( 'status' => VIP_Safe_Auth::STATUS_AUTHORIZED ),
 			Admin_Ajax_Controller::AUTH_STATUS_TTL
@@ -1999,7 +1999,7 @@ class Admin_Ajax_Controller_Test extends WP_Ajax_UnitTestCase {
 
 		// ASSERT: Transient was deleted by the invalidation hook.
 		$this->assertFalse(
-			get_site_transient(
+			get_transient(
 				Admin_Ajax_Controller::AUTH_STATUS_TRANSIENT
 			)
 		);
