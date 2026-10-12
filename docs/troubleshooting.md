@@ -28,6 +28,7 @@ This guide helps you resolve common issues with Safe Publish. See the [Debugging
 4. **Check the URL and TLS certificate**:
    - Use HTTPS outside local development. Safe Publish accepts HTTP URLs, but HTTP does not encrypt traffic.
    - Verify SSL certificates are valid.
+   - Self-signed certificates are accepted only for loopback, `.test`, `.local`, and `.localhost` hosts, and only when the site making the request sets `WP_ENVIRONMENT_TYPE` to `local` or `development`. **Test Connection** and media file downloads still require a valid certificate.
    - Test site URL in browser.
 
 #### "Connection timeout" error
@@ -299,9 +300,9 @@ This is a known limitation of WordPress' embed cache when imported posts referen
 
 Links inside post body content are migrated by host swap only, preserving the path, so a link can break when the target's destination slug or permalink differs from the source. See [Internal body links may 404 or open the wrong page](concepts/import-process.md#internal-body-links-may-404-or-open-the-wrong-page) for the cause and what to review.
 
-#### Navigation links to draft targets 404 or open the wrong page
+#### Navigation links to draft targets or their children 404 or open the wrong page
 
-A navigation link or submenu whose target was a draft at import keeps the host-swapped source path instead of being re-derived, so it can break under a slug collision or a different permalink structure. See [Navigation links to draft targets may 404 or open the wrong page](concepts/import-process.md#navigation-links-to-draft-targets-may-404-or-open-the-wrong-page) for the fix.
+A navigation link or submenu whose target was a draft at import, or sat under a draft or trashed parent, keeps the host-swapped source path instead of being re-derived, so it can break under a slug collision or a different permalink structure. See [Navigation links to draft targets or their children may 404 or open the wrong page](concepts/import-process.md#navigation-links-to-draft-targets-or-their-children-may-404-or-open-the-wrong-page) for the fix.
 
 #### A navigation link to a term stays on the Needs attention tab
 

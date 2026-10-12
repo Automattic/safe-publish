@@ -57,6 +57,7 @@ class Telemetry_Events {
 	// rollback_performed -> outcome enum.
 	const ROLLBACK_OUTCOME_SUCCESS = 'success';
 	const ROLLBACK_OUTCOME_FAILED  = 'failed';
+	const ROLLBACK_OUTCOME_REFUSED = 'refused';
 
 	// import_item_failed -> error_code enum fallback when the raw audit
 	// code isn't in the allowlist below.
@@ -122,6 +123,7 @@ class Telemetry_Events {
 		'content_cleanup_failed',
 		'content_verification_failed',
 		'content_restore_failed',
+		'terms_restore_failed',
 		'meta_update_failed',
 		'terms_update_failed',
 		'concurrent_import_blocked',

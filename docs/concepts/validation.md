@@ -92,7 +92,7 @@ Content passes through WordPress' normal save-time filters, including kses when 
 
 ### 5. Media Validation
 
-Media is validated during the import process itself, not as a separate pre-import step. A failed inline-media or featured-image import aborts the post import. An inline-media failure cleans up attachments created earlier in the same attempt. A featured-image failure leaves any inline-media attachments created earlier in the attempt in place. In either case, an existing destination post is left unchanged.
+Media is validated during the import process itself, not as a separate pre-import step. A failed inline-media or featured-image import aborts the post import and cleans up the attachments created earlier in the same attempt; a featured-image failure also names any attachment the cleanup could not remove. In either case, an existing destination post is left unchanged.
 
 A link that looks like media but resolves to a page (for example, an HTML page at a `.pdf` URL) is kept as a link. That case is not treated as a failed media download.
 

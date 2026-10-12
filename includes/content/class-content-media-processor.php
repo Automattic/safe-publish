@@ -34,6 +34,11 @@ if ( ! defined( 'ABSPATH' ) ) {
 class Content_Media_Processor {
 
 	/**
+	 * Matches an attribute value whose quoting swallowed other markup.
+	 */
+	private const SWALLOWED_MARKUP = '/[<>]|(?:["\']|\s[a-z][a-z0-9:-]*=)$/i';
+
+	/**
 	 * Media Importer instance.
 	 *
 	 * @var Media_Importer
@@ -274,7 +279,11 @@ class Content_Media_Processor {
 		}
 
 		if ( false === $new_url ) {
-			$this->failed_media[ $url ] = $block_name;
+			$download_url                        = Media_Importer::get_download_url(
+				$url,
+				$source_site_url
+			);
+			$this->failed_media[ $download_url ] = $block_name;
 		}
 
 		return null;
@@ -401,7 +410,11 @@ class Content_Media_Processor {
 			}
 
 			if ( false === $new_url ) {
-				$this->failed_media[ $url ] = $block_name;
+				$download_url                        = Media_Importer::get_download_url(
+					$url,
+					$source_site_url
+				);
+				$this->failed_media[ $download_url ] = $block_name;
 				continue;
 			}
 
@@ -419,9 +432,9 @@ class Content_Media_Processor {
 	}
 
 	/**
-	 * Detects source-domain URLs in media and embed element attributes that the
-	 * processor could not match, typically due to malformed HTML (e.g. unclosed
-	 * quotes).
+	 * Detects URLs on the source's host and port in media and embed element
+	 * attributes that the processor could not match, typically due to
+	 * malformed HTML (e.g. unclosed quotes).
 	 *
 	 * Uses a loose regex anchored to media and embed tag names and attribute
 	 * names. This catches URLs the HTML API skipped (because the tag was
@@ -443,14 +456,52 @@ class Content_Media_Processor {
 			return;
 		}
 
+		// Match the source's port too, since its media URLs carry it.
+		$source_port = URL_Validator::non_default_port( $source_site_url );
+		$authority   = preg_quote( $source_host, '~' )
+			. ( null !== $source_port ? ':' . $source_port : '' );
+
 		// Strip comments and script/style blocks so URLs inside them don't
 		// trigger false positives. The HTML API natively skips these during
-		// processing, but this detection pass uses a plain regex.
-		$check_content = preg_replace(
-			'~<!--.*?-->|<(script|style)\b[^>]*>.*?</\1\s*>~si',
-			'',
+		// processing, but this detection pass uses a plain regex. An unclosed
+		// script or style tag matches to the end once and is kept, since the
+		// HTML API stops there. Possessive runs avoid a backtrack per byte.
+		$check_content = preg_replace_callback(
+			'~<!--.*?-->|<(script|style)\b[^>]*>'
+				. '[^<]*+(?:<(?!/\1\s*>)[^<]*+)*+(</\1\s*>)?~si',
+			static fn ( array $matches ): string =>
+				isset( $matches[1] ) && ! isset( $matches[2] )
+					? $matches[0]
+					: '',
 			$content
 		) ?? $content;
+
+		// Skip values already reported as failed downloads: The regex below
+		// would report a line-broken URL again under a truncated key.
+		$check_processor = new WP_HTML_Tag_Processor( $check_content );
+
+		while ( $check_processor->next_tag() ) {
+			foreach ( array( 'src', 'poster', 'data' ) as $attr ) {
+				$value = $check_processor->get_attribute( $attr );
+
+				// Keep values whose quoting swallowed other markup.
+				if ( ! is_string( $value )
+					|| 1 === preg_match( self::SWALLOWED_MARKUP, $value ) ) {
+					continue;
+				}
+
+				$download_url = Media_Importer::get_download_url(
+					$value,
+					$source_site_url
+				);
+
+				if ( array_key_exists( $download_url, $this->failed_media ) ) {
+					$check_processor->remove_attribute( $attr );
+				}
+			}
+		}
+
+		$check_content = $check_processor->get_updated_html();
 
 		// Loose regex: Anchored to a media/embed tag, then looks for
 		// src/poster/srcset/data within the same tag. Uses [^<>]*? (stops at
@@ -460,7 +511,7 @@ class Content_Media_Processor {
 		$pattern = '~<(?:img|video|audio|source|embed|object)\b'
 			. '[^<>]*?\s(?:src|poster|srcset|data)\s*=\s*'
 			. '["\']?\s*(https?://'
-			. preg_quote( $source_host, '~' )
+			. $authority
 			. '/[^\s"\'<>]*)~i';
 
 		if ( ! preg_match_all( $pattern, $check_content, $matches ) ) {
@@ -471,12 +522,13 @@ class Content_Media_Processor {
 
 		foreach ( $remaining as $raw_url ) {
 			// The regex reads raw markup, so decode entities the way the tag
-			// processor does; otherwise an already-recorded failure keyed by
-			// the decoded URL isn't matched here.
+			// processor does; otherwise the failed download URL won't match.
 			$url = WP_HTML_Decoder::decode_attribute( $raw_url );
 
+			$download_url = Media_Importer::get_download_url( $url, $source_site_url );
+
 			if ( ! array_key_exists( $url, $this->unprocessable_media )
-				&& ! array_key_exists( $url, $this->failed_media ) ) {
+				&& ! array_key_exists( $download_url, $this->failed_media ) ) {
 				$this->unprocessable_media[ $url ] = $block_name;
 			}
 		}
