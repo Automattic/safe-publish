@@ -393,12 +393,16 @@ class Media_Importer {
 		$this->ensure_media_functions_loaded();
 
 		// Temporarily allow WebP uploads when the destination does not list
-		// the type. This only widens the allowed list; core still checks the
-		// bytes against the extension, so it cannot admit other content.
+		// the type. Add it last so a site filter cannot drop it again; core's
+		// content check still applies.
 		$webp_filter_added = false;
 		if ( ! $this->is_webp_supported() ) {
 			// phpcs:ignore WordPressVIPMinimum.Hooks.RestrictedHooks.upload_mimes
-			add_filter( 'upload_mimes', array( $this, 'add_webp_mime_type' ) );
+			add_filter(
+				'upload_mimes',
+				array( $this, 'add_webp_mime_type' ),
+				PHP_INT_MAX
+			);
 			$webp_filter_added = true;
 		}
 
@@ -412,7 +416,11 @@ class Media_Importer {
 			);
 		} finally {
 			if ( $webp_filter_added ) {
-				remove_filter( 'upload_mimes', array( $this, 'add_webp_mime_type' ) );
+				remove_filter(
+					'upload_mimes',
+					array( $this, 'add_webp_mime_type' ),
+					PHP_INT_MAX
+				);
 			}
 		}
 	}
