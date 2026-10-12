@@ -427,7 +427,7 @@ class Media_Importer {
 
 	/**
 	 * Downloads a media URL and creates the attachment, assuming the WebP
-	 * upload filters are already registered.
+	 * upload filter is registered when needed.
 	 *
 	 * @param string $media_url         Query-stripped source media URL.
 	 * @param string $source_site_url   Source site URL, recorded as import origin.
