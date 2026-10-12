@@ -326,6 +326,9 @@ final class HTTP_Client {
 	/**
 	 * Determines whether to verify SSL certificates based on environment and URL.
 	 *
+	 * Relaxes verification only in local and development environments, and only
+	 * for local hosts.
+	 *
 	 * @param string $url URL being requested.
 	 * @return bool Whether to verify SSL certificates.
 	 */
@@ -335,32 +338,45 @@ final class HTTP_Client {
 			return true;
 		}
 
-		// Parse URL to check for development indicators.
-		$parsed_url = wp_parse_url( $url );
-		$host       = $parsed_url['host'] ?? '';
+		$environment = wp_get_environment_type();
+		if ( 'local' !== $environment && 'development' !== $environment ) {
+			return true;
+		}
 
-		// Development domains where SSL verification can be disabled.
-		$dev_domains = array(
-			'.test',
-			'.local',
-			'.dev',
-			'localhost',
-			'127.0.0.1',
-			'::1',
+		$host = strtolower( (string) wp_parse_url( $url, PHP_URL_HOST ) );
+		if ( ! self::is_local_only_host( $host ) ) {
+			return true;
+		}
+
+		// Allow filtering for specific development needs.
+		return (bool) apply_filters(
+			'safe_publish_dev_ssl_verify',
+			false,
+			$url
 		);
+	}
 
-		// Check if this is a development domain.
-		foreach ( $dev_domains as $dev_domain ) {
-			if ( $host === $dev_domain ||
-				( function_exists( 'str_ends_with' ) && str_ends_with( $host, $dev_domain ) ) ||
-				( ! function_exists( 'str_ends_with' ) && substr( $host, -strlen( $dev_domain ) ) === $dev_domain ) ) {
-				// Allow filtering for specific development needs.
-				return apply_filters( 'safe_publish_dev_ssl_verify', false, $url );
+	/**
+	 * Checks whether a host is loopback or uses a reserved, non-public TLD.
+	 *
+	 * @param string $host Lowercased host from the request URL.
+	 * @return bool True when the host is loopback or uses a reserved TLD.
+	 */
+	private static function is_local_only_host( string $host ): bool {
+		// wp_parse_url keeps the brackets around an IPv6 literal.
+		$loopback = array( 'localhost', '127.0.0.1', '[::1]' );
+		if ( in_array( $host, $loopback, true ) ) {
+			return true;
+		}
+
+		// Special-use TLDs (RFC 6761, RFC 6762).
+		foreach ( array( '.test', '.local', '.localhost' ) as $reserved_tld ) {
+			if ( str_ends_with( $host, $reserved_tld ) ) {
+				return true;
 			}
 		}
 
-		// For production domains, always verify SSL.
-		return true;
+		return false;
 	}
 
 	/**

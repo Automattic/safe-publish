@@ -396,6 +396,16 @@ html:has(body.toplevel_page_safe-publish) {
 	}
 }
 
+// Needs attention inbox: The row's message. DataViews caps a cell at 80ch and
+// sets nowrap but leaves its overflow visible, so a longer message paints over
+// the columns that follow. A block box keeps the truncation independent of the
+// cell wrapper's display.
+.safe-publish-inbox-detail {
+	display: block;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
 // Needs attention inbox: The per-degradation resolvable-now hint badge.
 .safe-publish-inbox-resolvable {
 	display: inline-block;
@@ -522,6 +532,32 @@ html:has(body.toplevel_page_safe-publish) {
 		background: var(--safe-publish-diff-removed-bg);
 		text-decoration: line-through;
 		border-radius: 2px;
+	}
+
+	// Cells do not inherit their row's strike-through, so they repeat it.
+	.safe-publish-inline-removed td,
+	.safe-publish-inline-removed th {
+		text-decoration: line-through;
+	}
+
+	// Outlines changes with no text position: an attribute edit on its element,
+	// and a block whose change cannot be marked.
+	.safe-publish-inline-attr-changed,
+	.safe-publish-block-diff__col--unmarked {
+		outline: 1px dashed var(--safe-publish-primary);
+	}
+
+	// Text equivalent of the outline above, announced but not shown.
+	.safe-publish-sr-only {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		margin: -1px;
+		padding: 0;
+		border: 0;
+		overflow: hidden;
+		clip-path: inset(50%);
+		white-space: nowrap;
 	}
 
 	.safe-publish-block-diff__col img,
@@ -692,6 +728,15 @@ html:has(body.toplevel_page_safe-publish) {
 }
 /* stylelint-enable no-descending-specificity */
 
+// DataViews truncates a primary cell only when its content is a link, so a
+// plain title overflows its cell. A block box keeps the truncation independent
+// of the cell wrapper's display.
+.safe-publish-dataviews-wrapper .dataviews-title-field > span {
+	display: block;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
 // Accents DataViews' faint selected-row tint. A background would break hover.
 .safe-publish-dataviews-wrapper .dataviews-view-table tr.is-selected {
 	border-left: 3px solid var(--wp-admin-theme-color);
@@ -787,7 +832,7 @@ html:has(body.toplevel_page_safe-publish) {
 	white-space: pre;
 }
 
-.safe-publish-term-notes {
+.safe-publish-diff-notes {
 	margin: 8px 0 0;
 	padding-left: 20px;
 	font-size: 12px;

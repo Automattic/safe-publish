@@ -165,6 +165,13 @@ class Source_Identity_Lookup_Test extends Source_Posts_API_Test_Base {
 				'body'     => (string) wp_json_encode(
 					array(
 						array(
+							'slug'       => 'post',
+							'name'       => 'Posts',
+							'label'      => 'Posts',
+							'rest_base'  => 'posts',
+							'raw_fields' => array( 'title', 'content' ),
+						),
+						array(
 							'slug'       => 'wp_block',
 							'name'       => 'Patterns',
 							'label'      => 'Patterns',
@@ -283,6 +290,44 @@ class Source_Identity_Lookup_Test extends Source_Posts_API_Test_Base {
 	}
 
 	/**
+	 * Verifies that a source type change updates its original claim after the
+	 * destination type's registration is removed.
+	 */
+	public function test_retyped_source_updates_deregistered_type_claim(): void {
+		// ARRANGE: Import a custom type, then deactivate its registration.
+		$source_id = 7204;
+		$post_data = array(
+			'id'        => $source_id,
+			'title'     => 'Original type',
+			'content'   => '<p>Original.</p>',
+			'link'      => self::SOURCE_URL . '/retyped',
+			'post_type' => self::HIDDEN_TYPE,
+		);
+		$first     = $this->import_service->import_post( $post_data );
+		$this->assertTrue( $first['success'] );
+		$original_id = $first['post_id'];
+		unregister_post_type( self::HIDDEN_TYPE );
+
+		// ASSERT: The old source type still fails the destination type gate.
+		$same_type = $this->import_service->import_post( $post_data );
+		$this->assertFalse( $same_type['success'] );
+		$this->assertSame( array( $original_id ), $this->claiming_post_ids( $source_id ) );
+
+		// ACT: The source now reports the same identity as a regular post.
+		$post_data['post_type']               = 'post';
+		$this->mock_post_overrides['type']    = 'post';
+		$this->mock_post_overrides['content'] = '<p>Retyped.</p>';
+		$retyped                              = $this->import_service->import_post( $post_data );
+
+		// ASSERT: It updates the original claim and changes its destination type.
+		$this->assertTrue( $retyped['success'], $retyped['error'] ?? '' );
+		$this->assertTrue( $retyped['existing'] );
+		$this->assertSame( $original_id, $retyped['post_id'] );
+		$this->assertSame( 'post', get_post_type( $original_id ) );
+		$this->assertSame( array( $original_id ), $this->claiming_post_ids( $source_id ) );
+	}
+
+	/**
 	 * Verifies that the batched lookup resolves each post type excluded from
 	 * site search to the destination post that claims its source ID.
 	 */
@@ -309,6 +354,36 @@ class Source_Identity_Lookup_Test extends Source_Posts_API_Test_Base {
 			$this->assertArrayHasKey( $source_id, $found );
 			$this->assertSame( $post_id, $found[ $source_id ]->ID );
 		}
+	}
+
+	/**
+	 * Verifies that batched imports and block references resolve a claim after
+	 * its destination post type is deregistered.
+	 */
+	public function test_batched_lookups_resolve_deregistered_type(): void {
+		// ARRANGE: A destination claim remains after its type is deregistered.
+		$source_id = 7303;
+		$post_id   = $this->create_claiming_post(
+			$source_id,
+			self::HIDDEN_TYPE
+		);
+		unregister_post_type( self::HIDDEN_TYPE );
+
+		// ACT: Resolve it through the batched import and reference lookups.
+		$found    = $this->import_service->fetch_imported_posts_by_source_ids(
+			array( $source_id ),
+			self::SOURCE_URL
+		);
+		$remapped = $this->content_processor->map_target_refs(
+			array( $source_id => true ),
+			array(),
+			self::SOURCE_URL
+		);
+
+		// ASSERT: Both callers still map the identity to the original post.
+		$this->assertArrayHasKey( $source_id, $found );
+		$this->assertSame( $post_id, $found[ $source_id ]->ID );
+		$this->assertSame( $post_id, $remapped['post'][ $source_id ] );
 	}
 
 	/**
@@ -512,6 +587,53 @@ class Source_Identity_Lookup_Test extends Source_Posts_API_Test_Base {
 		$this->assertSame(
 			array( $winner_id ),
 			$this->claiming_post_ids( 7800 )
+		);
+	}
+
+	/**
+	 * Verifies that the duplicate guard sees a claim under a deregistered type.
+	 */
+	public function test_duplicate_guard_sees_deregistered_type_sibling(): void {
+		// ARRANGE: An older post claims the identity before its type is removed.
+		$source_id = 7801;
+		$winner_id = $this->create_claiming_post(
+			$source_id,
+			self::HIDDEN_TYPE
+		);
+		unregister_post_type( self::HIDDEN_TYPE );
+
+		// ACT: Try to persist a regular post with the same source identity.
+		$result = $this->import_service->persist_new_post(
+			array(
+				'post_title'   => 'Duplicate retyped post',
+				'post_content' => '',
+				'post_status'  => 'publish',
+				'post_type'    => 'post',
+				'meta_input'   => array(
+					Options::META_SOURCE_POST_ID  => $source_id,
+					Options::META_SOURCE_SITE_URL => self::SOURCE_URL,
+					Options::META_SOURCE_LINK     => self::SOURCE_URL . '/retyped',
+					Options::META_IMPORTED_FROM   =>
+						Options::META_IMPORTED_FROM_VALUE,
+				),
+			),
+			0,
+			array(),
+			array(),
+			array(),
+			0
+		);
+
+		// ASSERT: The older claim wins and the new post is discarded.
+		$this->assertWPError( $result );
+		$this->assertSame( 'duplicate_import', $result->get_error_code() );
+		$this->assertSame(
+			$winner_id,
+			(int) $result->get_error_data()['winning_post_id']
+		);
+		$this->assertSame(
+			array( $winner_id ),
+			$this->claiming_post_ids( $source_id )
 		);
 	}
 

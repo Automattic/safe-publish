@@ -22,6 +22,11 @@ namespace Safe_Publish\Utils;
 abstract class Logger {
 
 	/**
+	 * Maximum stored length, in bytes, of a caller-controlled forensic string.
+	 */
+	private const FORENSIC_STRING_LIMIT = 512;
+
+	/**
 	 * The logging channel identifier (e.g. 'auth', 'media').
 	 *
 	 * Drives the database option key, server log prefix, and hook channel
@@ -206,6 +211,10 @@ abstract class Logger {
 		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
 		$request_uri = $_SERVER['REQUEST_URI'] ?? 'unknown';
 
+		// The caller-set fields among the reserved keys; both are unbounded.
+		$user_agent  = self::cap_forensic_string( (string) $user_agent );
+		$request_uri = self::cap_forensic_string( (string) $request_uri );
+
 		$actor_user_id      = function_exists( 'get_current_user_id' )
 			? get_current_user_id()
 			: 0;
@@ -231,6 +240,36 @@ abstract class Logger {
 		);
 
 		return $base + $data;
+	}
+
+	/**
+	 * Caps a string to a stored length in bytes, cutting on a UTF-8 boundary
+	 * so a valid value is never stored split mid-character.
+	 *
+	 * @param string $value Value to cap.
+	 * @param int    $limit Optional. Maximum bytes to keep. Default 512.
+	 * @return string Value within the stored length limit.
+	 */
+	protected static function cap_forensic_string(
+		string $value,
+		int $limit = self::FORENSIC_STRING_LIMIT
+	): string {
+		if ( strlen( $value ) <= $limit ) {
+			return $value;
+		}
+
+		$capped = substr( $value, 0, $limit );
+
+		// At most the three continuation bytes of a four-byte character.
+		for ( $i = 0; $i < 3; $i++ ) {
+			if ( 1 === preg_match( '//u', $capped ) ) {
+				break;
+			}
+
+			$capped = substr( $capped, 0, -1 );
+		}
+
+		return $capped;
 	}
 
 	/**

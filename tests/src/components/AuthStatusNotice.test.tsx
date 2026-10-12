@@ -43,6 +43,21 @@ describe( 'AuthStatusNotice', () => {
 		expect( container.firstChild ).toBeNull();
 	} );
 
+	it( 'distinguishes a failed probe from an unreachable source', () => {
+		// ARRANGE + ACT: Render the banner for a probe that never completed.
+		const { container } = render(
+			<AuthStatusNotice status="probe_failed" />
+		);
+
+		// ASSERT: The copy blames the check, not the source site, and stays at
+		// warning level.
+		expect( container.textContent ).toContain(
+			'Could not check the connection status'
+		);
+		expect( container.textContent ).not.toContain( 'could not be reached' );
+		expect( container.querySelector( '.is-warning' ) ).not.toBeNull();
+	} );
+
 	it( 'renders nothing for an unrecognized status', () => {
 		// ARRANGE + ACT: Render with a status outside the known set.
 		const { container } = render(

@@ -423,7 +423,7 @@ export default function PostDiffModal( {
 		blockDiffs.some( ( block ) => block.status !== 'unchanged' ) ||
 		hasAnyNonContentDiff( nonContentDiffs );
 	const hasImages =
-		Boolean( nonContentDiffs?.featuredMedia ) ||
+		/<img\s/i.test( nonContentDiffs?.featuredMedia || '' ) ||
 		blockDiffs.some(
 			( block ) =>
 				/<img\s/i.test( block.current?.rendered || '' ) ||
@@ -453,11 +453,9 @@ export default function PostDiffModal( {
 				showLabels={ showLabels }
 				hasImages={ hasImages }
 				showViewOptions={ showDiffBody }
-				// Outlives the diff the post-update refetch clears; unmounting
-				// the activated action would drop focus to the body.
-				showUpdateButton={
-					! error && ! isUpToDate && ( hasAnyChanges || updateSucceeded )
-				}
+				// Offered whenever the row is stale, including when nothing
+				// differs, so an update can still refresh the import date.
+				showUpdateButton={ ! error && ! isUpToDate }
 				isUpdating={ isUpdating }
 				isLoading={ isLoading }
 				updateSucceeded={ updateSucceeded }
