@@ -98,7 +98,7 @@ An inline `<img>` carries two attachment-ID references alongside its URL — the
 
 ### URL Replacement
 
-After media processing, all remaining source-domain URLs in the content are replaced with the destination site URL. This catches URLs outside media elements, such as normal links, block comment attributes, and text references.
+After media processing, all remaining URLs on the source site's host and port are replaced with the destination site URL. This catches URLs outside media elements, such as normal links, block comment attributes, and text references.
 
 The **Compare** action runs this whole transform over the incoming content before diffing it, resolving media against what earlier imports already sideloaded rather than downloading anything, so the comparison reports what a re-import would change instead of the rewrite it already applied. Media the destination has never imported cannot be resolved this way, so it keeps its source URL: it still reads as a difference, and the comparison shows the source file. A file link, which the import may keep as a link (step 6), is left to the URL replacement instead.
 
