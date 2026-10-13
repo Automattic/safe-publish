@@ -745,23 +745,23 @@ function makeIssue( overrides: Partial< AttentionIssue > ): AttentionIssue {
 }
 
 describe( 'renderIssueMessage', () => {
-	it( 'explains all remedies for a deferred navigation URL', () => {
-		// ARRANGE: A mapped link whose target is not yet ready.
+	it( 'keeps deferred URL guidance within the inbox detail band', () => {
+		// ARRANGE: A deferred URL with a five-digit source ID.
 		const issue = makeIssue( {
 			issue_type: 'deferred_navigation_url',
-			target_ref: 703,
+			target_ref: 59001,
 		} );
 
 		// ACT: Render its issue guidance.
 		const message = renderIssueMessage( issue );
 
-		// ASSERT: The source ID and each target remedy are clear.
-		expect( message ).toContain( 'source post 703' );
-		expect( message ).toContain( 'Import' );
-		expect( message ).toContain( 'publish it and its ancestors' );
-		expect( message ).toContain( 'register' );
-		expect( message ).toContain( 'path' );
+		// ASSERT: The message stays within the 82-character inbox band.
+		expect( message ).toBe(
+			'Source post 59001 awaits a final URL. Publish it or register its type, then Retry.'
+		);
+		expect( message.length ).toBeLessThanOrEqual( 82 );
 	} );
+
 	it( 'renders retry-oriented copy for an unmapped post reference', () => {
 		// ARRANGE: An unmapped post-reference issue.
 		const issue = makeIssue( {

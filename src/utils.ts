@@ -516,7 +516,7 @@ export function renderIssueMessage( issue: AttentionIssue ): string {
 			return sprintf(
 				/* translators: %d: source target post ID */
 				__(
-					'Link to source post %d awaits its final URL. Import or restore the target, publish it and its ancestors, register its post type, or finalize its path, then Retry.',
+					'Source post %d awaits a final URL. Publish it or register its type, then Retry.',
 					'safe-publish'
 				),
 				issue.target_ref
