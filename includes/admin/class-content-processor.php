@@ -44,19 +44,20 @@ class Content_Processor {
 	public const META_REF_REPOINTED_AT = '_safe_publish_block_ref_repointed_at';
 
 	/**
-	 * Detail returned when a mapped navigation URL still needs a final path.
-	 *
-	 * @var string
-	 */
-	public const DEFERRED_URL_DETAIL = 'Navigation URL awaits a final target path or registered post type.';
-
-	/**
 	 * Post meta recording the unix timestamp at which a stale gallery/playlist
 	 * post reference was repointed in place by a retry.
 	 *
 	 * @var string
 	 */
 	public const META_GALLERY_REF_REPOINTED_AT = '_safe_publish_gallery_ref_repointed_at';
+
+	/**
+	 * Reconcile outcome detail for a deferred navigation URL.
+	 *
+	 * @var string
+	 */
+	public const DEFERRED_URL_DETAIL =
+		'Navigation URL awaits a final target path or registered post type.';
 
 	/**
 	 * Block-name => list of post-ID attrs, optionally gated on sibling attrs
@@ -2945,7 +2946,7 @@ class Content_Processor {
 	 * When a rule names a url_attr, the link url is re-derived from the
 	 * resolved destination id, and a post link's declared type is realigned
 	 * with the post it lands on. Logs a warning for each matched attr whose
-	 * source ID was not resolvable so the admin can surface and fix it.
+	 * source ID was not resolvable or whose link url is deferred.
 	 *
 	 * @param array<string, mixed>                                                                        $attrs    Block attrs.
 	 * @param string                                                                                      $name     Block name.

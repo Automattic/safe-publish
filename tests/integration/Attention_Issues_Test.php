@@ -821,22 +821,27 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 			)
 		);
 
-		// ACT: Import a page with a navigation link to that target.
-		$result  = $this->import_under(
+		// ACT: Import a page linking to that target, then retry its URL.
+		$result    = $this->import_under(
 			self::BLOG_URL,
 			7201,
 			array( 'content' => $this->post_link_content( 9701 ) )
 		);
-		$post_id = (int) $result['post_id'];
-
-		// ASSERT: The ID is mapped, the URL is deferred, and Retry stays open.
-		$this->assertSame( array( $target ), $this->nav_link_ids( $post_id ) );
+		$post_id   = (int) $result['post_id'];
 		$issue_row = $this->attention->get_issue(
 			$post_id,
 			'deferred_navigation_url',
 			9701,
 			'post'
 		);
+		$waiting   = $this->import_service->retry_deferred_navigation_url(
+			$post_id,
+			9701,
+			self::BLOG_URL
+		);
+
+		// ASSERT: The ID is mapped, the URL is deferred, and Retry stays open.
+		$this->assertSame( array( $target ), $this->nav_link_ids( $post_id ) );
 		$this->assertIsArray( $issue_row );
 		$this->assertSame(
 			array( false ),
@@ -845,14 +850,7 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 				self::BLOG_URL
 			)
 		);
-		$this->assertSame(
-			Reconcile_Outcome::DEFERRED_URL,
-			$this->import_service->retry_deferred_navigation_url(
-				$post_id,
-				9701,
-				self::BLOG_URL
-			)->type
-		);
+		$this->assertSame( Reconcile_Outcome::DEFERRED_URL, $waiting->type );
 
 		// ACT: Publishing finalizes the collision, then Retry repairs the URL.
 		wp_update_post(
@@ -861,22 +859,20 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 				'post_status' => 'publish',
 			)
 		);
-		$this->assertSame(
-			array( true ),
-			$this->import_service->degradation_resolvability(
-				array( $issue_row ),
-				self::BLOG_URL
-			)
+		$resolvable = $this->import_service->degradation_resolvability(
+			array( $issue_row ),
+			self::BLOG_URL
 		);
-		$modified  = get_post_field( 'post_modified', $post_id );
-		$revisions = count( wp_get_post_revisions( $post_id ) );
-		$outcome   = $this->import_service->retry_deferred_navigation_url(
+		$modified   = get_post_field( 'post_modified', $post_id );
+		$revisions  = count( wp_get_post_revisions( $post_id ) );
+		$outcome    = $this->import_service->retry_deferred_navigation_url(
 			$post_id,
 			9701,
 			self::BLOG_URL
 		);
 
-		// ASSERT: The issue clears and the link points to the mapped target.
+		// ASSERT: The row turns resolvable, and Retry repairs it in place.
+		$this->assertSame( array( true ), $resolvable );
 		$this->assertSame( Reconcile_Outcome::RESOLVED, $outcome->type );
 		$this->assertSame( array( $target ), $this->nav_link_ids( $post_id ) );
 		$this->assertSame( $modified, get_post_field( 'post_modified', $post_id ) );
@@ -911,7 +907,7 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 			)
 		);
 
-		// ACT: Import a link, then publish its target without its post type.
+		// ACT: Import a link, publish its target, drop its type, and retry.
 		$result  = $this->import_under(
 			self::BLOG_URL,
 			7205,
@@ -925,6 +921,11 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 			)
 		);
 		unregister_post_type( 'sp_missing' );
+		$waiting = $this->import_service->retry_deferred_navigation_url(
+			$post_id,
+			9705,
+			self::BLOG_URL
+		);
 
 		// ASSERT: The mapped ID is retained and the URL still awaits the type.
 		$this->assertSame( array( $target ), $this->nav_link_ids( $post_id ) );
@@ -936,14 +937,7 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 				'post'
 			)
 		);
-		$this->assertSame(
-			Reconcile_Outcome::DEFERRED_URL,
-			$this->import_service->retry_deferred_navigation_url(
-				$post_id,
-				9705,
-				self::BLOG_URL
-			)->type
-		);
+		$this->assertSame( Reconcile_Outcome::DEFERRED_URL, $waiting->type );
 
 		// ACT: Restore the type and retry the URL repair.
 		register_post_type( 'sp_missing', array( 'public' => true ) );
@@ -1124,7 +1118,9 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 		);
 
 		// ASSERT: The submenu keeps its mapped ID and gains the final URL.
-		$blocks  = parse_blocks( (string) get_post_field( 'post_content', $post_id ) );
+		$blocks  = parse_blocks(
+			(string) get_post_field( 'post_content', $post_id )
+		);
 		$submenu = $blocks[0]['innerBlocks'][0];
 		$this->assertSame( Reconcile_Outcome::RESOLVED, $outcome->type );
 		$this->assertSame( 'core/navigation-submenu', $submenu['blockName'] );

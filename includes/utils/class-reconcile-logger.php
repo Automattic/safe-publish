@@ -21,7 +21,8 @@ namespace Safe_Publish\Utils;
  * identity.
  *
  * Outcomes are type-agnostic: issue_type names the reference class reconciled,
- * so a new reference class reuses these helpers without adding events.
+ * so a new reference class reuses these helpers without adding events. A
+ * deferred-URL handoff is the one exception.
  */
 class Reconcile_Logger extends Logger {
 
@@ -48,34 +49,24 @@ class Reconcile_Logger extends Logger {
 		int $target_ref,
 		string $target_kind
 	): void {
+		if (
+			Reconcile_Outcome::DEFERRED_URL === $outcome->type
+			&& 'unmapped_block_reference' === $issue_type
+		) {
+			$this->resolved(
+				$issue_type,
+				$affected_post_id,
+				$target_ref,
+				$target_kind,
+				array(
+					'deferred_issue_type' => 'deferred_navigation_url',
+					'reason'              => $outcome->detail,
+				)
+			);
+			return;
+		}
+
 		switch ( $outcome->type ) {
-			case Reconcile_Outcome::DEFERRED_URL:
-				if ( 'unmapped_block_reference' === $issue_type ) {
-					$this->log_event(
-						Log_Events::RECONCILE_RESOLVED,
-						array_merge(
-							$this->payload(
-								$issue_type,
-								$affected_post_id,
-								$target_ref,
-								$target_kind
-							),
-							array(
-								'deferred_issue_type' => 'deferred_navigation_url',
-								'reason'              => $outcome->detail,
-							)
-						)
-					);
-					return;
-				}
-				$this->unresolved(
-					$issue_type,
-					$affected_post_id,
-					$target_ref,
-					$target_kind,
-					$outcome->detail
-				);
-				return;
 			case Reconcile_Outcome::RESOLVED:
 				$this->resolved(
 					$issue_type,
@@ -116,24 +107,29 @@ class Reconcile_Logger extends Logger {
 	/**
 	 * Logs a reference reconciled to its destination target.
 	 *
-	 * @param string $issue_type       Tracked issue type that was reconciled.
-	 * @param int    $affected_post_id Post holding the reference.
-	 * @param int    $target_ref       Source id the reference now resolves to.
-	 * @param string $target_kind      'post' or 'term'.
+	 * @param string                $issue_type       Tracked issue type that was reconciled.
+	 * @param int                   $affected_post_id Post holding the reference.
+	 * @param int                   $target_ref       Source id the reference now resolves to.
+	 * @param string                $target_kind      'post' or 'term'.
+	 * @param array<string, string> $extra            Additional event data.
 	 */
 	public function resolved(
 		string $issue_type,
 		int $affected_post_id,
 		int $target_ref,
-		string $target_kind
+		string $target_kind,
+		array $extra = array()
 	): void {
 		$this->log_event(
 			Log_Events::RECONCILE_RESOLVED,
-			$this->payload(
-				$issue_type,
-				$affected_post_id,
-				$target_ref,
-				$target_kind
+			array_merge(
+				$this->payload(
+					$issue_type,
+					$affected_post_id,
+					$target_ref,
+					$target_kind
+				),
+				$extra
 			)
 		);
 	}

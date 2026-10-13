@@ -588,8 +588,8 @@ const dispatchSingleRetry = (
 
 /**
  * Sums a bulk retry's per-outcome counts into one notice: An error if any write
- * failed, a warning if any are unresolved, target-absent, or skipped, else
- * success.
+ * failed, a warning if any are unresolved, target-absent, deferred, or skipped,
+ * else success.
  *
  * @param {BulkRetryAttentionResponse} counts                Per-outcome counts.
  * @param {number}                     [skippedNonRetryable] Rows dropped as non-retryable.
@@ -624,7 +624,9 @@ const bulkRetryNotice = (
 	if ( counts.write_failed > 0 ) {
 		return { status: 'error', message };
 	}
-	if ( counts.target_absent + counts.deferred_url + counts.unresolved + skipped > 0 ) {
+	const stillOpen =
+		counts.target_absent + counts.deferred_url + counts.unresolved;
+	if ( stillOpen + skipped > 0 ) {
 		return { status: 'warning', message };
 	}
 	return { status: 'success', message };

@@ -1060,7 +1060,10 @@ class Content_Processor_Block_ID_Remap_Test extends Integration_Test_Case {
 		);
 
 		// ASSERT: Preserve the mapped ID and defer URL repair.
-		$this->assertSame( $target, $this->first_nav_link_attrs( (string) $result )['id'] );
+		$this->assertSame(
+			$target,
+			$this->first_nav_link_attrs( (string) $result )['id']
+		);
 		$this->assertSame(
 			'http://example.org/target',
 			$this->first_nav_link_url( (string) $result )

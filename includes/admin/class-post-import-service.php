@@ -1342,8 +1342,8 @@ class Post_Import_Service {
 	/**
 	 * Reports whether Retry would resolve each open degradation now. Deferred
 	 * URLs also need a final target path and registered type. A true value is a
-	 * hint, not a guarantee:
-	 * Retry can still fail to write or leave a mismatched term open.
+	 * hint, not a guarantee: Retry can still fail to write or leave a
+	 * mismatched term open.
 	 *
 	 * @param array[] $issue_rows      Open degradation rows, each carrying
 	 *                                 issue_type, target_ref, and target_kind.

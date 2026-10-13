@@ -149,8 +149,8 @@ export type AttentionIssueType =
  * `resolvable` is the batched hint that Retry can resolve the row now; a
  * deferred URL also needs a final path and registered post type.
  * `target_terms` names the terms the issue left unattached or unreconciled,
- * empty for types that name none; `target_reason`
- * carries why, for types that distinguish several.
+ * empty for types that name none; `target_reason` carries why, for types that
+ * distinguish several.
  */
 export interface AttentionIssue {
 	affected_post_id: number;
