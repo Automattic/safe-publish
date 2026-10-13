@@ -1771,7 +1771,8 @@ class Content_Processor {
 	}
 
 	/**
-	 * Replaces a media URL without matching inside a longer URL.
+	 * Replaces a media URL, but not as the tail of a longer URL or the start of
+	 * a longer path. A query or fragment that follows the URL is kept.
 	 *
 	 * @param string $content Content containing the URL.
 	 * @param string $old_url Source media URL.
@@ -1785,7 +1786,7 @@ class Content_Processor {
 	): string {
 		$pattern = '/(?<![a-zA-Z0-9_\.\/:\-])'
 			. preg_quote( $old_url, '/' )
-			. '(?![a-zA-Z0-9_\.\/:?#%&=+\-])/';
+			. '(?![a-zA-Z0-9_\.\/%=+\-])/';
 		$updated = preg_replace_callback(
 			$pattern,
 			static fn (): string => $new_url,
