@@ -304,7 +304,7 @@ class Content_Processor_Whitespace_Url_Test extends Integration_Test_Case {
 
 		// ASSERT: The message names the URL an operator can act on.
 		$this->assertSame(
-			'Import failed: 1 media file(s) could not be downloaded: ' . $missing,
+			'Import failed: 1 media file(s) could not be imported: ' . $missing,
 			$this->processor->get_failed_media_error_message()
 		);
 	}
@@ -334,7 +334,7 @@ class Content_Processor_Whitespace_Url_Test extends Integration_Test_Case {
 			array_keys( $this->processor->get_failed_media() )
 		);
 		$this->assertSame(
-			'Import failed: 1 media file(s) could not be downloaded: ' . $missing,
+			'Import failed: 1 media file(s) could not be imported: ' . $missing,
 			$this->processor->get_failed_media_error_message()
 		);
 		$this->assertSame( array(), $this->processor->get_unprocessable_media() );
