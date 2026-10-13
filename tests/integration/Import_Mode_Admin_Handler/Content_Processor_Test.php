@@ -2662,7 +2662,7 @@ class Content_Processor_Test extends Integration_Test_Case {
 		);
 		$this->assertContains( $url, $this->requested_urls );
 		$this->assertSame(
-			'Import failed: 1 media file(s) could not be downloaded: '
+			'Import failed: 1 media file(s) could not be imported: '
 				. $url . ' (core/image)',
 			$this->processor->get_failed_media_error_message()
 		);
@@ -2685,7 +2685,7 @@ class Content_Processor_Test extends Integration_Test_Case {
 		$this->assertContains( $url, $this->requested_urls );
 		$this->assertSame( array( $url => '' ), $this->processor->get_failed_media() );
 		$this->assertSame(
-			'Import failed: 1 media file(s) could not be downloaded: ' . $url,
+			'Import failed: 1 media file(s) could not be imported: ' . $url,
 			$this->processor->get_failed_media_error_message()
 		);
 	}
@@ -2706,7 +2706,7 @@ class Content_Processor_Test extends Integration_Test_Case {
 		$this->assertContains( $url, $this->requested_urls );
 		$this->assertSame( array( $url => '' ), $this->processor->get_failed_media() );
 		$this->assertSame(
-			'Import failed: 1 media file(s) could not be downloaded: ' . $url,
+			'Import failed: 1 media file(s) could not be imported: ' . $url,
 			$this->processor->get_failed_media_error_message()
 		);
 	}
@@ -2881,7 +2881,7 @@ class Content_Processor_Test extends Integration_Test_Case {
 		);
 		$this->assertSame( array(), $this->processor->get_unprocessable_media() );
 		$this->assertSame(
-			'Import failed: 1 media file(s) could not be downloaded: '
+			'Import failed: 1 media file(s) could not be imported: '
 				. $url . ( '' === $block_name ? '' : ' (' . $block_name . ')' ),
 			$this->processor->get_failed_media_error_message()
 		);
@@ -3044,7 +3044,7 @@ class Content_Processor_Test extends Integration_Test_Case {
 
 		// ASSERT: Each URL is followed by its originating block, comma-joined.
 		$this->assertSame(
-			'Import failed: 2 media file(s) could not be downloaded: '
+			'Import failed: 2 media file(s) could not be imported: '
 				. $image_url . ' (core/image), '
 				. $gallery_url . ' (core/gallery)',
 			$this->processor->get_failed_media_error_message()
