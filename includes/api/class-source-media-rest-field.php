@@ -591,7 +591,11 @@ class Source_Media_REST_Field {
 		string $content,
 		string $pattern
 	): array {
-		if ( false === strpos( $content, '<!-- wp:' ) ) {
+		// The raw scan already covers unescaped attrs.
+		if (
+			false === strpos( $content, '<!-- wp:' )
+			|| false === strpos( $content, '\\' )
+		) {
 			return array();
 		}
 
@@ -657,7 +661,7 @@ class Source_Media_REST_Field {
 				continue;
 			}
 
-			$url = $this->normalized_block_url( $value, $pattern );
+			$url = $this->normalized_url( $value, $pattern );
 
 			if ( null !== $url ) {
 				$urls[] = $url;
@@ -668,13 +672,13 @@ class Source_Media_REST_Field {
 	}
 
 	/**
-	 * Normalizes a block attribute URL accepted by the source media pattern.
+	 * Normalizes a URL value accepted by the source media pattern.
 	 *
-	 * @param mixed  $value   Block attribute value.
+	 * @param mixed  $value   Attribute value.
 	 * @param string $pattern Accepted source media URL pattern.
 	 * @return string|null Normalized URL, or null when not eligible.
 	 */
-	private function normalized_block_url(
+	private function normalized_url(
 		mixed $value,
 		string $pattern
 	): ?string {
@@ -774,9 +778,7 @@ class Source_Media_REST_Field {
 			return null;
 		}
 
-		$url = URL_Validator::normalize_url_whitespace( $value );
-
-		return 1 === preg_match( $pattern, $url ) ? $url : null;
+		return $this->normalized_url( $value, $pattern );
 	}
 
 	/**
