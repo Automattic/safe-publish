@@ -8,6 +8,7 @@
  */
 
 import { __experimentalText as Text } from '@wordpress/components';
+import { useEffect, useRef, useState } from '@wordpress/element';
 import { __ } from '@wordpress/i18n';
 import { diffArrays, diffWords } from 'diff';
 
@@ -734,6 +735,56 @@ function BlockDiffHeader( {
 }
 
 /**
+ * Props for the PreviewPane component.
+ *
+ * @property {string} className Class list of the preview wrapper.
+ * @property {string} html      Rendered HTML to show.
+ * @property {string} label     Accessible name while the preview scrolls.
+ */
+interface PaneProps {
+	className: string;
+	html: string;
+	label: string;
+}
+
+/**
+ * Renders one preview, a labeled Tab stop while its content overflows.
+ *
+ * @param {PaneProps} props Component props.
+ *
+ * @return {JSX.Element} Rendered preview.
+ */
+function PreviewPane( { className, html, label }: PaneProps ): JSX.Element {
+	const ref = useRef< HTMLDivElement >( null );
+	const [ overflows, setOverflows ] = useState( false );
+
+	// Re-run on new content, which can overflow without resizing the preview.
+	useEffect( () => {
+		const element = ref.current;
+		if ( element === null || typeof ResizeObserver === 'undefined' ) {
+			return;
+		}
+
+		const observer = new ResizeObserver( () =>
+			setOverflows( element.scrollWidth > element.clientWidth )
+		);
+		observer.observe( element );
+		return () => observer.disconnect();
+	}, [ html ] );
+
+	return (
+		<div
+			ref={ ref }
+			className={ className }
+			tabIndex={ overflows ? 0 : undefined }
+			role={ overflows ? 'region' : undefined }
+			aria-label={ overflows ? label : undefined }
+			dangerouslySetInnerHTML={ { __html: html } }
+		/>
+	);
+}
+
+/**
  * Props for the BlockDiffBody component.
  *
  * @property {BlockDiff} block              Block diff entry to render.
@@ -762,16 +813,18 @@ function BlockDiffBody( {
 	unmarked,
 }: BodyProps ): JSX.Element {
 	const currentHtml = linkifyImages( block.current?.rendered || '' );
+	const currentLabel = __( 'Current preview', 'safe-publish' );
+	const incomingLabel = __( 'Incoming preview', 'safe-publish' );
 
 	if ( block.status === 'removed' ) {
-		return <div className="safe-publish-block-diff__removed" dangerouslySetInnerHTML={ { __html: currentHtml } } />;
+		return <PreviewPane className="safe-publish-block-diff__removed" html={ currentHtml } label={ currentLabel } />;
 	}
 	if ( block.status === 'added' ) {
 		const addedHtml = linkifyImages( block.incoming?.rendered || '' );
-		return <div className="safe-publish-block-diff__added" dangerouslySetInnerHTML={ { __html: addedHtml } } />;
+		return <PreviewPane className="safe-publish-block-diff__added" html={ addedHtml } label={ incomingLabel } />;
 	}
 	if ( block.status === 'unchanged' ) {
-		return <div className="safe-publish-block-diff__unchanged" dangerouslySetInnerHTML={ { __html: currentHtml } } />;
+		return <PreviewPane className="safe-publish-block-diff__unchanged" html={ currentHtml } label={ currentLabel } />;
 	}
 	if ( previewUnavailable ) {
 		return (
@@ -785,8 +838,8 @@ function BlockDiffBody( {
 
 	return (
 		<div className="safe-publish-block-diff__modified">
-			<div className="safe-publish-block-diff__col" dangerouslySetInnerHTML={ { __html: currentHtml } } />
-			<div className={ incomingColumnClass( unmarked ) } dangerouslySetInnerHTML={ { __html: linkifyImages( incomingHtml ) } } />
+			<PreviewPane className="safe-publish-block-diff__col" html={ currentHtml } label={ currentLabel } />
+			<PreviewPane className={ incomingColumnClass( unmarked ) } html={ linkifyImages( incomingHtml ) } label={ incomingLabel } />
 		</div>
 	);
 }
