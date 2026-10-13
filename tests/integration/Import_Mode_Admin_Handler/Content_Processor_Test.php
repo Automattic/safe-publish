@@ -1579,6 +1579,218 @@ class Content_Processor_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that scheme-less custom block media attributes are imported.
+	 *
+	 * @dataProvider scheme_less_custom_media_provider
+	 * @param string $serialized_url URL in the serialized block comment.
+	 * @param string $media_url      Parsed attribute URL to import.
+	 * @param string $resolved_url   Expected source request URL.
+	 */
+	public function test_process_custom_block_imports_scheme_less_media_from_attrs(
+		string $serialized_url,
+		string $media_url,
+		string $resolved_url
+	): void {
+		// ARRANGE: Store media in attrs alongside a bare design token.
+		$source_site_url    = 'https://source.example.com';
+		$content            = '<!-- wp:my-plugin/hero {"backgroundUrl":"'
+			. $serialized_url . '","icon":"star.png"} -->'
+			. '<div class="wp-block-my-plugin-hero">'
+			. '<img src="' . $media_url . '">'
+			. '<img src="' . $resolved_url . '">'
+			. '<span data-alternate="' . $media_url . '.webp"></span>'
+			. '</div>'
+			. '<!-- /wp:my-plugin/hero -->';
+		$attachments_before = $this->get_attachment_count();
+		$this->assertSame(
+			$media_url,
+			parse_blocks( $content )[0]['attrs']['backgroundUrl']
+		);
+
+		// ACT: Process the custom block through the Gutenberg path.
+		$processed = $this->processor->process_content(
+			$content,
+			$source_site_url
+		);
+
+		// ASSERT: Only the media URL is requested and localized.
+		$this->assertSame( array( $resolved_url ), $this->requested_urls );
+		$this->assertSame(
+			$attachments_before + 1,
+			$this->get_attachment_count()
+		);
+		$blocks      = parse_blocks( $processed );
+		$local_url   = $blocks[0]['attrs']['backgroundUrl'];
+		$attachments = get_posts(
+			array(
+				'post_type'      => 'attachment',
+				'post_status'    => 'inherit',
+				'posts_per_page' => 1,
+				'orderby'        => 'ID',
+				'order'          => 'DESC',
+			)
+		);
+		$this->assertCount( 1, $attachments );
+		$this->assertSame(
+			wp_get_attachment_url( $attachments[0]->ID ),
+			$local_url
+		);
+		$this->assertSame(
+			2,
+			substr_count( $processed, '<img src="' . $local_url . '">' )
+		);
+		$this->assertStringContainsString(
+			'<span data-alternate="' . $media_url . '.webp"></span>',
+			$processed
+		);
+		$this->assertStringContainsString( '"icon":"star.png"', $processed );
+		$this->assertSame( array(), $this->processor->get_failed_media() );
+	}
+
+	/**
+	 * Provides scheme-less custom block media URLs and their resolved forms.
+	 *
+	 * @return array<string, array{string, string, string}>
+	 */
+	public static function scheme_less_custom_media_provider(): array {
+		return array(
+			'protocol-relative'  => array(
+				'//source.example.com/custom.jpg',
+				'//source.example.com/custom.jpg',
+				'https://source.example.com/custom.jpg',
+			),
+			'root-relative'      => array(
+				'/wp-content/uploads/custom.jpg',
+				'/wp-content/uploads/custom.jpg',
+				'https://source.example.com/wp-content/uploads/custom.jpg',
+			),
+			'escaped-slashes'    => array(
+				'\/wp-content\/uploads\/custom.jpg',
+				'/wp-content/uploads/custom.jpg',
+				'https://source.example.com/wp-content/uploads/custom.jpg',
+			),
+			'leading-whitespace' => array(
+				' /wp-content/uploads/custom.jpg',
+				' /wp-content/uploads/custom.jpg',
+				'https://source.example.com/wp-content/uploads/custom.jpg',
+			),
+		);
+	}
+
+	/**
+	 * Verifies that a markup copy of a custom block media URL is rewritten when
+	 * a query, fragment, or delimiter follows it, keeping what follows.
+	 *
+	 * @dataProvider suffixed_media_copy_provider
+	 * @param string $markup Markup copy, with %s for the media URL.
+	 */
+	public function test_process_custom_block_rewrites_suffixed_media_copies(
+		string $markup
+	): void {
+		// ARRANGE: An absolute attr URL whose markup copy carries a suffix.
+		$source_site_url = 'https://source.example.com';
+		$media_url       = $source_site_url . '/hero.jpg';
+		$content         = '<!-- wp:my-plugin/hero {"backgroundUrl":"'
+			. $media_url . '"} -->'
+			. '<div class="wp-block-my-plugin-hero">'
+			. sprintf( $markup, $media_url )
+			. '</div>'
+			. '<!-- /wp:my-plugin/hero -->';
+
+		// ACT: Process the custom block through the Gutenberg path.
+		$processed = $this->processor->process_content(
+			$content,
+			$source_site_url
+		);
+
+		// ASSERT: One download feeds the attr and the suffixed copy.
+		$local_url = wp_get_attachment_url(
+			$this->media_importer->get_newly_created_attachment_ids()[0]
+		);
+		$this->assertSame( array( $media_url ), $this->requested_urls );
+		$this->assertSame(
+			$local_url,
+			parse_blocks( $processed )[0]['attrs']['backgroundUrl']
+		);
+		$this->assertStringContainsString(
+			sprintf( $markup, $local_url ),
+			$processed
+		);
+	}
+
+	/**
+	 * Provides markup copies of a media URL, each followed by a suffix.
+	 *
+	 * @return array<string, array{string}>
+	 */
+	public static function suffixed_media_copy_provider(): array {
+		return array(
+			'query in style'     => array(
+				'<div style="background-image:url(%s?w=1200)"></div>',
+			),
+			'fragment in data'   => array( '<div data-bg="%s#center"></div>' ),
+			'fragment in link'   => array( '<a href="%s#zoom">Zoom</a>' ),
+			'entity-quoted JSON' => array(
+				'<div data-settings="{&quot;bg&quot;:&quot;%s&quot;}"></div>',
+			),
+			'colon in text'      => array( '<p>%s: hero</p>' ),
+		);
+	}
+
+	/**
+	 * Verifies that a markup copy whose path continues past a custom block
+	 * media URL, naming another file, is left unchanged.
+	 *
+	 * @dataProvider longer_media_path_provider
+	 * @param string $markup Markup copy, with %s for the media URL.
+	 */
+	public function test_process_custom_block_keeps_longer_media_paths(
+		string $markup
+	): void {
+		// ARRANGE: A root-relative attr URL that starts a longer markup path.
+		$media_url = '/hero.jpg';
+		$content   = '<!-- wp:my-plugin/hero {"backgroundUrl":"'
+			. $media_url . '"} -->'
+			. '<div class="wp-block-my-plugin-hero">'
+			. sprintf( $markup, $media_url )
+			. '</div>'
+			. '<!-- /wp:my-plugin/hero -->';
+
+		// ACT: Process the custom block through the Gutenberg path.
+		$processed = $this->processor->process_content(
+			$content,
+			'https://source.example.com'
+		);
+
+		// ASSERT: The attr is localized while the longer path is unchanged.
+		$this->assertSame(
+			wp_get_attachment_url(
+				$this->media_importer->get_newly_created_attachment_ids()[0]
+			),
+			parse_blocks( $processed )[0]['attrs']['backgroundUrl']
+		);
+		$this->assertStringContainsString(
+			sprintf( $markup, $media_url ),
+			$processed
+		);
+	}
+
+	/**
+	 * Provides markup copies that continue a media URL's path.
+	 *
+	 * @return array<string, array{string}>
+	 */
+	public static function longer_media_path_provider(): array {
+		return array(
+			'hyphen'  => array( '<span data-copy="%s-copy.jpg"></span>' ),
+			'slash'   => array( '<span data-copy="%s/copy.jpg"></span>' ),
+			'percent' => array( '<span data-copy="%s%%20copy.jpg"></span>' ),
+			'plus'    => array( '<span data-copy="%s+copy.jpg"></span>' ),
+			'equals'  => array( '<span data-copy="%s=copy.jpg"></span>' ),
+		);
+	}
+
+	/**
 	 * Verifies that an absolute source media URL whose path carries non-ASCII
 	 * characters is downloaded from that URL unchanged.
 	 *
