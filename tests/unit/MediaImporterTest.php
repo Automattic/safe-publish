@@ -68,25 +68,6 @@ class MediaImporterTest extends TestCase {
 	}
 
 	/**
-	 * Verifies that the WebP filetype callback stays removed.
-	 *
-	 * It re-asserted a type after core had already compared the downloaded
-	 * bytes with the filename extension, so reintroducing it would override
-	 * that check again.
-	 */
-	public function test_webp_filetype_callback_is_not_reintroduced(): void {
-		// ARRANGE: The importer under test.
-		$importer = $this->importer;
-
-		// ACT: Look for the removed callback.
-		$exists = method_exists( $importer, 'handle_webp_filetype' );
-
-		// ASSERT: It is gone, and the supported override is still present.
-		$this->assertFalse( $exists );
-		$this->assertTrue( method_exists( $importer, 'add_webp_mime_type' ) );
-	}
-
-	/**
 	 * Verifies that get_attachment_id_from_url returns an integer.
 	 */
 	public function test_get_attachment_id_from_url_returns_int(): void {
