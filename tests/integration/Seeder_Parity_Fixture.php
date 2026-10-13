@@ -43,6 +43,7 @@ final class Seeder_Parity_Fixture {
 	use Image_Byte_Mock_Trait;
 	use Per_Source_Id_Media_Api_Mock_Trait;
 	use Per_Source_Id_Post_Api_Mock_Trait;
+	use Unfiltered_Html_Trait;
 
 	/**
 	 * Plaintext password seeded on the non-default half of the batch. Chosen to
@@ -710,6 +711,7 @@ final class Seeder_Parity_Fixture {
 	 */
 	private function import_batch(): void {
 		wp_set_current_user( $this->admin_user_id );
+		$this->grant_unfiltered_html( $this->admin_user_id );
 
 		$this->add_per_source_id_post_api_mock();
 		$this->add_per_source_id_media_api_mock();

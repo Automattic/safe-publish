@@ -14,6 +14,7 @@ use Safe_Publish\API\HTTP_Client;
 use Safe_Publish\Content\Content_Media_Processor;
 use Safe_Publish\Content\Shortcode_ID_Rewriter;
 use Safe_Publish\Media\Media_Importer;
+use Safe_Publish\Utils\Options;
 use WP_Error;
 
 /**
@@ -110,6 +111,68 @@ class Content_Processor_Shortcode_Media_Test extends Integration_Test_Case {
 		$this->assertStringNotContainsString( $src, $result );
 		$this->assertStringNotContainsString( $poster, $result );
 		$this->assertSame( array(), $this->processor->get_failed_media() );
+	}
+
+	/**
+	 * Verifies that a line-broken video shortcode URL receives source library
+	 * metadata and its source parent after sideloading.
+	 */
+	public function test_line_broken_video_shortcode_applies_library_metadata(): void {
+		// ARRANGE: The source map keys the URL after whitespace normalization.
+		$url     = self::SOURCE . '/clip.mp4';
+		$broken  = str_replace( 'clip', "cl\nip", $url );
+		$content = '[video src="' . $broken . '"]';
+		$before  = $this->get_attachment_count();
+		$map     = array(
+			$url => array(
+				'alt'         => 'Video alt',
+				'title'       => 'Video title',
+				'caption'     => 'Video caption',
+				'description' => 'Video description',
+				'parent'      => '4242',
+			),
+		);
+
+		// ACT: Import the shortcode and apply its source metadata map.
+		$result = $this->processor->process_content(
+			$content,
+			self::SOURCE,
+			array( 'library_metadata_map' => $map )
+		);
+
+		// ASSERT: The normalized URL is sideloaded with all library fields.
+		$this->assertIsString( $result );
+		$this->assertSame( $before + 1, $this->get_attachment_count() );
+		$this->assertStringNotContainsString( $broken, $result );
+		$this->assertSame( array(), $this->processor->get_failed_media() );
+		$attachments = get_posts(
+			array(
+				'post_type'      => 'attachment',
+				'post_status'    => 'inherit',
+				'meta_key'       => Options::META_ORIGINAL_URL,
+				'fields'         => 'ids',
+				'posts_per_page' => -1,
+			)
+		);
+		$this->assertCount( 1, $attachments );
+		$attachment_id = $attachments[0];
+		$attachment    = get_post( $attachment_id );
+		$this->assertSame(
+			$url,
+			get_post_meta( $attachment_id, Options::META_ORIGINAL_URL, true )
+		);
+		$this->assertSame( 'Video alt', get_post_meta( $attachment_id, '_wp_attachment_image_alt', true ) );
+		$this->assertSame( 'Video title', $attachment->post_title );
+		$this->assertSame( 'Video caption', $attachment->post_excerpt );
+		$this->assertSame( 'Video description', $attachment->post_content );
+		$this->assertSame(
+			'4242',
+			get_post_meta(
+				$attachment_id,
+				Options::META_SOURCE_ATTACHMENT_PARENT_ID,
+				true
+			)
+		);
 	}
 
 	/**

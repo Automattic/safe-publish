@@ -12,13 +12,17 @@ on:
       wordpress-version:
         required: true
         type: string
+      multisite:
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
 jobs:
   integration-tests:
-    name: WordPress ${{ inputs.wordpress-version }} / PHP ${{ inputs.php-version }}
+    name: WordPress ${{ inputs.wordpress-version }} / PHP ${{ inputs.php-version }}${{ inputs.multisite && ' / multisite' || '' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -75,3 +79,5 @@ jobs:
 
       - name: Integration tests
         run: npm run test:integration
+        env:
+          WP_MULTISITE: ${{ inputs.multisite && '1' || '0' }}

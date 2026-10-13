@@ -16,7 +16,7 @@ use WP_UnitTestCase;
 /**
  * Covers the upload filters the importer registers around a sideload, ensuring
  * each is removed on every exit path so none leaks into later uploads in the
- * same request.
+ * same request, and that the WebP filter overrides a site's late restriction.
  */
 class Media_Importer_Filter_Cleanup_Test extends WP_UnitTestCase {
 
@@ -209,6 +209,49 @@ class Media_Importer_Filter_Cleanup_Test extends WP_UnitTestCase {
 				array( $this->importer, 'add_webp_mime_type' )
 			)
 		);
+	}
+
+	/**
+	 * Verifies that a WebP imports when the destination drops WebP from its
+	 * allowed types at a late priority, and that the mime filter is removed.
+	 */
+	public function test_webp_imports_despite_late_webp_restriction(): void {
+		// ARRANGE: A destination that drops WebP late, and WebP image bytes.
+		// phpcs:ignore WordPressVIPMinimum.Hooks.RestrictedHooks.upload_mimes
+		add_filter(
+			'upload_mimes',
+			array( $this, 'disallow_webp_uploads' ),
+			11
+		);
+		$this->add_image_byte_response_mock();
+		$importer  = new Media_Importer( new HTTP_Client() );
+		$media_url = self::SOURCE_URL . '/wp-content/uploads/2025/01/late.webp';
+
+		try {
+			// ACT: Sideload the WebP.
+			$result = $importer->import_source_media_as_attachment(
+				$media_url,
+				self::SOURCE_URL
+			);
+		} finally {
+			$this->remove_image_byte_response_mock();
+			remove_filter(
+				'upload_mimes',
+				array( $this, 'disallow_webp_uploads' ),
+				11
+			);
+		}
+
+		// ASSERT: It imported as a WebP, and the mime filter was removed.
+		$this->assertIsInt( $result );
+		$this->assertSame( 'image/webp', get_post_mime_type( $result ) );
+		$this->assertFalse(
+			has_filter(
+				'upload_mimes',
+				array( $importer, 'add_webp_mime_type' )
+			)
+		);
+		wp_delete_attachment( $result, true );
 	}
 
 	/**

@@ -15,6 +15,7 @@ use Safe_Publish\API\Source_Media_REST_Field;
 use Safe_Publish\Auth\Auth_Logger;
 use Safe_Publish\Auth\HMAC_Authenticator;
 use Safe_Publish\Auth\Permission_Manager;
+use Safe_Publish\Tests\Integration\Unfiltered_Html_Trait;
 use ReflectionClass;
 use WP_REST_Request;
 use WP_REST_Server;
@@ -29,6 +30,8 @@ use WP_UnitTestCase;
  * attachment record.
  */
 class Source_Media_REST_Field_Test extends WP_UnitTestCase {
+
+	use Unfiltered_Html_Trait;
 
 	/**
 	 * REST server instance used for dispatching requests.
@@ -221,6 +224,438 @@ class Source_Media_REST_Field_Test extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Verifies that scheme-less media resolves to its source library metadata.
+	 */
+	public function test_field_maps_scheme_less_urls_to_library_metadata(): void {
+		// ARRANGE: Local attachments and a foreign-only attachment reference.
+		$protocol     = $this->seed_attachment( '2025/01/protocol.jpg', 'Protocol' );
+		$root         = $this->seed_attachment( '2025/01/root.jpg', 'Root' );
+		$foreign      = $this->seed_attachment( '2025/01/foreign.jpg', 'Foreign' );
+		$protocol_url = (string) preg_replace(
+			'#^https?:#',
+			'',
+			$protocol['url']
+		);
+		$root_url     = (string) wp_parse_url( $root['url'], PHP_URL_PATH );
+		$foreign_path = (string) wp_parse_url( $foreign['url'], PHP_URL_PATH );
+		$post_id      = self::factory()->post->create(
+			array(
+				'post_content' => '<img src="' . $protocol_url . '">'
+					. '<img src="' . $root_url . '">'
+					. '<img src="//unrelated.example.com' . $foreign_path . '">',
+			)
+		);
+		$this->force_hmac_authenticated( true );
+
+		// ACT: Read the source media map through the single-post REST field.
+		$response = $this->server->dispatch(
+			new WP_REST_Request( 'GET', '/wp/v2/posts/' . $post_id )
+		);
+
+		// ASSERT: Each local URL carries its complete library metadata.
+		$this->assertSame( 200, $response->get_status() );
+		$media = $response->get_data()['safe_publish_media'];
+		$this->assertSame( array( $protocol['url'], $root['url'] ), array_keys( $media ) );
+		$this->assertSame( 'Protocol alt', $media[ $protocol['url'] ]['alt'] );
+		$this->assertSame( 'Protocol title', $media[ $protocol['url'] ]['title'] );
+		$this->assertSame( 'Protocol caption', $media[ $protocol['url'] ]['caption'] );
+		$this->assertSame( 'Root alt', $media[ $root['url'] ]['alt'] );
+		$this->assertSame( 'Root title', $media[ $root['url'] ]['title'] );
+		$this->assertSame( 'Root caption', $media[ $root['url'] ]['caption'] );
+	}
+
+	/**
+	 * Verifies that a site port is retained for every supported URL form.
+	 */
+	public function test_field_maps_media_urls_with_site_port(): void {
+		// ARRANGE: The source site and its upload URLs use a non-default port.
+		$with_port = static fn ( string $url ): string => (string) preg_replace(
+			'#^(https?://[^/:]+)(?::\d+)?#',
+			'$1:8443',
+			$url
+		);
+		add_filter( 'home_url', $with_port );
+		add_filter(
+			'upload_dir',
+			static function ( array $dir ) use ( $with_port ): array {
+				$dir['baseurl'] = $with_port( (string) $dir['baseurl'] );
+				$dir['url']     = $with_port( (string) $dir['url'] );
+				return $dir;
+			}
+		);
+		$absolute     = $this->seed_attachment( '2025/01/absolute.jpg', 'Absolute' );
+		$protocol     = $this->seed_attachment( '2025/01/protocol.jpg', 'Protocol' );
+		$root         = $this->seed_attachment( '2025/01/root.jpg', 'Root' );
+		$absolute_url = str_replace(
+			'absolute',
+			"abso\nlute",
+			$absolute['url']
+		);
+		$protocol_url = str_replace(
+			'protocol',
+			"pro\ntocol",
+			(string) preg_replace( '#^https?:#', '', $protocol['url'] )
+		);
+		$user_id      = self::factory()->user->create(
+			array( 'role' => 'administrator' )
+		);
+		wp_set_current_user( $user_id );
+		$this->grant_current_user_unfiltered_html();
+		$looked_up = array();
+		add_filter(
+			'pre_attachment_url_to_postid',
+			static function ( ?int $result, string $url ) use ( &$looked_up ) {
+				$looked_up[] = $url;
+				return $result;
+			},
+			10,
+			2
+		);
+		$post_id = self::factory()->post->create(
+			array(
+				'post_content' => '<img src="' . $absolute_url . '">'
+					. '<img src="' . $protocol_url . '">'
+					. '<img src="' . wp_parse_url( $root['url'], PHP_URL_PATH )
+					. '">',
+			)
+		);
+		$this->force_hmac_authenticated( true );
+		$this->assertStringContainsString( ':8443', home_url() );
+		$this->assertStringContainsString(
+			$protocol_url,
+			(string) get_post_field( 'post_content', $post_id )
+		);
+
+		// ACT: Read the source media map through the single-post REST field.
+		$response = $this->server->dispatch(
+			new WP_REST_Request( 'GET', '/wp/v2/posts/' . $post_id )
+		);
+
+		// ASSERT: Every form resolves to its attachment on the ported site.
+		$this->assertSame( 200, $response->get_status() );
+		$this->assertContains( $absolute['url'], $looked_up );
+		$this->assertContains( $protocol['url'], $looked_up );
+		$this->assertContains( $root['url'], $looked_up );
+		$media = $response->get_data()['safe_publish_media'];
+		$this->assertCount( 3, $media );
+		$this->assertSame( 'Absolute alt', $media[ $absolute['url'] ]['alt'] );
+		$this->assertSame( 'Protocol alt', $media[ $protocol['url'] ]['alt'] );
+		$this->assertSame( 'Root alt', $media[ $root['url'] ]['alt'] );
+	}
+
+	/**
+	 * Verifies that line breaks and tabs inside image URLs preserve library
+	 * metadata and source parents under the URLs the importer will request.
+	 */
+	public function test_field_maps_line_broken_image_url(): void {
+		// ARRANGE: Image URLs with a line break and tab inside src values.
+		$parent = self::factory()->post->create();
+		$this->assertIsInt( $parent );
+		$image  = $this->seed_attachment( '2025/01/line-broken.jpg' );
+		$tabbed = $this->seed_attachment( '2025/01/tab-broken.jpg', 'Tabbed' );
+		wp_update_post(
+			array(
+				'ID'          => $image['id'],
+				'post_parent' => $parent,
+			)
+		);
+		$broken_url = str_replace(
+			'line-broken',
+			"line-\nbroken",
+			(string) preg_replace( '#^https?:#', '', $image['url'] )
+		);
+		$tabbed_url = str_replace(
+			'tab-broken',
+			"tab-\tbroken",
+			(string) wp_parse_url( $tabbed['url'], PHP_URL_PATH )
+		);
+		$post_id    = self::factory()->post->create(
+			array(
+				'post_content' => '<img src="' . $broken_url . '">'
+					. '<img src="' . $tabbed_url . '">',
+			)
+		);
+		$this->force_hmac_authenticated( true );
+
+		// ACT: Export the post's media metadata.
+		$response = $this->server->dispatch(
+			new WP_REST_Request( 'GET', '/wp/v2/posts/' . $post_id )
+		);
+
+		// ASSERT: The normalized URL carries all library fields and the parent.
+		$this->assertSame( 200, $response->get_status() );
+		$this->assertSame(
+			array(
+				$image['url']  => array(
+					'alt'         => 'Library alt',
+					'title'       => 'Library title',
+					'caption'     => 'Library caption',
+					'description' => 'Library description',
+					'parent'      => (string) $parent,
+				),
+				$tabbed['url'] => array(
+					'alt'         => 'Tabbed alt',
+					'title'       => 'Tabbed title',
+					'caption'     => 'Tabbed caption',
+					'description' => 'Tabbed description',
+					'parent'      => '0',
+				),
+			),
+			$response->get_data()['safe_publish_media']
+		);
+	}
+
+	/**
+	 * Verifies that a URL found only in a serialized block attribute retains
+	 * its library metadata after the attribute's escaped line break is parsed.
+	 */
+	public function test_field_maps_line_broken_block_attribute_url(): void {
+		// ARRANGE: A cover URL exists only in the block comment's JSON attrs.
+		$image      = $this->seed_attachment( '2025/01/cover-image.jpg' );
+		$broken_url = str_replace(
+			'cover-image',
+			"cover-\nimage",
+			(string) wp_parse_url( $image['url'], PHP_URL_PATH )
+		);
+		$content    = serialize_block(
+			array(
+				'blockName'    => 'core/cover',
+				'attrs'        => array( 'url' => $broken_url ),
+				'innerBlocks'  => array(),
+				'innerHTML'    => '',
+				'innerContent' => array(),
+			)
+		);
+		$post_id    = self::factory()->post->create(
+			array( 'post_content' => wp_slash( $content ) )
+		);
+		$this->assertSame(
+			$broken_url,
+			parse_blocks( (string) get_post_field( 'post_content', $post_id ) )[0]['attrs']['url']
+		);
+		$this->force_hmac_authenticated( true );
+
+		// ACT: Export the post's media metadata.
+		$response = $this->server->dispatch(
+			new WP_REST_Request( 'GET', '/wp/v2/posts/' . $post_id )
+		);
+
+		// ASSERT: The parsed URL keys the complete source library record.
+		$this->assertSame( 200, $response->get_status() );
+		$this->assertSame(
+			array(
+				$image['url'] => array(
+					'alt'         => 'Library alt',
+					'title'       => 'Library title',
+					'caption'     => 'Library caption',
+					'description' => 'Library description',
+					'parent'      => '0',
+				),
+			),
+			$response->get_data()['safe_publish_media']
+		);
+	}
+
+	/**
+	 * Verifies that nested attributes in a child block retain a line-broken
+	 * media URL's library metadata.
+	 */
+	public function test_field_maps_nested_line_broken_block_url(): void {
+		// ARRANGE: A custom child block stores its URL in a nested attribute.
+		$image      = $this->seed_attachment( '2025/01/nested-image.jpg' );
+		$broken_url = str_replace( 'nested-image', "nested-\nimage", $image['url'] );
+		$content    = serialize_block(
+			array(
+				'blockName'    => 'core/group',
+				'attrs'        => array(),
+				'innerBlocks'  => array(
+					array(
+						'blockName'    => 'example/media',
+						'attrs'        => array(
+							'image' => array( 'url' => $broken_url ),
+						),
+						'innerBlocks'  => array(),
+						'innerHTML'    => '',
+						'innerContent' => array(),
+					),
+				),
+				'innerHTML'    => '',
+				'innerContent' => array( null ),
+			)
+		);
+		$post_id    = self::factory()->post->create(
+			array( 'post_content' => wp_slash( $content ) )
+		);
+		$this->force_hmac_authenticated( true );
+
+		// ACT: Export the post's media metadata.
+		$response = $this->server->dispatch(
+			new WP_REST_Request( 'GET', '/wp/v2/posts/' . $post_id )
+		);
+
+		// ASSERT: The nested URL resolves to the complete library record.
+		$this->assertSame( 200, $response->get_status() );
+		$this->assertSame(
+			array(
+				$image['url'] => array(
+					'alt'         => 'Library alt',
+					'title'       => 'Library title',
+					'caption'     => 'Library caption',
+					'description' => 'Library description',
+					'parent'      => '0',
+				),
+			),
+			$response->get_data()['safe_publish_media']
+		);
+	}
+
+	/**
+	 * Verifies that live media shortcode URL attributes retain library metadata
+	 * across line breaks while escaped shortcodes are ignored.
+	 */
+	public function test_field_maps_line_broken_shortcode_urls(): void {
+		// ARRANGE: Video, poster, and audio URLs break within quoted values.
+		$parent = self::factory()->post->create();
+		$this->assertIsInt( $parent );
+		$video   = $this->seed_attachment( '2025/01/clip.mp4', 'Video' );
+		$poster  = $this->seed_attachment( '2025/01/poster.jpg', 'Poster' );
+		$audio   = $this->seed_attachment( '2025/01/track.mp3', 'Audio' );
+		$escaped = $this->seed_attachment( '2025/01/escaped.mp4' );
+		wp_update_post(
+			array(
+				'ID'             => $video['id'],
+				'post_mime_type' => 'video/mp4',
+				'post_parent'    => $parent,
+			)
+		);
+		wp_update_post(
+			array(
+				'ID'             => $audio['id'],
+				'post_mime_type' => 'audio/mpeg',
+			)
+		);
+		$content = '[video src="'
+			. str_replace(
+				'clip',
+				"cl\nip",
+				(string) preg_replace( '#^https?:#', '', $video['url'] )
+			)
+			. '" poster="'
+			. str_replace(
+				'poster',
+				"po\tster",
+				(string) wp_parse_url( $poster['url'], PHP_URL_PATH )
+			)
+			. '"] [audio mp3="'
+			. str_replace( 'track', "tr\rack", $audio['url'] )
+			. '"] [[video src="'
+			. str_replace( 'escaped', "es\ncaped", $escaped['url'] )
+			. '"]]';
+		$post_id = self::factory()->post->create(
+			array( 'post_content' => $content )
+		);
+		$this->force_hmac_authenticated( true );
+
+		// ACT: Export the post's media metadata.
+		$response = $this->server->dispatch(
+			new WP_REST_Request( 'GET', '/wp/v2/posts/' . $post_id )
+		);
+
+		// ASSERT: Only live URLs key their complete source library records.
+		$this->assertSame( 200, $response->get_status() );
+		$this->assertSame(
+			array(
+				$video['url']  => array(
+					'alt'         => 'Video alt',
+					'title'       => 'Video title',
+					'caption'     => 'Video caption',
+					'description' => 'Video description',
+					'parent'      => (string) $parent,
+				),
+				$poster['url'] => array(
+					'alt'         => 'Poster alt',
+					'title'       => 'Poster title',
+					'caption'     => 'Poster caption',
+					'description' => 'Poster description',
+					'parent'      => '0',
+				),
+				$audio['url']  => array(
+					'alt'         => 'Audio alt',
+					'title'       => 'Audio title',
+					'caption'     => 'Audio caption',
+					'description' => 'Audio description',
+					'parent'      => '0',
+				),
+			),
+			$response->get_data()['safe_publish_media']
+		);
+	}
+
+	/**
+	 * Verifies that single-quoted shortcode URLs and their query strings map to
+	 * attachments without collecting unsupported attributes or shortcode names.
+	 */
+	public function test_field_maps_single_quoted_shortcode_urls(): void {
+		// ARRANGE: Audio src and video codec URLs carry internal line breaks.
+		$audio   = $this->seed_attachment( '2025/01/voice.mp3', 'Audio' );
+		$video   = $this->seed_attachment( '2025/01/codec.mp4', 'Video' );
+		$ignored = $this->seed_attachment( '2025/01/ignored.jpg' );
+		$content = "[audio src='"
+			. str_replace( 'voice', "vo\nice", $audio['url'] )
+			. "?v=1'] [video mp4='"
+			. str_replace( 'codec', "co\tdec", $video['url'] )
+			. "'] [video data-url='"
+			. str_replace( 'ignored', "ig\nnored", $ignored['url'] )
+			. "'] [video-extra src='"
+			. str_replace( 'ignored', "ig\nnored", $ignored['url'] )
+			. "']";
+		$post_id = self::factory()->post->create(
+			array( 'post_content' => $content )
+		);
+		$this->force_hmac_authenticated( true );
+
+		// ACT: Export the post's media metadata.
+		$response = $this->server->dispatch(
+			new WP_REST_Request( 'GET', '/wp/v2/posts/' . $post_id )
+		);
+
+		// ASSERT: The query is stripped and only importable attrs are mapped.
+		$this->assertSame( 200, $response->get_status() );
+		$this->assertSame(
+			array( $audio['url'], $video['url'] ),
+			array_keys( $response->get_data()['safe_publish_media'] )
+		);
+	}
+
+	/**
+	 * Verifies that a plain URL ending before a line break is not joined to the
+	 * next word when the export collects library metadata.
+	 */
+	public function test_field_keeps_plain_url_before_next_line(): void {
+		// ARRANGE: An ordinary image URL followed by prose on the next line.
+		$image   = $this->seed_attachment( '2025/01/ordinary.jpg' );
+		$post_id = self::factory()->post->create(
+			array(
+				'post_content' => '<img src="' . $image['url']
+					. '">' . "\n" . 'Next word',
+			)
+		);
+		$this->force_hmac_authenticated( true );
+
+		// ACT: Export the post's media metadata.
+		$response = $this->server->dispatch(
+			new WP_REST_Request( 'GET', '/wp/v2/posts/' . $post_id )
+		);
+
+		// ASSERT: Only the complete image URL is keyed in the map.
+		$this->assertSame( 200, $response->get_status() );
+		$this->assertSame(
+			array( $image['url'] ),
+			array_keys( $response->get_data()['safe_publish_media'] )
+		);
+	}
+
+	/**
 	 * Verifies that the map reports each attachment's source parent post, the
 	 * value the destination re-parents its imported copy to.
 	 */
@@ -384,6 +819,7 @@ class Source_Media_REST_Field_Test extends WP_UnitTestCase {
 		wp_set_current_user(
 			self::factory()->user->create( array( 'role' => 'administrator' ) )
 		);
+		$this->grant_current_user_unfiltered_html();
 		$post_id = self::factory()->post->create(
 			array(
 				'post_content' => '<img srcset="' . $image['sized_url']
@@ -450,6 +886,45 @@ class Source_Media_REST_Field_Test extends WP_UnitTestCase {
 		$this->assertContains( $image['url'], $looked_up );
 		$this->assertNotContains( home_url( '/about' ), $looked_up );
 		$this->assertNotContains( home_url( '/contact' ), $looked_up );
+	}
+
+	/**
+	 * Verifies that HTML closing syntax is not queried as root-relative media.
+	 */
+	public function test_field_skips_markup_lookups_with_web_root_uploads(): void {
+		// ARRANGE: A web-root upload path cannot filter non-media by directory.
+		add_filter(
+			'upload_dir',
+			static function ( array $dir ): array {
+				$dir['baseurl'] = home_url( '/' );
+				return $dir;
+			}
+		);
+		$looked_up = array();
+		add_filter(
+			'pre_attachment_url_to_postid',
+			static function ( ?int $result, string $url ) use ( &$looked_up ) {
+				$looked_up[] = $url;
+				return $result;
+			},
+			10,
+			2
+		);
+		$post_id = self::factory()->post->create(
+			array(
+				'post_content' => '<p>Example</p><!-- /wp:image -->',
+			)
+		);
+		$this->force_hmac_authenticated( true );
+
+		// ACT: Export the source media map.
+		$response = $this->server->dispatch(
+			new WP_REST_Request( 'GET', '/wp/v2/posts/' . $post_id )
+		);
+
+		// ASSERT: Neither closing syntax reaches an attachment lookup.
+		$this->assertSame( 200, $response->get_status() );
+		$this->assertSame( array(), $looked_up );
 	}
 
 	/**

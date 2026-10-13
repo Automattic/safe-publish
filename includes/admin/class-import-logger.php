@@ -89,6 +89,57 @@ class Import_Logger extends Logger {
 	}
 
 	/**
+	 * Logs a reverted item left flagged because its claim could not be
+	 * released, so the record no longer describes the post.
+	 *
+	 * @param int    $item_id    Item stuck in the rolled-back state.
+	 * @param int    $session_id Parent session of the item.
+	 * @param int    $post_id    Local WP post the item rolled back.
+	 * @param string $wpdb_error Last MySQL error from $wpdb->last_error.
+	 */
+	public function item_rollback_stuck(
+		int $item_id,
+		int $session_id,
+		int $post_id,
+		string $wpdb_error
+	): void {
+		$this->log_error(
+			Log_Events::ITEM_ROLLBACK_STUCK,
+			array(
+				'item_id'    => $item_id,
+				'session_id' => $session_id,
+				'post_id'    => $post_id,
+				'wpdb_error' => $wpdb_error,
+			)
+		);
+	}
+
+	/**
+	 * Logs an item closed because its destination post no longer exists.
+	 *
+	 * Distinct from ITEM_ROLLED_BACK: The import was never reverted, it just
+	 * has nothing left to revert.
+	 *
+	 * @param int $item_id    Item that was closed.
+	 * @param int $session_id Parent session of the item.
+	 * @param int $post_id    Local WP post the item recorded.
+	 */
+	public function item_closed_post_missing(
+		int $item_id,
+		int $session_id,
+		int $post_id
+	): void {
+		$this->log_event(
+			Log_Events::ITEM_CLOSED_POST_MISSING,
+			array(
+				'item_id'    => $item_id,
+				'session_id' => $session_id,
+				'post_id'    => $post_id,
+			)
+		);
+	}
+
+	/**
 	 * Logs an item rollback that failed at the SQL layer.
 	 *
 	 * @param int    $item_id    Item whose rollback UPDATE failed.

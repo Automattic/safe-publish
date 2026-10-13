@@ -7,16 +7,16 @@
 
 declare(strict_types=1);
 
-function get_site_transient( string $key ): mixed {
-	return $GLOBALS['_test_site_transients'][ $key ] ?? false;
+function get_transient( string $key ): mixed {
+	return $GLOBALS['_test_transients'][ $key ] ?? false;
 }
 
-function set_site_transient(
+function set_transient(
 	string $key,
 	mixed $value,
 	int $_expiration = 0
 ): bool {
-	$GLOBALS['_test_site_transients'][ $key ] = $value;
+	$GLOBALS['_test_transients'][ $key ] = $value;
 	return true;
 }
 
@@ -233,7 +233,15 @@ function trailingslashit( string $path ): string {
 }
 
 function wp_get_environment_type(): string {
-	return 'production';
+	return $GLOBALS['_test_environment_type'] ?? 'production';
+}
+
+function set_test_environment_type( string $type ): void {
+	$GLOBALS['_test_environment_type'] = $type;
+}
+
+function reset_test_environment_type(): void {
+	unset( $GLOBALS['_test_environment_type'] );
 }
 
 function wp_get_upload_dir(): array {
