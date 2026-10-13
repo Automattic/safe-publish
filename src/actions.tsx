@@ -299,6 +299,8 @@ const retryOutcomeNotice = (
 	outcome: RetryAttentionIssueResponse[ 'outcome' ],
 	issue: AttentionIssue
 ): ActionNotice => {
+	const deferredRow = issue.issue_type === 'deferred_navigation_url';
+
 	switch ( outcome ) {
 		case 'deferred_url':
 			return {
@@ -317,8 +319,32 @@ const retryOutcomeNotice = (
 		case 'target_absent':
 			return {
 				status: 'warning',
-				message: renderIssueMessage( issue ),
+				message: deferredRow
+					? sprintf(
+						/* translators: %d: source target post ID */
+						__(
+							"Source post %d isn't on this site. Restore it from the trash, or re-import this post.",
+							'safe-publish'
+						),
+						issue.target_ref
+					)
+					: renderIssueMessage( issue ),
 			};
+		case 'unresolved':
+			if ( deferredRow ) {
+				return {
+					status: 'warning',
+					message: sprintf(
+						/* translators: %d: source target post ID */
+						__(
+							'The link no longer points at source post %d on this site. Re-import this post to relink it.',
+							'safe-publish'
+						),
+						issue.target_ref
+					),
+				};
+			}
+		// Falls through.
 		default:
 			return {
 				status: 'warning',

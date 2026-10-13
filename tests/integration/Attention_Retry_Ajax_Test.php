@@ -260,6 +260,48 @@ class Attention_Retry_Ajax_Test extends WP_Ajax_UnitTestCase {
 	}
 
 	/**
+	 * Verifies that a deferred URL retry reports a trashed target as absent.
+	 */
+	public function test_retry_deferred_url_reports_trashed_target(): void {
+		// ARRANGE: A mapped navigation link whose target is trashed.
+		$target  = $this->seed_target_post( 9703 );
+		$content = $this->nav_link_content( $target, 'post-type' );
+		$post_id = self::factory()->post->create(
+			array( 'post_content' => $content )
+		);
+		$before  = (string) get_post_field( 'post_content', $post_id );
+		$this->open_issue( $post_id, 'deferred_navigation_url', 9703, 'post' );
+		wp_trash_post( $target );
+
+		// ACT: Retry the deferred issue through the endpoint.
+		$response = $this->retry(
+			array(
+				'affected_post_id' => (string) $post_id,
+				'issue_type'       => 'deferred_navigation_url',
+				'target_ref'       => '9703',
+				'target_kind'      => 'post',
+			)
+		);
+
+		// ASSERT: The target is absent, and the link and issue are unchanged.
+		$this->assertTrue( $response['success'] );
+		$this->assertFalse( $response['data']['resolved'] );
+		$this->assertSame( 'target_absent', $response['data']['outcome'] );
+		$this->assertSame(
+			$before,
+			(string) get_post_field( 'post_content', $post_id )
+		);
+		$this->assertNotNull(
+			$this->attention->get_issue(
+				$post_id,
+				'deferred_navigation_url',
+				9703,
+				'post'
+			)
+		);
+	}
+
+	/**
 	 * Verifies that deferred URL repair changes only the matching post link in
 	 * a menu with other post, taxonomy, and empty-URL links.
 	 */

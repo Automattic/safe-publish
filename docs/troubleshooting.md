@@ -302,7 +302,7 @@ Links inside post body content are migrated by host swap only, preserving the pa
 
 #### Navigation links have a deferred URL
 
-A navigation link or submenu keeps a temporary URL when the destination target or an ancestor lacks a final path, or the target's post type is unregistered. The link can 404 or open the wrong page. Needs attention records the deferred URL. Import or restore a missing target, register its type, or finalize its path, then Retry to repair the URL. See [Navigation links with deferred URLs](concepts/import-process.md#navigation-links-with-deferred-urls).
+A navigation link or submenu keeps a temporary URL when the destination target or an ancestor lacks a final path, or the target's post type is unregistered. The link can 404 or open the wrong page. Needs attention records the deferred URL. Publish the target and its ancestors, or register its post type, then Retry to repair the URL. Restore a trashed target or ancestor first. If the target was deleted, re-import the post that holds the link. See [Navigation links with deferred URLs](concepts/import-process.md#navigation-links-with-deferred-urls).
 
 #### A navigation link to a term stays on the Needs attention tab
 

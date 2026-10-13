@@ -1257,6 +1257,67 @@ class Attention_Issues_Test extends Source_Posts_API_Test_Base {
 	}
 
 	/**
+	 * Verifies that only a re-import repairs a deferred URL whose target was
+	 * deleted and imported again.
+	 */
+	public function test_deleted_target_deferred_url_needs_reimport(): void {
+		// ARRANGE: Defer a link, then replace its target with a published copy.
+		$this->set_permalink_structure( '/%postname%/' );
+		$deleted = $this->seed_target_post( 9710, self::BLOG_URL );
+		wp_update_post(
+			array(
+				'ID'          => $deleted,
+				'post_status' => 'draft',
+			)
+		);
+		$result  = $this->import_under(
+			self::BLOG_URL,
+			7210,
+			array( 'content' => $this->post_link_content( 9710 ) )
+		);
+		$post_id = (int) $result['post_id'];
+		wp_delete_post( $deleted, true );
+		$fresh = $this->seed_target_post( 9710, self::BLOG_URL );
+
+		// ACT: Retry, then re-import the post.
+		$outcome = $this->import_service->retry_deferred_navigation_url(
+			$post_id,
+			9710,
+			self::BLOG_URL
+		);
+		$ids     = $this->nav_link_ids( $post_id );
+		$open    = $this->attention->get_issue(
+			$post_id,
+			'deferred_navigation_url',
+			9710,
+			'post'
+		);
+		$this->import_under(
+			self::BLOG_URL,
+			7210,
+			array( 'content' => $this->post_link_content( 9710 ) )
+		);
+
+		// ASSERT: Retry leaves the stale link open; the re-import relinks it.
+		$this->assertSame( Reconcile_Outcome::UNRESOLVED, $outcome->type );
+		$this->assertSame( array( $deleted ), $ids );
+		$this->assertNotNull( $open );
+		$this->assertSame( array( $fresh ), $this->nav_link_ids( $post_id ) );
+		$this->assertSame(
+			array( (string) get_permalink( $fresh ) ),
+			$this->nav_link_urls( $post_id )
+		);
+		$this->assertNull(
+			$this->attention->get_issue(
+				$post_id,
+				'deferred_navigation_url',
+				9710,
+				'post'
+			)
+		);
+	}
+
+	/**
 	 * Verifies that retrying an unmapped post nav-link re-derives its url to the
 	 * destination permalink, without bumping post_modified.
 	 */

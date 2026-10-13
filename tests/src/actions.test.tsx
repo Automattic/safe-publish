@@ -784,6 +784,78 @@ describe( 'createNeedsAttentionActions', () => {
 		expect( notice.message ).not.toContain( 'Still needs attention' );
 	} );
 
+	it( 'points a deferred URL with a missing target to restore or re-import', async () => {
+		// ARRANGE: The mapped target was trashed or deleted.
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockResolvedValue( {
+				json: () =>
+					Promise.resolve( {
+						success: true,
+						data: {
+							resolved: false,
+							outcome: 'target_absent',
+							detail: 'Internal diagnostic.',
+						},
+					} ),
+			} )
+		);
+		const onRefresh = vi.fn();
+		const onNotice = vi.fn();
+
+		// ACT: Retry the deferred URL.
+		runCallback( retryAction( onRefresh, { ...RETRY_CONTEXT, onNotice } ), [
+			buildDegradation( {
+				issue_type: 'deferred_navigation_url',
+				target_ref: 703,
+			} ),
+		] );
+
+		// ASSERT: The notice offers restore or re-import.
+		await vi.waitFor( () => expect( onRefresh ).toHaveBeenCalled() );
+		expect( onNotice ).toHaveBeenLastCalledWith( {
+			status: 'warning',
+			message:
+				"Source post 703 isn't on this site. Restore it from the trash, or re-import this post.",
+		} );
+	} );
+
+	it( 'points a deferred URL whose link changed to re-importing the post', async () => {
+		// ARRANGE: No link points at the mapped target anymore.
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockResolvedValue( {
+				json: () =>
+					Promise.resolve( {
+						success: true,
+						data: {
+							resolved: false,
+							outcome: 'unresolved',
+							detail: 'Internal diagnostic.',
+						},
+					} ),
+			} )
+		);
+		const onRefresh = vi.fn();
+		const onNotice = vi.fn();
+
+		// ACT: Retry the deferred URL.
+		runCallback( retryAction( onRefresh, { ...RETRY_CONTEXT, onNotice } ), [
+			buildDegradation( {
+				issue_type: 'deferred_navigation_url',
+				target_ref: 703,
+			} ),
+		] );
+
+		// ASSERT: The notice points to a re-import.
+		await vi.waitFor( () => expect( onRefresh ).toHaveBeenCalled() );
+		expect( onNotice ).toHaveBeenLastCalledWith( {
+			status: 'warning',
+			message:
+				'The link no longer points at source post 703 on this site. Re-import this post to relink it.',
+		} );
+	} );
+
 	it( 'maps a write_failed outcome to an error notice', async () => {
 		// ARRANGE: A reconciliation whose write failed.
 		vi.stubGlobal(
