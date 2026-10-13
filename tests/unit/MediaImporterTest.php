@@ -16,7 +16,7 @@ use Safe_Publish\API\HTTP_Client;
 /**
  * Media Importer Test.
  *
- * Tests complex WebP logic in the Media_Importer class.
+ * Tests the Media_Importer class.
  */
 class MediaImporterTest extends TestCase {
 
