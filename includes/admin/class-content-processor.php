@@ -1452,21 +1452,22 @@ class Content_Processor {
 		);
 
 		if ( ! empty( $block['innerHTML'] ) ) {
-			$block['innerHTML'] = str_replace(
+			$block['innerHTML'] = $this->replace_standalone_media_url(
+				$block['innerHTML'],
 				$media_url,
-				$url_with_parameters,
-				$block['innerHTML']
+				$url_with_parameters
 			);
 		}
 
 		if ( ! empty( $block['innerContent'] ) && is_array( $block['innerContent'] ) ) {
 			foreach ( $block['innerContent'] as $index => $content ) {
 				if ( is_string( $content ) ) {
-					$block['innerContent'][ $index ] = str_replace(
-						$media_url,
-						$url_with_parameters,
-						$content
-					);
+					$block['innerContent'][ $index ] =
+						$this->replace_standalone_media_url(
+							$content,
+							$media_url,
+							$url_with_parameters
+						);
 				}
 			}
 		}
@@ -1637,8 +1638,8 @@ class Content_Processor {
 			return $updated_html;
 		}
 
-		// Fallback to simple string replacement.
-		return str_replace( $old_url, $new_url, $html );
+		// Fall back to replacing standalone occurrences anywhere in the markup.
+		return $this->replace_standalone_media_url( $html, $old_url, $new_url );
 	}
 
 	/**
