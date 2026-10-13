@@ -572,6 +572,14 @@ html:has(body.toplevel_page_safe-publish) {
 		white-space: nowrap;
 	}
 
+	// WP admin strips every div's outline, so this ring marks keyboard focus.
+	.safe-publish-block-diff__col:focus-visible,
+	.safe-publish-block-diff__added:focus-visible,
+	.safe-publish-block-diff__removed:focus-visible,
+	.safe-publish-block-diff__unchanged:focus-visible {
+		outline: 2px solid var(--wp-admin-theme-color);
+	}
+
 	.safe-publish-block-diff__col img,
 	.safe-publish-block-diff__added img,
 	.safe-publish-block-diff__removed img,
