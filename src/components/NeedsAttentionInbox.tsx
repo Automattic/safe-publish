@@ -29,6 +29,7 @@ import { useRowActions } from './hooks/useRowActions';
 import { useStepBackWhenPageEmpties } from './hooks/useStepBackWhenPageEmpties';
 
 import type {
+	AttentionIssue,
 	ApiResponse,
 	DataViewsField,
 	NeedsAttentionResponse,
@@ -98,13 +99,27 @@ const detailCell = (
 						item.resolvable ? 'ready' : 'waiting'
 					}` }
 				>
-					{ item.resolvable
-						? __( 'Resolvable now', 'safe-publish' )
-						: __( 'Waiting on import', 'safe-publish' ) }
+					{ resolvabilityLabel( item ) }
 				</span>
 			) }
 		</>
 	);
+};
+
+/**
+ * Names why a retryable issue can or cannot be repaired yet.
+ *
+ * @param {AttentionIssue} item Degradation row.
+ * @return {string} Localized hint label.
+ */
+const resolvabilityLabel = ( item: AttentionIssue ): string => {
+	if ( item.resolvable ) {
+		return __( 'Resolvable now', 'safe-publish' );
+	}
+	if ( item.issue_type === 'deferred_navigation_url' ) {
+		return __( 'Waiting on final URL', 'safe-publish' );
+	}
+	return __( 'Waiting on import', 'safe-publish' );
 };
 
 /**

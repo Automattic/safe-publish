@@ -134,6 +134,7 @@ export interface SyncStatusBatchResponse {
  */
 export type AttentionIssueType =
 	| 'unmapped_block_reference'
+	| 'deferred_navigation_url'
 	| 'unmapped_gallery_reference'
 	| 'nav_ref_rewrite_failed'
 	| 'parent_orphaned'
@@ -145,10 +146,11 @@ export type AttentionIssueType =
  * target_ref, target_kind, target_slug). An id-keyed issue carries
  * `target_ref`; a string-keyed one carries `target_slug` with `target_ref` 0.
  * `retryable` is the server's signal that the row's reconciliation can run;
- * `resolvable` is the batched hint that its target is imported, so a Retry
- * would reconcile it now. `target_terms` names the terms the issue left
- * unattached or unreconciled, empty for types that name none; `target_reason`
- * carries why, for types that distinguish several.
+ * `resolvable` is the batched hint that Retry can resolve the row now; a
+ * deferred URL also needs a final path and registered post type.
+ * `target_terms` names the terms the issue left unattached or unreconciled,
+ * empty for types that name none; `target_reason` carries why, for types that
+ * distinguish several.
  */
 export interface AttentionIssue {
 	affected_post_id: number;
@@ -230,7 +232,12 @@ export interface SetIgnoredResponse {
  */
 export interface RetryAttentionIssueResponse {
 	resolved: boolean;
-	outcome: 'resolved' | 'target_absent' | 'write_failed' | 'unresolved';
+	outcome:
+		| 'resolved'
+		| 'target_absent'
+		| 'write_failed'
+		| 'unresolved'
+		| 'deferred_url';
 	detail: string;
 }
 
@@ -243,6 +250,7 @@ export interface BulkRetryAttentionResponse {
 	target_absent: number;
 	write_failed: number;
 	unresolved: number;
+	deferred_url: number;
 	skipped: number;
 }
 
@@ -317,6 +325,16 @@ export interface UnmappedBlockReferenceWarning {
 }
 
 /**
+ * Surfaced when a mapped navigation link keeps its source path until the
+ * destination target and its ancestors have final slugs and its post type is
+ * registered.
+ */
+export interface DeferredNavigationUrlWarning {
+	type: 'deferred_navigation_url';
+	source_id: number;
+}
+
+/**
  * Surfaced when a navigation menu was imported but one or more destination
  * posts that reference it by the source ID could not be updated automatically.
  * The listed posts keep their stale ref until the menu is re-imported, which
@@ -387,6 +405,7 @@ export type Warning =
 	| AuthorFallbackWarning
 	| ParentOrphanedWarning
 	| UnmappedBlockReferenceWarning
+	| DeferredNavigationUrlWarning
 	| NavRefRewriteFailedWarning
 	| UnmappedShortcodeReferenceWarning
 	| UnmappedGalleryReferenceWarning

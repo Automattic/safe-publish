@@ -302,4 +302,35 @@ class Out_Of_Import_Degradation_Test extends WP_UnitTestCase {
 			$events[0]['event']
 		);
 	}
+
+	/**
+	 * Verifies that a mapped ID handoff records the cleared old issue.
+	 */
+	public function test_record_deferred_url_handoff_logs_resolved_event(): void {
+		// ARRANGE: A mapped ID still waiting on a final URL.
+		$outcome = Reconcile_Outcome::deferred_url(
+			'Navigation URL awaits a registered post type.'
+		);
+
+		// ACT: Record the handoff from the stale reference to its URL issue.
+		$this->logger->record(
+			$outcome,
+			'unmapped_block_reference',
+			4242,
+			700,
+			'post'
+		);
+
+		// ASSERT: The old issue was resolved and the new one is identified.
+		$events = Audit_Log_Table::get_events(
+			array( 'channel' => 'reconcile' )
+		);
+		$this->assertCount( 1, $events );
+		$this->assertSame( Log_Events::RECONCILE_RESOLVED, $events[0]['event'] );
+		$this->assertSame(
+			'deferred_navigation_url',
+			$events[0]['data']['deferred_issue_type']
+		);
+		$this->assertSame( $outcome->detail, $events[0]['data']['reason'] );
+	}
 }
