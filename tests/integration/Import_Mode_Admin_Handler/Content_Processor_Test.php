@@ -1738,6 +1738,74 @@ class Content_Processor_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that a block's media URL attr keeps the source URL's query, as
+	 * its markup copy does.
+	 *
+	 * @dataProvider media_attr_query_provider
+	 * @param string $block  Block markup, with %s for the media URL.
+	 * @param string $attr   Attr that holds the media URL after import.
+	 * @param string $suffix Markup text that follows the media URL.
+	 */
+	public function test_process_media_attr_keeps_query(
+		string $block,
+		string $attr,
+		string $suffix
+	): void {
+		// ARRANGE: A block whose source media URL carries a query.
+		$media_url = 'https://source.example.com/hero.jpg?w=300';
+
+		// ACT: Process the block through the Gutenberg path.
+		$processed = $this->processor->process_content(
+			str_replace( '%s', $media_url, $block ),
+			'https://source.example.com'
+		);
+
+		// ASSERT: The attr and its markup copy hold the local URL and query.
+		$local_url = wp_get_attachment_url(
+			$this->media_importer->get_newly_created_attachment_ids()[0]
+		) . '?w=300';
+		$this->assertSame(
+			$local_url,
+			parse_blocks( $processed )[0]['attrs'][ $attr ]
+		);
+		$this->assertStringContainsString(
+			'src="' . $local_url . $suffix . '"',
+			$processed
+		);
+	}
+
+	/**
+	 * Provides one block per media URL attr writer.
+	 *
+	 * @return array<string, array{string, string, string}>
+	 */
+	public static function media_attr_query_provider(): array {
+		return array(
+			'image with URL only in markup' => array(
+				'<!-- wp:image --><figure class="wp-block-image">'
+					. '<img src="%s" alt=""/></figure><!-- /wp:image -->',
+				'url',
+				'',
+			),
+			'cover'                         => array(
+				'<!-- wp:cover {"url":"%s"} --><div class="wp-block-cover">'
+					. '<img class="wp-block-cover__image-background" alt=""'
+					. ' src="%s"/></div><!-- /wp:cover -->',
+				'url',
+				'',
+			),
+			'custom with longer query'      => array(
+				'<!-- wp:my-plugin/hero {"backgroundUrl":"%s"} -->'
+					. '<div class="wp-block-my-plugin-hero">'
+					. '<img src="%s&amp;h=600"/></div>'
+					. '<!-- /wp:my-plugin/hero -->',
+				'backgroundUrl',
+				'&amp;h=600',
+			),
+		);
+	}
+
+	/**
 	 * Verifies that a markup copy whose path continues past a custom block
 	 * media URL, naming another file, is left unchanged.
 	 *

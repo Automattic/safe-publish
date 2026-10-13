@@ -1305,16 +1305,19 @@ class Content_Processor {
 			$block['attrs'] = array();
 		}
 
+		$url_with_parameters = Media_Importer::reapply_query_parameters(
+			$original_url,
+			$new_url
+		);
+
 		// Update block attributes with local URL and attachment ID.
-		$block['attrs']['url'] = $new_url;
+		$block['attrs']['url'] = $url_with_parameters;
 		$block['attrs']['id']  = $attachment_id;
 
 		// Also update other common image attributes that might reference the URL.
 		if ( isset( $block['attrs']['src'] ) ) {
-			$block['attrs']['src'] = $new_url;
+			$block['attrs']['src'] = $url_with_parameters;
 		}
-
-		$url_with_parameters = Media_Importer::reapply_query_parameters( $original_url, $new_url );
 
 		// Update innerHTML with the appropriate URL for correct rendering.
 		if ( ! empty( $block['innerHTML'] ) ) {
@@ -1441,15 +1444,15 @@ class Content_Processor {
 			return $this->process_block_inner_html( $block, $source_site_url );
 		}
 
-		if ( null !== $url_attr ) {
-			$block['attrs'][ $url_attr ] = $new_url;
-		}
-		$block['attrs'][ $id_attr ] = $attachment_id;
-
 		$url_with_parameters = Media_Importer::reapply_query_parameters(
 			$media_url,
 			$new_url
 		);
+
+		if ( null !== $url_attr ) {
+			$block['attrs'][ $url_attr ] = $url_with_parameters;
+		}
+		$block['attrs'][ $id_attr ] = $attachment_id;
 
 		if ( ! empty( $block['innerHTML'] ) ) {
 			$block['innerHTML'] = str_replace(
@@ -1683,8 +1686,9 @@ class Content_Processor {
 	 *
 	 * Walks all string values in $attrs. For each value that is a valid URL
 	 * on the source domain, the URL is sideloaded and replaced with the local
-	 * attachment URL. Matching occurrences in $block['innerHTML'] and
-	 * $block['innerContent'] are also updated so they stay consistent.
+	 * attachment URL, keeping its query. Matching occurrences in
+	 * $block['innerHTML'] and $block['innerContent'] are also updated so they
+	 * stay consistent.
 	 *
 	 * @param array  $attrs           Attributes array to walk (possibly nested).
 	 * @param string $source_site_url Source site URL.
@@ -1746,6 +1750,10 @@ class Content_Processor {
 					continue;
 				}
 
+				$new_url       = Media_Importer::reapply_query_parameters(
+					$value,
+					$new_url
+				);
 				$attrs[ $key ] = $new_url;
 
 				if ( isset( $block['innerHTML'] ) && '' !== $block['innerHTML'] ) {
