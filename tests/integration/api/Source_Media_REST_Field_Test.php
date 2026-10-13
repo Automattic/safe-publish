@@ -467,8 +467,14 @@ class Source_Media_REST_Field_Test extends WP_UnitTestCase {
 		$spaced   = $this->seed_attachment( '2025/01/spaced.jpg' );
 		$attrs    = array(
 			'absolute' => $absolute['url'],
-			'root'     => (string) wp_parse_url( $relative['url'], PHP_URL_PATH ),
-			'protocol' => substr( $protocol['url'], strpos( $protocol['url'], '//' ) ),
+			'root'     => (string) wp_parse_url(
+				$relative['url'],
+				PHP_URL_PATH
+			),
+			'protocol' => substr(
+				$protocol['url'],
+				strpos( $protocol['url'], '//' )
+			),
 			'spaced'   => ' ' . $spaced['url'],
 		);
 		$content  = serialize_block(
@@ -499,14 +505,9 @@ class Source_Media_REST_Field_Test extends WP_UnitTestCase {
 			array( 'ID' => $post_id )
 		);
 		clean_post_cache( $post_id );
-		$this->assertStringNotContainsString(
-			$absolute['url'],
-			(string) get_post_field( 'post_content', $post_id )
-		);
-		$this->assertSame(
-			$attrs,
-			parse_blocks( (string) get_post_field( 'post_content', $post_id ) )[0]['attrs']
-		);
+		$stored = (string) get_post_field( 'post_content', $post_id );
+		$this->assertStringNotContainsString( $absolute['url'], $stored );
+		$this->assertSame( $attrs, parse_blocks( $stored )[0]['attrs'] );
 		$this->force_hmac_authenticated( true );
 
 		// ACT: Export the post's media metadata.
@@ -516,7 +517,8 @@ class Source_Media_REST_Field_Test extends WP_UnitTestCase {
 
 		// ASSERT: All imported URLs carry their source library values.
 		$this->assertSame( 200, $response->get_status() );
-		$actual_urls   = array_keys( $response->get_data()['safe_publish_media'] );
+		$media         = $response->get_data()['safe_publish_media'];
+		$actual_urls   = array_keys( $media );
 		$expected_urls = array(
 			$absolute['url'],
 			$relative['url'],
@@ -525,14 +527,8 @@ class Source_Media_REST_Field_Test extends WP_UnitTestCase {
 		);
 		sort( $actual_urls );
 		sort( $expected_urls );
-		$this->assertSame(
-			$expected_urls,
-			$actual_urls
-		);
-		$this->assertSame(
-			'Library alt',
-			$response->get_data()['safe_publish_media'][ $absolute['url'] ]['alt']
-		);
+		$this->assertSame( $expected_urls, $actual_urls );
+		$this->assertSame( 'Library alt', $media[ $absolute['url'] ]['alt'] );
 	}
 
 	/**

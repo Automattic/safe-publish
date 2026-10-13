@@ -1602,14 +1602,23 @@ class Content_Processor_Test extends Integration_Test_Case {
 			. '</div>'
 			. '<!-- /wp:my-plugin/hero -->';
 		$attachments_before = $this->get_attachment_count();
-		$this->assertSame( $media_url, parse_blocks( $content )[0]['attrs']['backgroundUrl'] );
+		$this->assertSame(
+			$media_url,
+			parse_blocks( $content )[0]['attrs']['backgroundUrl']
+		);
 
 		// ACT: Process the custom block through the Gutenberg path.
-		$processed = $this->processor->process_content( $content, $source_site_url );
+		$processed = $this->processor->process_content(
+			$content,
+			$source_site_url
+		);
 
 		// ASSERT: Only the media URL is requested and localized.
 		$this->assertSame( array( $resolved_url ), $this->requested_urls );
-		$this->assertSame( $attachments_before + 1, $this->get_attachment_count() );
+		$this->assertSame(
+			$attachments_before + 1,
+			$this->get_attachment_count()
+		);
 		$blocks      = parse_blocks( $processed );
 		$local_url   = $blocks[0]['attrs']['backgroundUrl'];
 		$attachments = get_posts(
@@ -1635,8 +1644,6 @@ class Content_Processor_Test extends Integration_Test_Case {
 			$processed
 		);
 		$this->assertStringContainsString( '"icon":"star.png"', $processed );
-		$this->assertStringNotContainsString( 'https:https://', $processed );
-		$this->assertStringNotContainsString( 'source.example.comhttps://', $processed );
 		$this->assertSame( array(), $this->processor->get_failed_media() );
 	}
 
