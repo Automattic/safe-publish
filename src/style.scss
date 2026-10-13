@@ -460,6 +460,19 @@ html:has(body.toplevel_page_safe-publish) {
 			align-items: center;
 		}
 
+		// Preview wrappers hold rendered post HTML. Paint containment confines
+		// positioned descendants to the wrapper and clips them. Inline-size
+		// containment keeps wide content from widening the modal; scrolling
+		// keeps it reachable. Browsers without inline-size keep paint alone.
+		&__col,
+		&__added,
+		&__removed,
+		&__unchanged {
+			contain: paint;
+			contain: inline-size paint;
+			overflow-x: auto;
+		}
+
 		&__modified {
 			display: flex;
 			gap: 10px;
@@ -468,7 +481,6 @@ html:has(body.toplevel_page_safe-publish) {
 				flex: 1;
 				padding: 8px;
 				max-width: 50%;
-				overflow-x: auto;
 			}
 		}
 
