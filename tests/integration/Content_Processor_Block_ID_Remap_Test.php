@@ -932,19 +932,39 @@ class Content_Processor_Block_ID_Remap_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Verifies that an empty URL does not create an unrepairable deferral.
+	 * Empty link URLs: [url, or null to omit it].
+	 *
+	 * @return array<string, array{0: ?string}>
 	 */
-	public function test_does_not_defer_empty_navigation_url(): void {
+	public static function empty_url_provider(): array {
+		return array(
+			'empty url'  => array( '' ),
+			'absent url' => array( null ),
+		);
+	}
+
+	/**
+	 * Verifies that an empty or absent URL is not deferred.
+	 *
+	 * @dataProvider empty_url_provider
+	 *
+	 * @param string|null $url Link URL, or null to omit it.
+	 */
+	public function test_does_not_defer_empty_navigation_url(
+		?string $url
+	): void {
 		// ARRANGE: A draft target and a link with no URL to repair.
-		$target  = self::factory()->post->create(
+		$target = self::factory()->post->create(
 			array(
 				'post_type'   => 'page',
 				'post_status' => 'draft',
 			)
 		);
-		$content = $this->nav_block_content(
-			array( $this->post_link( 99052, '' ) )
-		);
+		$link   = $this->post_link( 99052, (string) $url );
+		if ( null === $url ) {
+			unset( $link['attrs']['url'] );
+		}
+		$content = $this->nav_block_content( array( $link ) );
 
 		// ACT: Remap the target ID.
 		$result = $this->processor->process_content(

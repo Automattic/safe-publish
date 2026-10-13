@@ -2055,9 +2055,7 @@ class Content_Processor {
 					$attrs
 				);
 				if ( $dest_id <= 0
-					|| (int) ( $attrs[ $rule['attr'] ] ?? 0 ) !== $dest_id
-					|| ! is_string( $attrs[ $rule['url_attr'] ] ?? null )
-					|| '' === $attrs[ $rule['url_attr'] ] ) {
+					|| (int) ( $attrs[ $rule['attr'] ] ?? 0 ) !== $dest_id ) {
 					continue;
 				}
 				$found = true;
@@ -2375,11 +2373,11 @@ class Content_Processor {
 				}
 
 				if ( isset( $rule['url_attr'] ) ) {
-					$deferred = $deferred || (
-						'post' === $kind
-						&& is_string( $attrs[ $rule['url_attr'] ] ?? null )
-						&& '' !== $attrs[ $rule['url_attr'] ]
-						&& ! $this->is_post_path_final( $dest_id )
+					$deferred = $deferred || $this->defers_link_url(
+						$attrs,
+						$rule['url_attr'],
+						$dest_id,
+						$kind
 					);
 					$attrs    = $this->rederive_link_url(
 						$attrs,
@@ -2996,10 +2994,12 @@ class Content_Processor {
 				}
 
 				if ( isset( $rule['url_attr'] ) ) {
-					$deferred = 'post' === $kind
-						&& is_string( $attrs[ $rule['url_attr'] ] ?? null )
-						&& '' !== $attrs[ $rule['url_attr'] ]
-						&& ! $this->is_post_path_final( $dest_id );
+					$deferred = $this->defers_link_url(
+						$attrs,
+						$rule['url_attr'],
+						$dest_id,
+						$kind
+					);
 					$attrs    = $this->rederive_link_url(
 						$attrs,
 						$rule['url_attr'],
@@ -3093,6 +3093,29 @@ class Content_Processor {
 		$attrs[ $url_attr ] = $result;
 
 		return $attrs;
+	}
+
+	/**
+	 * Whether a post link keeps its url until the target's permalink is final.
+	 *
+	 * @param array<string, mixed> $attrs    Block attrs.
+	 * @param string               $url_attr Attr holding the link url.
+	 * @param int                  $dest_id  Resolved destination id.
+	 * @param string               $kind     'post' or 'term'.
+	 * @return bool
+	 */
+	private function defers_link_url(
+		array $attrs,
+		string $url_attr,
+		int $dest_id,
+		string $kind
+	): bool {
+		$url = $attrs[ $url_attr ] ?? null;
+
+		return 'post' === $kind
+			&& is_string( $url )
+			&& '' !== $url
+			&& ! $this->is_post_path_final( $dest_id );
 	}
 
 	/**
