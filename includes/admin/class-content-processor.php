@@ -979,7 +979,7 @@ class Content_Processor {
 
 		return sprintf(
 			/* translators: 1: number of failed media files, 2: comma-separated list of failed media file URLs, each optionally followed by the originating block name in parentheses */
-			__( 'Import failed: %1$d media file(s) could not be downloaded: %2$s', 'safe-publish' ),
+			__( 'Import failed: %1$d media file(s) could not be imported: %2$s', 'safe-publish' ),
 			count( $this->failed_media ),
 			self::format_media_list( $this->failed_media )
 		);
