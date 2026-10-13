@@ -1788,7 +1788,8 @@ class Content_Processor {
 
 	/**
 	 * Replaces a media URL, but not as the tail of a longer URL or the start of
-	 * a longer path. A query or fragment that follows the URL is kept.
+	 * a longer path. A query or fragment that follows the URL is kept. A copy
+	 * that encodes the query's "&" as "&amp;", as markup does, keeps that form.
 	 *
 	 * @param string $content Content containing the URL.
 	 * @param string $old_url Source media URL.
@@ -1800,12 +1801,16 @@ class Content_Processor {
 		string $old_url,
 		string $new_url
 	): string {
+		$encoded = str_replace( '&', '&amp;', $old_url );
 		$pattern = '/(?<![a-zA-Z0-9_\.\/:\-])'
-			. preg_quote( $old_url, '/' )
+			. '(?:' . preg_quote( $old_url, '/' )
+			. '|' . preg_quote( $encoded, '/' ) . ')'
 			. '(?![a-zA-Z0-9_\.\/%=+\-])/';
 		$updated = preg_replace_callback(
 			$pattern,
-			static fn (): string => $new_url,
+			static fn ( array $matches ): string => $old_url === $matches[0]
+				? $new_url
+				: str_replace( '&', '&amp;', $new_url ),
 			$content
 		);
 

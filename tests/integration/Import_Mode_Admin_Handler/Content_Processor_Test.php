@@ -1806,6 +1806,33 @@ class Content_Processor_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that a custom block's markup copy of a media URL is rewritten
+	 * when it HTML-encodes the query's ampersands.
+	 */
+	public function test_process_custom_block_rewrites_encoded_copy(): void {
+		// ARRANGE: A data attribute, which no later pass repoints, encodes "&".
+		$media_url = 'https://source.example.com/hero.jpg?w=300&h=200';
+		$content   = '<!-- wp:my-plugin/hero {"backgroundUrl":"' . $media_url
+			. '"} --><div class="wp-block-my-plugin-hero" data-bg="'
+			. esc_attr( $media_url ) . '"></div><!-- /wp:my-plugin/hero -->';
+
+		// ACT: Process the custom block through the Gutenberg path.
+		$processed = $this->processor->process_content(
+			$content,
+			'https://source.example.com'
+		);
+
+		// ASSERT: The copy holds the local URL, still encoded.
+		$local_url = wp_get_attachment_url(
+			$this->media_importer->get_newly_created_attachment_ids()[0]
+		);
+		$this->assertStringContainsString(
+			'data-bg="' . $local_url . '?w=300&amp;h=200"',
+			$processed
+		);
+	}
+
+	/**
 	 * Verifies that a markup copy whose path continues past a custom block
 	 * media URL, naming another file, is left unchanged.
 	 *
