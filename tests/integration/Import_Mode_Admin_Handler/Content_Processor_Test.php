@@ -2192,10 +2192,6 @@ class Content_Processor_Test extends Integration_Test_Case {
 	/**
 	 * Verifies that a custom block attr holding a .webp URL that serves an HTML
 	 * page is kept as a link, not sideloaded as a bogus WebP attachment.
-	 *
-	 * This path registers the WebP upload shim, which would otherwise re-assert
-	 * image/webp for the page during the content check; is_media_content() strips
-	 * it so the real type (text/html) is seen and the link is preserved.
 	 */
 	public function test_process_media_looking_webp_page_link_in_custom_attr_is_kept_as_link(): void {
 		// ARRANGE: A custom block attr holding a .webp URL that serves HTML.
@@ -2228,6 +2224,31 @@ class Content_Processor_Test extends Integration_Test_Case {
 			array(),
 			$this->processor->get_failed_media(),
 			'WebP-looking page link in attrs must not be recorded as a failure'
+		);
+	}
+
+	/**
+	 * Verifies that an image block whose .webp src serves an HTML page records
+	 * a media failure instead of sideloading the page as a WebP attachment.
+	 */
+	public function test_webp_src_serving_html_is_a_media_failure(): void {
+		// ARRANGE: An image block whose .webp src serves an HTML page.
+		$source_site_url = 'https://source.example.com';
+		$image_url       = $source_site_url . '/serves-html/photo.webp';
+		$content         = '<!-- wp:image {"id":7} -->'
+			. '<figure class="wp-block-image"><img src="' . $image_url
+			. '" class="wp-image-7"/></figure><!-- /wp:image -->';
+
+		$attachments_before = $this->get_attachment_count();
+
+		// ACT: Process the block through the full Gutenberg path.
+		$this->processor->process_content( $content, $source_site_url );
+
+		// ASSERT: Nothing was sideloaded, and the src is a media failure.
+		$this->assert_no_new_attachments( $attachments_before );
+		$this->assertSame(
+			array( $image_url => 'core/image' ),
+			$this->processor->get_failed_media()
 		);
 	}
 

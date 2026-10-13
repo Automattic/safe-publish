@@ -41,6 +41,19 @@ if ( ! defined( 'ABSPATH' ) ) {
 final class Diff_Renderer {
 
 	/**
+	 * Attributes that open content in the browser's top layer, above the admin.
+	 *
+	 * @var array<string, true>
+	 */
+	private const TOP_LAYER_TRIGGERS = array(
+		'command'             => true,
+		'commandfor'          => true,
+		'interestfor'         => true,
+		'popovertarget'       => true,
+		'popovertargetaction' => true,
+	);
+
+	/**
 	 * Logger instance.
 	 *
 	 * @var Content_Logger
@@ -739,6 +752,14 @@ final class Diff_Renderer {
 			return trim( $html );
 		};
 
+		// Previews render inline in the admin, so they drop top-layer triggers.
+		$preview_html = array_map(
+			static fn ( mixed $attributes ): mixed => is_array( $attributes )
+				? array_diff_key( $attributes, self::TOP_LAYER_TRIGGERS )
+				: $attributes,
+			wp_kses_allowed_html( 'post' )
+		);
+
 		$current_blocks  = parse_blocks( $current ?? '' );
 		$incoming_blocks = parse_blocks( $incoming ?? '' );
 		$max             = max( count( $current_blocks ), count( $incoming_blocks ) );
@@ -756,8 +777,8 @@ final class Diff_Renderer {
 			$inc_name = $inc['blockName'] ?? null;
 
 			// An update writes saved markup, so the verdict reads that. A
-			// render drops whatever wp_kses_post() filters, and invents
-			// changes from the counters some blocks assign per render.
+			// render drops whatever kses filters, and invents changes from the
+			// counters some blocks assign per render.
 			$cur_signal = $cur
 				? $normalize_block_html( serialize_block( $cur ) )
 				: '';
@@ -766,8 +787,12 @@ final class Diff_Renderer {
 				: '';
 
 			// Rendering serves the previews alone.
-			$cur_filtered = $cur ? wp_kses_post( render_block( $cur ) ) : '';
-			$inc_filtered = $inc ? wp_kses_post( render_block( $inc ) ) : '';
+			$cur_filtered = $cur
+				? wp_kses( render_block( $cur ), $preview_html )
+				: '';
+			$inc_filtered = $inc
+				? wp_kses( render_block( $inc ), $preview_html )
+				: '';
 
 			// Skip empty freeform whitespace slots — parse_blocks emits them
 			// between real blocks and they carry no visible signal.
