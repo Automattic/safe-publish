@@ -38,8 +38,8 @@ const ATTRS_CLASS = 'safe-publish-inline-attr-changed';
 
 /**
  * Elements whose children are raw text or an inert fragment, so a marker inside
- * one would read as content. Block HTML passes wp_kses_post, which drops all
- * but textarea and title; the rest cover unfiltered callers.
+ * one would read as content. Block HTML passes kses with the post allowlist,
+ * which drops all but textarea and title; the rest cover unfiltered callers.
  */
 const OPAQUE_TAGS = new Set( [
 	'IFRAME',
