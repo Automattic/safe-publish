@@ -457,6 +457,81 @@ class Source_Media_REST_Field_Test extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Verifies that escaped block URLs retain their source library metadata.
+	 */
+	public function test_field_maps_escaped_block_attribute_urls(): void {
+		// ARRANGE: Media URLs appear only in serialized custom block attrs.
+		$absolute = $this->seed_attachment( '2025/01/escaped-absolute.jpg' );
+		$relative = $this->seed_attachment( '2025/01/escaped-relative.jpg' );
+		$protocol = $this->seed_attachment( '2025/01/escaped-protocol.jpg' );
+		$spaced   = $this->seed_attachment( '2025/01/spaced.jpg' );
+		$attrs    = array(
+			'absolute' => $absolute['url'],
+			'root'     => (string) wp_parse_url(
+				$relative['url'],
+				PHP_URL_PATH
+			),
+			'protocol' => substr(
+				$protocol['url'],
+				strpos( $protocol['url'], '//' )
+			),
+			'spaced'   => ' ' . $spaced['url'],
+		);
+		$content  = serialize_block(
+			array(
+				'blockName'    => 'example/media',
+				'attrs'        => $attrs,
+				'innerBlocks'  => array(),
+				'innerHTML'    => '',
+				'innerContent' => array(),
+			)
+		);
+		$content  = str_replace(
+			array( $absolute['url'], $attrs['root'], $attrs['protocol'] ),
+			array(
+				str_replace( '/', '\\/', $absolute['url'] ),
+				str_replace( '/', '\\/', $attrs['root'] ),
+				str_replace( '/', '\\/', $attrs['protocol'] ),
+			),
+			$content
+		);
+		$post_id  = self::factory()->post->create();
+		global $wpdb;
+		// Store raw escaped JSON that wp_insert_post() would unslash.
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
+		$wpdb->update(
+			$wpdb->posts,
+			array( 'post_content' => $content ),
+			array( 'ID' => $post_id )
+		);
+		clean_post_cache( $post_id );
+		$stored = (string) get_post_field( 'post_content', $post_id );
+		$this->assertStringNotContainsString( $absolute['url'], $stored );
+		$this->assertSame( $attrs, parse_blocks( $stored )[0]['attrs'] );
+		$this->force_hmac_authenticated( true );
+
+		// ACT: Export the post's media metadata.
+		$response = $this->server->dispatch(
+			new WP_REST_Request( 'GET', '/wp/v2/posts/' . $post_id )
+		);
+
+		// ASSERT: All imported URLs carry their source library values.
+		$this->assertSame( 200, $response->get_status() );
+		$media         = $response->get_data()['safe_publish_media'];
+		$actual_urls   = array_keys( $media );
+		$expected_urls = array(
+			$absolute['url'],
+			$relative['url'],
+			$protocol['url'],
+			$spaced['url'],
+		);
+		sort( $actual_urls );
+		sort( $expected_urls );
+		$this->assertSame( $expected_urls, $actual_urls );
+		$this->assertSame( 'Library alt', $media[ $absolute['url'] ]['alt'] );
+	}
+
+	/**
 	 * Verifies that nested attributes in a child block retain a line-broken
 	 * media URL's library metadata.
 	 */

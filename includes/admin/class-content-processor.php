@@ -1698,7 +1698,13 @@ class Content_Processor {
 				);
 			} elseif (
 				is_string( $value ) &&
-				URL_Validator::is_absolute_http_url( $value ) &&
+				(
+					URL_Validator::is_absolute_http_url( $value ) ||
+					str_starts_with(
+						URL_Validator::normalize_url_whitespace( $value ),
+						'/'
+					)
+				) &&
 				$this->content_media_processor
 					->has_uploadable_file_extension( $value )
 			) {
@@ -1735,10 +1741,10 @@ class Content_Processor {
 				$attrs[ $key ] = $new_url;
 
 				if ( isset( $block['innerHTML'] ) && '' !== $block['innerHTML'] ) {
-					$block['innerHTML'] = str_replace(
+					$block['innerHTML'] = $this->replace_standalone_media_url(
+						$block['innerHTML'],
 						$value,
-						$new_url,
-						$block['innerHTML']
+						$new_url
 					);
 				}
 
@@ -1749,11 +1755,12 @@ class Content_Processor {
 				) {
 					foreach ( $block['innerContent'] as $idx => $content ) {
 						if ( is_string( $content ) ) {
-							$block['innerContent'][ $idx ] = str_replace(
-								$value,
-								$new_url,
-								$content
-							);
+							$block['innerContent'][ $idx ] =
+								$this->replace_standalone_media_url(
+									$content,
+									$value,
+									$new_url
+								);
 						}
 					}
 				}
@@ -1761,6 +1768,32 @@ class Content_Processor {
 		}
 
 		return $attrs;
+	}
+
+	/**
+	 * Replaces a media URL, but not as the tail of a longer URL or the start of
+	 * a longer path. A query or fragment that follows the URL is kept.
+	 *
+	 * @param string $content Content containing the URL.
+	 * @param string $old_url Source media URL.
+	 * @param string $new_url Imported media URL.
+	 * @return string Updated content.
+	 */
+	private function replace_standalone_media_url(
+		string $content,
+		string $old_url,
+		string $new_url
+	): string {
+		$pattern = '/(?<![a-zA-Z0-9_\.\/:\-])'
+			. preg_quote( $old_url, '/' )
+			. '(?![a-zA-Z0-9_\.\/%=+\-])/';
+		$updated = preg_replace_callback(
+			$pattern,
+			static fn (): string => $new_url,
+			$content
+		);
+
+		return is_string( $updated ) ? $updated : $content;
 	}
 
 	/**
