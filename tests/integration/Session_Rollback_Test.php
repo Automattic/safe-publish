@@ -2270,7 +2270,7 @@ class Session_Rollback_Test extends Integration_Test_Case {
 
 	/**
 	 * Verifies that a newer failed import does not supersede the update
-	 * before it, since the failure left the post's content alone.
+	 * before it, since a failed update usually leaves the post's content alone.
 	 */
 	public function test_rollback_item_ignores_a_newer_failed_import(): void {
 		// ARRANGE: An update, then a failed update of the same post.
