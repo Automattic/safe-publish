@@ -58,6 +58,16 @@ jobs:
       - name: Start WordPress environment
         run: npx wp-env start
 
+      # wp-env loads trunk's test library for an -alpha core, which a
+      # maintenance branch reports between patch releases. Use the library
+      # from the same branch as core instead. Must run after the last start.
+      - name: Match the PHPUnit library to the WordPress branch
+        run: |
+          path="$(npx wp-env status --json | jq -r .installPath)"
+          dir="$path/tests-WordPress-PHPUnit"
+          git -C "$dir" fetch --depth 1 origin '${{ inputs.wordpress-version }}'
+          git -C "$dir" checkout --force FETCH_HEAD
+
       - name: Verify WordPress environment
         run: |
           npx wp-env run tests-cli -- php -r '
