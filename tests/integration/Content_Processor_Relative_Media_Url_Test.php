@@ -48,6 +48,8 @@ class Content_Processor_Relative_Media_Url_Test extends Integration_Test_Case {
 		self::SOURCE . self::SUBSITE_UPLOAD,
 		self::SUBSITE . '/bare.jpg',
 		self::SOURCE . '/combo.jpg',
+		self::SOURCE . '/wp-content/uploads/2024/01/mixed-cover.jpg',
+		self::SOURCE . '/wp-content/uploads/2024/01/mixed-image.jpg',
 	);
 
 	/**
@@ -398,5 +400,46 @@ class Content_Processor_Relative_Media_Url_Test extends Integration_Test_Case {
 		// ASSERT: The destination host replaced the source host.
 		$this->assertStringNotContainsString( 'source.example.com', $result );
 		$this->assertStringContainsString( home_url( '/about' ), $result );
+	}
+
+	/**
+	 * Verifies that a media block's relative URL is not replaced inside the
+	 * absolute URL of the same file in its markup, which left the source host
+	 * glued to the destination URL.
+	 */
+	public function test_media_block_keeps_absolute_src_whole(): void {
+		// ARRANGE: A cover whose url is root-relative and whose src is absolute.
+		$path = '/wp-content/uploads/2024/01/mixed-cover.jpg';
+		$html = '<!-- wp:cover {"url":"' . $path . '"} -->'
+			. '<div class="wp-block-cover">'
+			. '<img src="' . self::SOURCE . $path . '" alt=""/>'
+			. '</div><!-- /wp:cover -->';
+
+		// ACT: Run the full pipeline.
+		$result = (string) $this->processor->process_content( $html, self::SOURCE );
+
+		// ASSERT: The src names the same destination file as the url attr.
+		$url = parse_blocks( $result )[0]['attrs']['url'];
+		$this->assertStringContainsString( 'src="' . $url . '"', $result );
+	}
+
+	/**
+	 * Verifies that an image block's relative URL is not replaced inside the
+	 * absolute URL of the same file when the src does not match it exactly.
+	 */
+	public function test_image_block_keeps_absolute_src_whole(): void {
+		// ARRANGE: An image whose url is root-relative and whose src is absolute.
+		$path = '/wp-content/uploads/2024/01/mixed-image.jpg';
+		$html = '<!-- wp:image {"url":"' . $path . '"} -->'
+			. '<figure class="wp-block-image">'
+			. '<img src="' . self::SOURCE . $path . '" alt=""/>'
+			. '</figure><!-- /wp:image -->';
+
+		// ACT: Run the full pipeline.
+		$result = (string) $this->processor->process_content( $html, self::SOURCE );
+
+		// ASSERT: The src names the same destination file as the url attr.
+		$url = parse_blocks( $result )[0]['attrs']['url'];
+		$this->assertStringContainsString( 'src="' . $url . '"', $result );
 	}
 }
