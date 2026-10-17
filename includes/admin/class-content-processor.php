@@ -1305,23 +1305,23 @@ class Content_Processor {
 			$block['attrs'] = array();
 		}
 
-		$url_with_parameters = Media_Importer::reapply_query_parameters(
+		$new_url = Media_Importer::reapply_query_parameters(
 			$original_url,
 			$new_url
 		);
 
 		// Update block attributes with local URL and attachment ID.
-		$block['attrs']['url'] = $url_with_parameters;
+		$block['attrs']['url'] = $new_url;
 		$block['attrs']['id']  = $attachment_id;
 
 		// Also update other common image attributes that might reference the URL.
 		if ( isset( $block['attrs']['src'] ) ) {
-			$block['attrs']['src'] = $url_with_parameters;
+			$block['attrs']['src'] = $new_url;
 		}
 
 		// Update innerHTML with the appropriate URL for correct rendering.
 		if ( ! empty( $block['innerHTML'] ) ) {
-			$updated_html       = $this->update_img_src_in_html( $block['innerHTML'], $original_url, $url_with_parameters );
+			$updated_html       = $this->update_img_src_in_html( $block['innerHTML'], $original_url, $new_url );
 			$updated_html       = $this->update_wp_image_class( $updated_html, $attachment_id );
 			$block['innerHTML'] = $updated_html;
 		}
@@ -1330,7 +1330,7 @@ class Content_Processor {
 		if ( ! empty( $block['innerContent'] ) && is_array( $block['innerContent'] ) ) {
 			foreach ( $block['innerContent'] as $index => $content ) {
 				if ( is_string( $content ) ) {
-					$updated_content                 = $this->update_img_src_in_html( $content, $original_url, $url_with_parameters );
+					$updated_content                 = $this->update_img_src_in_html( $content, $original_url, $new_url );
 					$updated_content                 = $this->update_wp_image_class( $updated_content, $attachment_id );
 					$block['innerContent'][ $index ] = $updated_content;
 				}
@@ -1444,20 +1444,20 @@ class Content_Processor {
 			return $this->process_block_inner_html( $block, $source_site_url );
 		}
 
-		$url_with_parameters = Media_Importer::reapply_query_parameters(
+		$new_url = Media_Importer::reapply_query_parameters(
 			$media_url,
 			$new_url
 		);
 
 		if ( null !== $url_attr ) {
-			$block['attrs'][ $url_attr ] = $url_with_parameters;
+			$block['attrs'][ $url_attr ] = $new_url;
 		}
 		$block['attrs'][ $id_attr ] = $attachment_id;
 
 		if ( ! empty( $block['innerHTML'] ) ) {
 			$block['innerHTML'] = str_replace(
 				$media_url,
-				$url_with_parameters,
+				$new_url,
 				$block['innerHTML']
 			);
 		}
@@ -1467,7 +1467,7 @@ class Content_Processor {
 				if ( is_string( $content ) ) {
 					$block['innerContent'][ $index ] = str_replace(
 						$media_url,
-						$url_with_parameters,
+						$new_url,
 						$content
 					);
 				}
