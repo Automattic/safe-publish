@@ -359,6 +359,7 @@ Ask a user who can save the content unfiltered to retry the import or rollback. 
 These rollback errors point at a listing that no longer matches the destination:
 
 - **"This import was already rolled back. Reload the list."** The import had been rolled back already, usually from another browser tab. Reload the listing; the row will no longer offer that rollback. Safe Publish refuses the request rather than replaying it, because replaying would write the stored snapshot over whatever the post holds now.
+- **"This post was imported again. Reload the list before rolling back the latest import."** Another import updated the post, usually after the listing loaded. Reload the listing, which offers rollback for the latest import. Roll back each import in turn to reach an earlier version.
 - **"The post is in the trash. Restore it before rolling back."** The post was moved to the trash after the listing loaded. Restore it, reload the listing, and roll back again.
 - **"The post no longer exists, so there is nothing to roll back."** The post was permanently deleted after the listing loaded.
 
