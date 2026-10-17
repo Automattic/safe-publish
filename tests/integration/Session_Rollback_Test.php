@@ -2220,6 +2220,96 @@ class Session_Rollback_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that rolling back an import a newer one superseded is refused
+	 * and leaves the post untouched.
+	 */
+	public function test_rollback_item_refuses_a_superseded_item(): void {
+		// ARRANGE: Two updates of one post, as a listing loaded before the
+		// second one would still offer the first.
+		$session_id = $this->repository->create_session( 'https://example.com', 'bulk' );
+		$post_id    = $this->factory()->post->create(
+			array( 'post_content' => 'Second import content.' )
+		);
+		$first_id   = $this->repository->log_import_action(
+			$session_id,
+			1,
+			'Post',
+			'updated',
+			$post_id,
+			null,
+			array(
+				'previous_content' => 'Original content.',
+				'action'           => 'updated_existing',
+			)
+		);
+		$this->repository->log_import_action(
+			$session_id,
+			1,
+			'Post',
+			'updated',
+			$post_id,
+			null,
+			array(
+				'previous_content' => 'First import content.',
+				'action'           => 'updated_existing',
+			)
+		);
+
+		// ACT: Roll back the superseded first import.
+		$result = $this->rollback_service->rollback_item( $first_id );
+
+		// ASSERT: The rollback was refused with its own error code.
+		$this->assertInstanceOf( WP_Error::class, $result );
+		$this->assertSame( 'item_superseded', $result->get_error_code() );
+
+		// ASSERT: The post kept the second import's content.
+		$post = get_post( $post_id );
+		$this->assertNotNull( $post );
+		$this->assertSame( 'Second import content.', $post->post_content );
+	}
+
+	/**
+	 * Verifies that a newer failed import does not supersede the update
+	 * before it, since a failed update usually leaves the post's content alone.
+	 */
+	public function test_rollback_item_ignores_a_newer_failed_import(): void {
+		// ARRANGE: An update, then a failed update of the same post.
+		$session_id = $this->repository->create_session( 'https://example.com', 'bulk' );
+		$post_id    = $this->factory()->post->create(
+			array( 'post_content' => 'Imported content.' )
+		);
+		$item_id    = $this->repository->log_import_action(
+			$session_id,
+			1,
+			'Post',
+			'updated',
+			$post_id,
+			null,
+			array(
+				'previous_content' => 'Original content.',
+				'action'           => 'updated_existing',
+			)
+		);
+		$failed_id  = $this->repository->log_import_action(
+			$session_id,
+			1,
+			'Post',
+			'error',
+			$post_id,
+			'Fixture error'
+		);
+		// The failure row must exist, or the rollback passes for lack of it.
+		$this->assertIsInt( $failed_id );
+
+		// ACT: Roll back the update.
+		$result = $this->rollback_service->rollback_item( $item_id );
+
+		// ASSERT: The failure did not block the rollback.
+		$this->assertIsArray( $result );
+		$this->assertSame( 'restored', $result['action'] );
+	}
+
+	/**
 	 * Verifies that the replay guard leaves sequential rollback intact, so
 	 * each rollback still walks back one import operation.
 	 */

@@ -183,6 +183,20 @@ final class Session_Rollback_Service {
 			return $this->close_item_for_missing_post( $item_id );
 		}
 
+		// Only the post's newest import may roll back. An older row's revert
+		// would undo the imports after it too, while their rows stay active.
+		$active = $this->repository->get_item_for_post( $post_id );
+
+		if ( null === $active || $item_id !== (int) $active['id'] ) {
+			return new WP_Error(
+				'item_superseded',
+				__(
+					'This post was imported again. Reload the list before rolling back the latest import.',
+					'safe-publish'
+				)
+			);
+		}
+
 		if ( 'updated' !== $status ) {
 			return null;
 		}
