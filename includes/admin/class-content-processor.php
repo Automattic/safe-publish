@@ -1305,6 +1305,11 @@ class Content_Processor {
 			$block['attrs'] = array();
 		}
 
+		$new_url = Media_Importer::reapply_query_parameters(
+			$original_url,
+			$new_url
+		);
+
 		// Update block attributes with local URL and attachment ID.
 		$block['attrs']['url'] = $new_url;
 		$block['attrs']['id']  = $attachment_id;
@@ -1314,11 +1319,9 @@ class Content_Processor {
 			$block['attrs']['src'] = $new_url;
 		}
 
-		$url_with_parameters = Media_Importer::reapply_query_parameters( $original_url, $new_url );
-
 		// Update innerHTML with the appropriate URL for correct rendering.
 		if ( ! empty( $block['innerHTML'] ) ) {
-			$updated_html       = $this->update_img_src_in_html( $block['innerHTML'], $original_url, $url_with_parameters );
+			$updated_html       = $this->update_img_src_in_html( $block['innerHTML'], $original_url, $new_url );
 			$updated_html       = $this->update_wp_image_class( $updated_html, $attachment_id );
 			$block['innerHTML'] = $updated_html;
 		}
@@ -1327,7 +1330,7 @@ class Content_Processor {
 		if ( ! empty( $block['innerContent'] ) && is_array( $block['innerContent'] ) ) {
 			foreach ( $block['innerContent'] as $index => $content ) {
 				if ( is_string( $content ) ) {
-					$updated_content                 = $this->update_img_src_in_html( $content, $original_url, $url_with_parameters );
+					$updated_content                 = $this->update_img_src_in_html( $content, $original_url, $new_url );
 					$updated_content                 = $this->update_wp_image_class( $updated_content, $attachment_id );
 					$block['innerContent'][ $index ] = $updated_content;
 				}
@@ -1441,21 +1444,21 @@ class Content_Processor {
 			return $this->process_block_inner_html( $block, $source_site_url );
 		}
 
+		$new_url = Media_Importer::reapply_query_parameters(
+			$media_url,
+			$new_url
+		);
+
 		if ( null !== $url_attr ) {
 			$block['attrs'][ $url_attr ] = $new_url;
 		}
 		$block['attrs'][ $id_attr ] = $attachment_id;
 
-		$url_with_parameters = Media_Importer::reapply_query_parameters(
-			$media_url,
-			$new_url
-		);
-
 		if ( ! empty( $block['innerHTML'] ) ) {
 			$block['innerHTML'] = $this->replace_standalone_media_url(
 				$block['innerHTML'],
 				$media_url,
-				$url_with_parameters
+				$new_url
 			);
 		}
 
@@ -1466,7 +1469,7 @@ class Content_Processor {
 						$this->replace_standalone_media_url(
 							$content,
 							$media_url,
-							$url_with_parameters
+							$new_url
 						);
 				}
 			}
@@ -1684,8 +1687,9 @@ class Content_Processor {
 	 *
 	 * Walks all string values in $attrs. For each value that is a valid URL
 	 * on the source domain, the URL is sideloaded and replaced with the local
-	 * attachment URL. Matching occurrences in $block['innerHTML'] and
-	 * $block['innerContent'] are also updated so they stay consistent.
+	 * attachment URL, keeping its query. Matching occurrences in
+	 * $block['innerHTML'] and $block['innerContent'] are also updated so they
+	 * stay consistent.
 	 *
 	 * @param array  $attrs           Attributes array to walk (possibly nested).
 	 * @param string $source_site_url Source site URL.
@@ -1747,6 +1751,10 @@ class Content_Processor {
 					continue;
 				}
 
+				$new_url       = Media_Importer::reapply_query_parameters(
+					$value,
+					$new_url
+				);
 				$attrs[ $key ] = $new_url;
 
 				if ( isset( $block['innerHTML'] ) && '' !== $block['innerHTML'] ) {
@@ -1781,7 +1789,8 @@ class Content_Processor {
 
 	/**
 	 * Replaces a media URL, but not as the tail of a longer URL or the start of
-	 * a longer path. A query or fragment that follows the URL is kept.
+	 * a longer path. A query or fragment that follows the URL is kept. A copy
+	 * that encodes the query's "&" as "&amp;", as markup does, keeps that form.
 	 *
 	 * @param string $content Content containing the URL.
 	 * @param string $old_url Source media URL.
@@ -1793,12 +1802,16 @@ class Content_Processor {
 		string $old_url,
 		string $new_url
 	): string {
+		$encoded = str_replace( '&', '&amp;', $old_url );
 		$pattern = '/(?<![a-zA-Z0-9_\.\/:\-])'
-			. preg_quote( $old_url, '/' )
+			. '(?:' . preg_quote( $old_url, '/' )
+			. '|' . preg_quote( $encoded, '/' ) . ')'
 			. '(?![a-zA-Z0-9_\.\/%=+\-])/';
 		$updated = preg_replace_callback(
 			$pattern,
-			static fn (): string => $new_url,
+			static fn ( array $matches ): string => $old_url === $matches[0]
+				? $new_url
+				: str_replace( '&', '&amp;', $new_url ),
 			$content
 		);
 
