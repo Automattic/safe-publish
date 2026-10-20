@@ -1321,8 +1321,16 @@ class Content_Processor {
 
 		// Update innerHTML with the appropriate URL for correct rendering.
 		if ( ! empty( $block['innerHTML'] ) ) {
-			$updated_html       = $this->update_img_src_in_html( $block['innerHTML'], $original_url, $new_url );
-			$updated_html       = $this->update_wp_image_class( $updated_html, $attachment_id );
+			$updated_html = $this->update_img_src_in_html(
+				$block['innerHTML'],
+				$original_url,
+				$new_url
+			);
+			$updated_html = $this->update_wp_image_class(
+				$updated_html,
+				$attachment_id
+			);
+
 			$block['innerHTML'] = $updated_html;
 		}
 
@@ -1330,8 +1338,16 @@ class Content_Processor {
 		if ( ! empty( $block['innerContent'] ) && is_array( $block['innerContent'] ) ) {
 			foreach ( $block['innerContent'] as $index => $content ) {
 				if ( is_string( $content ) ) {
-					$updated_content                 = $this->update_img_src_in_html( $content, $original_url, $new_url );
-					$updated_content                 = $this->update_wp_image_class( $updated_content, $attachment_id );
+					$updated_content = $this->update_img_src_in_html(
+						$content,
+						$original_url,
+						$new_url
+					);
+					$updated_content = $this->update_wp_image_class(
+						$updated_content,
+						$attachment_id
+					);
+
 					$block['innerContent'][ $index ] = $updated_content;
 				}
 			}
@@ -1578,7 +1594,7 @@ class Content_Processor {
 	/**
 	 * Extracts image src attribute from HTML content.
 	 *
-	 * Returns the attribute verbatim so it still matches the markup when used
+	 * Keeps the attribute's whitespace so it still matches the markup when used
 	 * as a replacement needle; callers normalize it for any other use.
 	 *
 	 * @param string $html HTML content.
@@ -1790,7 +1806,7 @@ class Content_Processor {
 	/**
 	 * Replaces a media URL, but not as the tail of a longer URL or the start of
 	 * a longer path. A query or fragment that follows the URL is kept. A copy
-	 * that encodes the query's "&" as "&amp;", as markup does, keeps that form.
+	 * that encodes the query's "&" as "&amp;" or "&#038;" keeps that form.
 	 *
 	 * @param string $content Content containing the URL.
 	 * @param string $old_url Source media URL.
@@ -1802,16 +1818,20 @@ class Content_Processor {
 		string $old_url,
 		string $new_url
 	): string {
-		$encoded = str_replace( '&', '&amp;', $old_url );
+		$named   = str_replace( '&', '&amp;', $old_url );
+		$numeric = str_replace( '&', '&#038;', $old_url );
 		$pattern = '/(?<![a-zA-Z0-9_\.\/:\-])'
 			. '(?:' . preg_quote( $old_url, '/' )
-			. '|' . preg_quote( $encoded, '/' ) . ')'
+			. '|' . preg_quote( $named, '/' )
+			. '|' . preg_quote( $numeric, '/' ) . ')'
 			. '(?![a-zA-Z0-9_\.\/%=+\-])/';
 		$updated = preg_replace_callback(
 			$pattern,
-			static fn ( array $matches ): string => $old_url === $matches[0]
-				? $new_url
-				: str_replace( '&', '&amp;', $new_url ),
+			static fn ( array $matches ): string => match ( $matches[0] ) {
+				$old_url => $new_url,
+				$named   => str_replace( '&', '&amp;', $new_url ),
+				default  => str_replace( '&', '&#038;', $new_url ),
+			},
 			$content
 		);
 

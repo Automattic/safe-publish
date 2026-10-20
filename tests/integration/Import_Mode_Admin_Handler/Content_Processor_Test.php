@@ -1806,15 +1806,18 @@ class Content_Processor_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Verifies that a custom block's markup copy of a media URL is rewritten
-	 * when it HTML-encodes the query's ampersands.
+	 * Verifies that a custom block's markup copies of a media URL are
+	 * rewritten, each keeping its form of the query's ampersands.
 	 */
-	public function test_process_custom_block_rewrites_encoded_copy(): void {
-		// ARRANGE: A data attribute, which no later pass repoints, encodes "&".
+	public function test_process_custom_block_keeps_ampersand_forms(): void {
+		// ARRANGE: Attribute copies encode "&" as esc_attr() and esc_url() do,
+		// and a script copy keeps it raw; no later pass repoints them.
 		$media_url = 'https://source.example.com/hero.jpg?w=300&h=200';
 		$content   = '<!-- wp:my-plugin/hero {"backgroundUrl":"' . $media_url
 			. '"} --><div class="wp-block-my-plugin-hero" data-bg="'
-			. esc_attr( $media_url ) . '"></div><!-- /wp:my-plugin/hero -->';
+			. esc_attr( $media_url ) . '" style="background-image:url('
+			. esc_url( $media_url ) . ')"><script>var bg = "' . $media_url
+			. '";</script></div><!-- /wp:my-plugin/hero -->';
 
 		// ACT: Process the custom block through the Gutenberg path.
 		$processed = $this->processor->process_content(
@@ -1822,12 +1825,20 @@ class Content_Processor_Test extends Integration_Test_Case {
 			'https://source.example.com'
 		);
 
-		// ASSERT: The copy holds the local URL, still encoded.
+		// ASSERT: Each copy holds the local URL in its original form.
 		$local_url = wp_get_attachment_url(
 			$this->media_importer->get_newly_created_attachment_ids()[0]
 		);
 		$this->assertStringContainsString(
 			'data-bg="' . $local_url . '?w=300&amp;h=200"',
+			$processed
+		);
+		$this->assertStringContainsString(
+			'url(' . $local_url . '?w=300&#038;h=200)',
+			$processed
+		);
+		$this->assertStringContainsString(
+			'<script>var bg = "' . $local_url . '?w=300&h=200";</script>',
 			$processed
 		);
 	}
