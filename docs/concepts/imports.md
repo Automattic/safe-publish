@@ -117,6 +117,7 @@ Rollback does not restore or remove imported custom metadata, delete created ter
 The server re-checks this on every request, so a listing loaded before an earlier rollback cannot re-apply it. A rollback is refused, leaving the post untouched, when:
 
 - The item was already rolled back, or a concurrent rollback claimed it first.
+- A later import updated the post and has not been rolled back.
 - An update's destination post is in the trash.
 - An update was recorded without a restore point, so its pre-existing post has nothing to put back.
 - The destination post no longer exists, which also closes the import record, since that import can never be reverted.
