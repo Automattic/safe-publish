@@ -1321,8 +1321,16 @@ class Content_Processor {
 
 		// Update innerHTML with the appropriate URL for correct rendering.
 		if ( ! empty( $block['innerHTML'] ) ) {
-			$updated_html       = $this->update_img_src_in_html( $block['innerHTML'], $original_url, $new_url );
-			$updated_html       = $this->update_wp_image_class( $updated_html, $attachment_id );
+			$updated_html = $this->update_img_src_in_html(
+				$block['innerHTML'],
+				$original_url,
+				$new_url
+			);
+			$updated_html = $this->update_wp_image_class(
+				$updated_html,
+				$attachment_id
+			);
+
 			$block['innerHTML'] = $updated_html;
 		}
 
@@ -1330,8 +1338,16 @@ class Content_Processor {
 		if ( ! empty( $block['innerContent'] ) && is_array( $block['innerContent'] ) ) {
 			foreach ( $block['innerContent'] as $index => $content ) {
 				if ( is_string( $content ) ) {
-					$updated_content                 = $this->update_img_src_in_html( $content, $original_url, $new_url );
-					$updated_content                 = $this->update_wp_image_class( $updated_content, $attachment_id );
+					$updated_content = $this->update_img_src_in_html(
+						$content,
+						$original_url,
+						$new_url
+					);
+					$updated_content = $this->update_wp_image_class(
+						$updated_content,
+						$attachment_id
+					);
+
 					$block['innerContent'][ $index ] = $updated_content;
 				}
 			}
