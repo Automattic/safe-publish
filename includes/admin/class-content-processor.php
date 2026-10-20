@@ -1594,7 +1594,7 @@ class Content_Processor {
 	/**
 	 * Extracts image src attribute from HTML content.
 	 *
-	 * Returns the attribute verbatim so it still matches the markup when used
+	 * Keeps the attribute's whitespace so it still matches the markup when used
 	 * as a replacement needle; callers normalize it for any other use.
 	 *
 	 * @param string $html HTML content.
