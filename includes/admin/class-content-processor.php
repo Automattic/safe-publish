@@ -933,10 +933,11 @@ class Content_Processor {
 		// "source.example.company.com"). A source on a non-default port matches
 		// only with that port, and the lookahead rejects any other. The same
 		// host on another port is another site, such as the destination itself
-		// when both share a host.
+		// when both share a host. The lookahead also rejects a "-", which
+		// continues a longer host name, and an "@", which ends a user name.
 		$authority = preg_quote( $source_host, '/' )
 			. ( null !== $source_port ? ':' . $source_port : '' );
-		$pattern   = '/https?:\/\/' . $authority . '(?=[^a-zA-Z0-9.:]|$)/';
+		$pattern   = '/https?:\/\/' . $authority . '(?=[^a-zA-Z0-9.:@-]|$)/';
 
 		$result = preg_replace( $pattern, $current_site_url, $content );
 
