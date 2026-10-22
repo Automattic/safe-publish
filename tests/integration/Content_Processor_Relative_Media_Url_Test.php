@@ -442,4 +442,64 @@ class Content_Processor_Relative_Media_Url_Test extends Integration_Test_Case {
 		$url = parse_blocks( $result )[0]['attrs']['url'];
 		$this->assertStringContainsString( 'src="' . $url . '"', $result );
 	}
+
+	/**
+	 * Verifies that a CSS background URL names the same destination file as
+	 * the block's media attr when the two hold different forms of the URL.
+	 *
+	 * @dataProvider css_url_form_provider
+	 * @param string $block_name Block name.
+	 * @param string $attr       Attr that holds the media URL.
+	 * @param string $attr_url   Media URL in the attr.
+	 * @param string $css_url    Media URL in the inline CSS.
+	 */
+	public function test_css_url_in_other_form_follows_attr(
+		string $block_name,
+		string $attr,
+		string $attr_url,
+		string $css_url
+	): void {
+		// ARRANGE: A block whose CSS holds another form of the attr's URL.
+		$html = sprintf(
+			'<!-- wp:%1$s {"%2$s":"%3$s"} -->'
+				. '<div style="background-image:url(%4$s)"></div>'
+				. '<!-- /wp:%1$s -->',
+			$block_name,
+			$attr,
+			$attr_url,
+			$css_url
+		);
+
+		// ACT: Run the full pipeline.
+		$result = (string) $this->processor->process_content(
+			$html,
+			self::SOURCE
+		);
+
+		// ASSERT: The CSS names the attr's destination file.
+		$url = parse_blocks( $result )[0]['attrs'][ $attr ];
+		$this->assertStringContainsString( 'url(' . $url . ')', $result );
+	}
+
+	/**
+	 * Provides blocks whose attr and CSS hold different forms of one URL.
+	 *
+	 * @return array<string, array{string, string, string, string}>
+	 */
+	public static function css_url_form_provider(): array {
+		$path = '/wp-content/uploads/2024/01/mixed-cover.jpg';
+		$url  = self::SOURCE . $path;
+
+		// The same file in the other scheme, and protocol-relative.
+		$http    = 'http://source.example.com' . $path;
+		$network = '//source.example.com' . $path;
+
+		return array(
+			'cover, relative attr'  => array( 'cover', 'url', $path, $url ),
+			'custom, relative attr' => array( 'acme/hero', 'bg', $path, $url ),
+			'cover, absolute attr'  => array( 'cover', 'url', $url, $path ),
+			'cover, http CSS'       => array( 'cover', 'url', $url, $http ),
+			'cover, //host CSS'     => array( 'cover', 'url', $url, $network ),
+		);
+	}
 }

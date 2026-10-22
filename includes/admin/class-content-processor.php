@@ -1455,10 +1455,11 @@ class Content_Processor {
 		$block['attrs'][ $id_attr ] = $attachment_id;
 
 		if ( ! empty( $block['innerHTML'] ) ) {
-			$block['innerHTML'] = $this->replace_standalone_media_url(
+			$block['innerHTML'] = $this->replace_media_url_forms(
 				$block['innerHTML'],
 				$media_url,
-				$new_url
+				$new_url,
+				$source_site_url
 			);
 		}
 
@@ -1466,10 +1467,11 @@ class Content_Processor {
 			foreach ( $block['innerContent'] as $index => $content ) {
 				if ( is_string( $content ) ) {
 					$block['innerContent'][ $index ] =
-						$this->replace_standalone_media_url(
+						$this->replace_media_url_forms(
 							$content,
 							$media_url,
-							$new_url
+							$new_url,
+							$source_site_url
 						);
 				}
 			}
@@ -1758,10 +1760,11 @@ class Content_Processor {
 				$attrs[ $key ] = $new_url;
 
 				if ( isset( $block['innerHTML'] ) && '' !== $block['innerHTML'] ) {
-					$block['innerHTML'] = $this->replace_standalone_media_url(
+					$block['innerHTML'] = $this->replace_media_url_forms(
 						$block['innerHTML'],
 						$value,
-						$new_url
+						$new_url,
+						$source_site_url
 					);
 				}
 
@@ -1773,10 +1776,11 @@ class Content_Processor {
 					foreach ( $block['innerContent'] as $idx => $content ) {
 						if ( is_string( $content ) ) {
 							$block['innerContent'][ $idx ] =
-								$this->replace_standalone_media_url(
+								$this->replace_media_url_forms(
 									$content,
 									$value,
-									$new_url
+									$new_url,
+									$source_site_url
 								);
 						}
 					}
@@ -1785,6 +1789,55 @@ class Content_Processor {
 		}
 
 		return $attrs;
+	}
+
+	/**
+	 * Replaces a source media URL in each form that names the same file: as
+	 * given, absolute in either scheme, protocol-relative, and root-relative.
+	 * Inline CSS can hold a form other than the block attr's, and no later pass
+	 * imports URLs inside CSS.
+	 *
+	 * @param string $content         Content containing the URL.
+	 * @param string $media_url       Source media URL, as the block holds it.
+	 * @param string $new_url         Imported media URL.
+	 * @param string $source_site_url Source site URL.
+	 * @return string Updated content.
+	 */
+	private function replace_media_url_forms(
+		string $content,
+		string $media_url,
+		string $new_url,
+		string $source_site_url
+	): string {
+		$protocol_relative_url = (string) preg_replace(
+			'~^https?:(?=//)~i',
+			'',
+			URL_Validator::resolve_relative_url( $media_url, $source_site_url )
+		);
+		// The importer takes only source-host media, so each form names the
+		// same file. A URL with no path keeps its host, so no form is empty. A
+		// repeated form is harmless: Its first pass leaves nothing to match.
+		$forms = array(
+			$media_url,
+			'https:' . $protocol_relative_url,
+			'http:' . $protocol_relative_url,
+			$protocol_relative_url,
+			(string) preg_replace(
+				'~^//[^/?#]+(?=/)~',
+				'',
+				$protocol_relative_url
+			),
+		);
+
+		foreach ( $forms as $old_url ) {
+			$content = $this->replace_standalone_media_url(
+				$content,
+				$old_url,
+				$new_url
+			);
+		}
+
+		return $content;
 	}
 
 	/**
