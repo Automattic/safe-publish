@@ -1794,9 +1794,9 @@ class Content_Processor {
 
 	/**
 	 * Replaces a source media URL in each form that names the same file: as
-	 * given, absolute in either scheme, protocol-relative, and root-relative.
-	 * Inline CSS can hold a form other than the block attr's, and no later pass
-	 * imports URLs inside CSS.
+	 * given, absolute in either scheme, and protocol-relative. Inline CSS can
+	 * hold a form other than the block attr's, and no later pass imports URLs
+	 * inside CSS.
 	 *
 	 * @param string $content         Content containing the URL.
 	 * @param string $media_url       Source media URL, as the block holds it.
@@ -1816,18 +1816,14 @@ class Content_Processor {
 			URL_Validator::resolve_relative_url( $media_url, $source_site_url )
 		);
 		// The importer takes only source-host media, so each form names the
-		// same file. A URL with no path keeps its host, so no form is empty. A
-		// repeated form is harmless: Its first pass leaves nothing to match.
+		// same file. Each added form starts with the host, so it can't match a
+		// path inside another host's URL. A repeated form is harmless: Its
+		// first pass leaves nothing to match.
 		$forms = array(
 			$media_url,
 			'https:' . $protocol_relative_url,
 			'http:' . $protocol_relative_url,
 			$protocol_relative_url,
-			(string) preg_replace(
-				'~^//[^/?#]+(?=/)~',
-				'',
-				$protocol_relative_url
-			),
 		);
 
 		foreach ( $forms as $old_url ) {

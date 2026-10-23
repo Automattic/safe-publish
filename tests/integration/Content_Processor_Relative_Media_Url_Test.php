@@ -445,7 +445,7 @@ class Content_Processor_Relative_Media_Url_Test extends Integration_Test_Case {
 
 	/**
 	 * Verifies that a CSS background URL names the same destination file as
-	 * the block's media attr when the two hold different forms of the URL.
+	 * the block's media attr, in whichever form each holds the URL.
 	 *
 	 * @dataProvider css_url_form_provider
 	 * @param string $block_name Block name.
@@ -453,7 +453,7 @@ class Content_Processor_Relative_Media_Url_Test extends Integration_Test_Case {
 	 * @param string $attr_url   Media URL in the attr.
 	 * @param string $css_url    Media URL in the inline CSS.
 	 */
-	public function test_css_url_in_other_form_follows_attr(
+	public function test_css_url_follows_attr(
 		string $block_name,
 		string $attr,
 		string $attr_url,
@@ -482,7 +482,8 @@ class Content_Processor_Relative_Media_Url_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Provides blocks whose attr and CSS hold different forms of one URL.
+	 * Provides blocks whose attr and CSS hold one URL, in the same or another
+	 * form.
 	 *
 	 * @return array<string, array{string, string, string, string}>
 	 */
@@ -497,9 +498,32 @@ class Content_Processor_Relative_Media_Url_Test extends Integration_Test_Case {
 		return array(
 			'cover, relative attr'  => array( 'cover', 'url', $path, $url ),
 			'custom, relative attr' => array( 'acme/hero', 'bg', $path, $url ),
-			'cover, absolute attr'  => array( 'cover', 'url', $url, $path ),
+			'cover, same form'      => array( 'cover', 'url', $path, $path ),
 			'cover, http CSS'       => array( 'cover', 'url', $url, $http ),
 			'cover, //host CSS'     => array( 'cover', 'url', $url, $network ),
 		);
+	}
+
+	/**
+	 * Verifies that another host's URL keeps its path when that path matches
+	 * the block's media file.
+	 */
+	public function test_other_host_url_with_media_path_stays(): void {
+		// ARRANGE: A cover whose CSS names another host's file at the same
+		// path, after an IPv6 host that ends in "]".
+		$path  = '/wp-content/uploads/2024/01/mixed-cover.jpg';
+		$other = 'https://[2001:db8::1]' . $path;
+		$html  = '<!-- wp:cover {"url":"' . self::SOURCE . $path . '"} -->'
+			. '<div style="background-image:url(' . $other . ')"></div>'
+			. '<!-- /wp:cover -->';
+
+		// ACT: Run the full pipeline.
+		$result = (string) $this->processor->process_content(
+			$html,
+			self::SOURCE
+		);
+
+		// ASSERT: The other host's URL is unchanged.
+		$this->assertStringContainsString( 'url(' . $other . ')', $result );
 	}
 }
