@@ -569,4 +569,48 @@ class Content_Processor_Relative_Media_Url_Test extends Integration_Test_Case {
 			'other query' => array( '?w=2' ),
 		);
 	}
+
+	/**
+	 * Verifies that a longer file name that starts with the media file's name
+	 * is left alone.
+	 *
+	 * @dataProvider longer_file_name_provider
+	 * @param string $attr_query Query on the attr URL, or '' for none.
+	 * @param string $suffix     Text that makes the longer file name.
+	 */
+	public function test_longer_file_name_stays(
+		string $attr_query,
+		string $suffix
+	): void {
+		// ARRANGE: A cover whose CSS names another file with a longer name.
+		$path = '/wp-content/uploads/2024/01/mixed-cover.jpg';
+		$html = '<!-- wp:cover {"url":"' . self::SOURCE . $path . $attr_query
+			. '"} --><div style="background-image:url('
+			. self::SOURCE . $path . $suffix . ')"></div><!-- /wp:cover -->';
+
+		// ACT: Run the full pipeline.
+		$result = (string) $this->processor->process_content(
+			$html,
+			self::SOURCE
+		);
+
+		// ASSERT: The longer file keeps its path, and only its host changes.
+		$this->assertStringContainsString(
+			'url(' . home_url( $path . $suffix ) . ')',
+			$result
+		);
+	}
+
+	/**
+	 * Provides attr queries and suffixes that make a longer file name.
+	 *
+	 * @return array<string, array{string, string}>
+	 */
+	public static function longer_file_name_provider(): array {
+		return array(
+			'"@" suffix'             => array( '', '@2x.jpg' ),
+			'"@" suffix, attr query' => array( '?v=1', '@2x.jpg' ),
+			'"~" suffix'             => array( '', '~old.jpg' ),
+		);
+	}
 }

@@ -1865,7 +1865,7 @@ class Content_Processor {
 		$pattern = '/(?<![a-zA-Z0-9_\.\/:\-])'
 			. '(?:' . preg_quote( $old_url, '/' )
 			. '|' . preg_quote( $encoded, '/' ) . ')'
-			. '(?![a-zA-Z0-9_\.\/%=+\-])/';
+			. '(?![a-zA-Z0-9_\.\/%=+@~\-])/';
 		$updated = preg_replace_callback(
 			$pattern,
 			static fn ( array $matches ): string => $old_url === $matches[0]
