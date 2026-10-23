@@ -1794,9 +1794,9 @@ class Content_Processor {
 
 	/**
 	 * Replaces a source media URL in each form that names the same file: as
-	 * given, absolute in either scheme, and protocol-relative. Inline CSS can
-	 * hold a form other than the block attr's, and no later pass imports URLs
-	 * inside CSS.
+	 * given, absolute in either scheme, and protocol-relative, each also
+	 * without its query. Inline CSS can hold a form other than the block
+	 * attr's, and no later pass imports URLs inside CSS.
 	 *
 	 * @param string $content         Content containing the URL.
 	 * @param string $media_url       Source media URL, as the block holds it.
@@ -1826,11 +1826,20 @@ class Content_Processor {
 			$protocol_relative_url,
 		);
 
+		// A copy without the attr's query gets the new URL without its query,
+		// and any query of its own stays.
+		$query_free_new_url = (string) strtok( $new_url, '?' );
+
 		foreach ( $forms as $old_url ) {
 			$content = $this->replace_standalone_media_url(
 				$content,
 				$old_url,
 				$new_url
+			);
+			$content = $this->replace_standalone_media_url(
+				$content,
+				(string) strtok( $old_url, '?' ),
+				$query_free_new_url
 			);
 		}
 

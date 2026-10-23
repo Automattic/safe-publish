@@ -526,4 +526,47 @@ class Content_Processor_Relative_Media_Url_Test extends Integration_Test_Case {
 		// ASSERT: The other host's URL is unchanged.
 		$this->assertStringContainsString( 'url(' . $other . ')', $result );
 	}
+
+	/**
+	 * Verifies that a CSS copy without the attr's query names the attr's
+	 * destination file and keeps any query of its own.
+	 *
+	 * @dataProvider css_query_provider
+	 * @param string $css_query Query on the CSS copy, or '' for none.
+	 */
+	public function test_css_url_without_attr_query_follows_attr(
+		string $css_query
+	): void {
+		// ARRANGE: A cover whose attr has a query that its CSS copy lacks.
+		$url  = self::SOURCE . '/wp-content/uploads/2024/01/mixed-cover.jpg';
+		$html = '<!-- wp:cover {"url":"' . $url . '?v=1"} -->'
+			. '<div style="background-image:url(' . $url . $css_query . ')">'
+			. '</div><!-- /wp:cover -->';
+
+		// ACT: Run the full pipeline.
+		$result = (string) $this->processor->process_content(
+			$html,
+			self::SOURCE
+		);
+
+		// ASSERT: The CSS names the attr's file, with only its own query.
+		$attr_url = parse_blocks( $result )[0]['attrs']['url'];
+		$this->assertStringEndsWith( '?v=1', $attr_url );
+		$this->assertStringContainsString(
+			'url(' . strtok( $attr_url, '?' ) . $css_query . ')',
+			$result
+		);
+	}
+
+	/**
+	 * Provides queries for a CSS copy whose attr has another query.
+	 *
+	 * @return array<string, array{string}>
+	 */
+	public static function css_query_provider(): array {
+		return array(
+			'no query'    => array( '' ),
+			'other query' => array( '?w=2' ),
+		);
+	}
 }
