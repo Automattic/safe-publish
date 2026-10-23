@@ -568,13 +568,18 @@ class Content_Processor_Test extends Integration_Test_Case {
 
 	/**
 	 * Verifies that a domain that starts with the source domain but continues
-	 * with more characters is not replaced.
+	 * with more characters, or names it as a user before its own host, is not
+	 * replaced.
+	 *
+	 * @dataProvider longer_domain_provider
+	 * @param string $longer_url URL whose host only starts with the source's.
 	 */
-	public function test_replace_source_urls_does_not_replace_longer_domain(): void {
+	public function test_replace_source_urls_does_not_replace_longer_domain(
+		string $longer_url
+	): void {
 		// ARRANGE: Content with a URL to a longer domain that starts with the
 		// source domain string.
 		$source_site_url = 'https://source.example.com';
-		$longer_url      = 'https://source.example.company.com/page';
 		$content         = '<a href="' . $longer_url . '">Link</a>';
 
 		// ACT: Call replace_source_urls() directly.
@@ -588,6 +593,19 @@ class Content_Processor_Test extends Integration_Test_Case {
 			'href="' . $longer_url . '"',
 			$processed,
 			'URL with a longer domain must not be rewritten'
+		);
+	}
+
+	/**
+	 * Provides URLs whose host starts with the source domain but is another.
+	 *
+	 * @return array<string, array{string}>
+	 */
+	public static function longer_domain_provider(): array {
+		return array(
+			'dotted suffix' => array( 'https://source.example.company.com/p' ),
+			'hyphen suffix' => array( 'https://source.example.com-cdn.net/p' ),
+			'user name'     => array( 'https://source.example.com@x.org/p' ),
 		);
 	}
 
