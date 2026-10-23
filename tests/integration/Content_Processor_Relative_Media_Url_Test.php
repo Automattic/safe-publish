@@ -613,4 +613,43 @@ class Content_Processor_Relative_Media_Url_Test extends Integration_Test_Case {
 			'"~" suffix'             => array( '', '~old.jpg' ),
 		);
 	}
+
+	/**
+	 * Verifies that a CSS copy keeps its own fragment.
+	 *
+	 * @dataProvider css_fragment_provider
+	 * @param string $css_url CSS copy of the attr URL, with %s for the path.
+	 */
+	public function test_css_url_keeps_its_fragment( string $css_url ): void {
+		// ARRANGE: A cover whose attr and CSS both end in a fragment.
+		$path = '/wp-content/uploads/2024/01/mixed-cover.jpg?v=1';
+		$html = '<!-- wp:cover {"url":"' . $path . '#top"} -->'
+			. '<div style="background-image:url('
+			. sprintf( $css_url, $path ) . '#top)"></div><!-- /wp:cover -->';
+
+		// ACT: Run the full pipeline.
+		$result = (string) $this->processor->process_content(
+			$html,
+			self::SOURCE
+		);
+
+		// ASSERT: The CSS names the attr's file and keeps its fragment.
+		$attr_url = parse_blocks( $result )[0]['attrs']['url'];
+		$this->assertStringContainsString(
+			'url(' . $attr_url . '#top)',
+			$result
+		);
+	}
+
+	/**
+	 * Provides CSS copies of a relative attr URL, with %s for the path.
+	 *
+	 * @return array<string, array{string}>
+	 */
+	public static function css_fragment_provider(): array {
+		return array(
+			'same form'  => array( '%s' ),
+			'other form' => array( self::SOURCE . '%s' ),
+		);
+	}
 }

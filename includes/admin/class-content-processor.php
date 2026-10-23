@@ -1810,6 +1810,8 @@ class Content_Processor {
 		string $new_url,
 		string $source_site_url
 	): string {
+		// Each copy keeps its own fragment, so the forms leave the attr's out.
+		$media_url             = (string) strtok( $media_url, '#' );
 		$protocol_relative_url = (string) preg_replace(
 			'~^https?:(?=//)~i',
 			'',
