@@ -427,19 +427,8 @@ const NeedsAttentionInbox = ( {
 					<p>{ __( 'Loading…', 'safe-publish' ) }</p>
 				</div>
 			) }
-			{ hasFetchedOnce && ! error && 0 === items.length && ! isLoading && (
-				<div className="safe-publish-no-data" role="status">
-					<p>
-						{ 'ignored' === viewMode
-							? __( 'No ignored items.', 'safe-publish' )
-							: __(
-									'Nothing needs attention.',
-									'safe-publish'
-							  ) }
-					</p>
-				</div>
-			) }
-			{ hasFetchedOnce && items.length > 0 && (
+			{ /* Keep DataViews when empty so Refresh stays reachable. */ }
+			{ hasFetchedOnce && ! error && (
 				<DataViews
 					getItemId={ ( item: NeedsAttentionRow ) => item.row_id }
 					data={ items }
@@ -464,6 +453,18 @@ const NeedsAttentionInbox = ( {
 							label={ __( 'Refresh', 'safe-publish' ) }
 							onClick={ refresh }
 						/>
+					}
+					empty={
+						! isLoading && (
+							<p role="status">
+								{ 'ignored' === viewMode
+									? __( 'No ignored items.', 'safe-publish' )
+									: __(
+											'Nothing needs attention.',
+											'safe-publish'
+									  ) }
+							</p>
+						)
 					}
 				/>
 			) }
