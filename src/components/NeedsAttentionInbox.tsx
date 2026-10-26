@@ -43,6 +43,7 @@ import type {
 interface NeedsAttentionInboxProps {
 	ajaxurl: string;
 	nonce: string;
+	isActive: boolean;
 	onCountChange?: ( count: number ) => void;
 }
 
@@ -130,6 +131,7 @@ const resolvabilityLabel = ( item: AttentionIssue ): string => {
 const NeedsAttentionInbox = ( {
 	ajaxurl,
 	nonce,
+	isActive,
 	onCountChange,
 }: NeedsAttentionInboxProps ): JSX.Element => {
 	const [ view, setView ] = useState< View >( {
@@ -165,6 +167,12 @@ const NeedsAttentionInbox = ( {
 	);
 
 	useEffect( () => {
+		// The panel stays mounted while hidden, so fetch on each activation:
+		// Imports on the Posts tab change this list without refetching it.
+		if ( ! isActive ) {
+			return;
+		}
+
 		const controller = new AbortController();
 
 		const formData = new FormData();
@@ -239,6 +247,7 @@ const NeedsAttentionInbox = ( {
 
 		return () => controller.abort();
 	}, [
+		isActive,
 		ajaxurl,
 		nonce,
 		view.page,

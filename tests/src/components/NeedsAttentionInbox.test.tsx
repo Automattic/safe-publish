@@ -158,6 +158,7 @@ describe( 'NeedsAttentionInbox', () => {
 			<NeedsAttentionInbox
 				ajaxurl="https://example.com/wp-admin/admin-ajax.php"
 				nonce="test-nonce"
+				isActive
 			/>
 		);
 		expect( await screen.findByText( 'Broken import' ) ).toBeInTheDocument();
@@ -177,6 +178,7 @@ describe( 'NeedsAttentionInbox', () => {
 			<NeedsAttentionInbox
 				ajaxurl="https://example.com/wp-admin/admin-ajax.php"
 				nonce="test-nonce"
+				isActive
 			/>
 		);
 		expect( await screen.findByText( 'Broken import' ) ).toBeInTheDocument();
@@ -195,6 +197,7 @@ describe( 'NeedsAttentionInbox', () => {
 			<NeedsAttentionInbox
 				ajaxurl="https://example.com/wp-admin/admin-ajax.php"
 				nonce="test-nonce"
+				isActive
 			/>
 		);
 
@@ -218,6 +221,7 @@ describe( 'NeedsAttentionInbox', () => {
 			<NeedsAttentionInbox
 				ajaxurl="https://example.com/wp-admin/admin-ajax.php"
 				nonce="test-nonce"
+				isActive
 			/>
 		);
 
@@ -240,6 +244,7 @@ describe( 'NeedsAttentionInbox', () => {
 			<NeedsAttentionInbox
 				ajaxurl="https://example.com/wp-admin/admin-ajax.php"
 				nonce="test-nonce"
+				isActive
 				onCountChange={ onCountChange }
 			/>
 		);
@@ -259,6 +264,7 @@ describe( 'NeedsAttentionInbox', () => {
 			<NeedsAttentionInbox
 				ajaxurl="https://example.com/wp-admin/admin-ajax.php"
 				nonce="test-nonce"
+				isActive
 			/>
 		);
 
@@ -277,6 +283,7 @@ describe( 'NeedsAttentionInbox', () => {
 			<NeedsAttentionInbox
 				ajaxurl="https://example.com/wp-admin/admin-ajax.php"
 				nonce="test-nonce"
+				isActive
 			/>
 		);
 
@@ -301,6 +308,7 @@ describe( 'NeedsAttentionInbox', () => {
 			<NeedsAttentionInbox
 				ajaxurl="https://example.com/wp-admin/admin-ajax.php"
 				nonce="test-nonce"
+				isActive
 			/>
 		);
 
@@ -319,6 +327,7 @@ describe( 'NeedsAttentionInbox', () => {
 			<NeedsAttentionInbox
 				ajaxurl="https://example.com/wp-admin/admin-ajax.php"
 				nonce="test-nonce"
+				isActive
 			/>
 		);
 		expect(
@@ -351,6 +360,7 @@ describe( 'NeedsAttentionInbox', () => {
 			<NeedsAttentionInbox
 				ajaxurl="https://example.com/wp-admin/admin-ajax.php"
 				nonce="test-nonce"
+				isActive
 			/>
 		);
 
@@ -370,6 +380,7 @@ describe( 'NeedsAttentionInbox', () => {
 			<NeedsAttentionInbox
 				ajaxurl="https://example.com/wp-admin/admin-ajax.php"
 				nonce="test-nonce"
+				isActive
 			/>
 		);
 
@@ -389,6 +400,7 @@ describe( 'NeedsAttentionInbox', () => {
 			<NeedsAttentionInbox
 				ajaxurl="https://example.com/wp-admin/admin-ajax.php"
 				nonce="test-nonce"
+				isActive
 			/>
 		);
 
@@ -408,6 +420,7 @@ describe( 'NeedsAttentionInbox', () => {
 			<NeedsAttentionInbox
 				ajaxurl="https://example.com/wp-admin/admin-ajax.php"
 				nonce="test-nonce"
+				isActive
 			/>
 		);
 		const badge = await screen.findByText( 'Resolvable now' );
@@ -430,6 +443,7 @@ describe( 'NeedsAttentionInbox', () => {
 			<NeedsAttentionInbox
 				ajaxurl="https://example.com/wp-admin/admin-ajax.php"
 				nonce="test-nonce"
+				isActive
 			/>
 		);
 
@@ -437,6 +451,49 @@ describe( 'NeedsAttentionInbox', () => {
 		expect(
 			await screen.findByText( 'Nothing needs attention.' )
 		).toBeInTheDocument();
+	} );
+
+	it( 'Verifies that reopening the tab refetches the list', async () => {
+		// ARRANGE: The first fetch finds nothing; later fetches find a failure.
+		const respond = ( items: NeedsAttentionRow[] ) => ( {
+			json: () =>
+				Promise.resolve( {
+					success: true,
+					data: {
+						items,
+						has_more: false,
+						needs_attention_count: items.length,
+					},
+				} ),
+		} );
+		const fetchMock = vi
+			.fn()
+			.mockResolvedValueOnce( respond( [] ) )
+			.mockResolvedValue( respond( [ FAILURE ] ) );
+		vi.stubGlobal( 'fetch', fetchMock );
+		const props = {
+			ajaxurl: 'https://example.com/wp-admin/admin-ajax.php',
+			nonce: 'test-nonce',
+		};
+		// ACT: Load the page on the Posts tab, with the inbox hidden.
+		const { rerender } = render(
+			<NeedsAttentionInbox { ...props } isActive={ false } />
+		);
+
+		// ASSERT: The hidden inbox skips the fetch.
+		expect( fetchMock ).not.toHaveBeenCalled();
+
+		// ACT: Open the tab, hide it, then open it again.
+		rerender( <NeedsAttentionInbox { ...props } isActive /> );
+		await screen.findByText( 'Nothing needs attention.' );
+		rerender( <NeedsAttentionInbox { ...props } isActive={ false } /> );
+		rerender( <NeedsAttentionInbox { ...props } isActive /> );
+
+		// ASSERT: Each opening fetched, and the second one loaded the row.
+		expect(
+			await screen.findByText( 'Broken import' )
+		).toBeInTheDocument();
+		expect( fetchMock ).toHaveBeenCalledTimes( 2 );
 	} );
 
 	it( 'Verifies that toggling views clears the old rows before the refetch', async () => {
@@ -462,6 +519,7 @@ describe( 'NeedsAttentionInbox', () => {
 			<NeedsAttentionInbox
 				ajaxurl="https://example.com/wp-admin/admin-ajax.php"
 				nonce="test-nonce"
+				isActive
 			/>
 		);
 		expect( await screen.findByText( 'Primary Menu' ) ).toBeInTheDocument();
@@ -496,6 +554,7 @@ describe( 'NeedsAttentionInbox', () => {
 			<NeedsAttentionInbox
 				ajaxurl="https://example.com/wp-admin/admin-ajax.php"
 				nonce="test-nonce"
+				isActive
 			/>
 		);
 		await screen.findByText( 'Primary Menu' );
@@ -518,6 +577,7 @@ describe( 'NeedsAttentionInbox', () => {
 			<NeedsAttentionInbox
 				ajaxurl="https://example.com/wp-admin/admin-ajax.php"
 				nonce="test-nonce"
+				isActive
 			/>
 		);
 		const refresh = await screen.findByRole( 'button', {
