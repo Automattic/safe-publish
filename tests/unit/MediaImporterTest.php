@@ -199,6 +199,40 @@ class MediaImporterTest extends TestCase {
 	}
 
 	/**
+	 * Verifies that reapply_query_parameters reapplies the fragment after any
+	 * query.
+	 *
+	 * @dataProvider fragment_url_provider
+	 * @param string $original_url Source URL with a fragment.
+	 * @param string $suffix       Expected text after the clean URL.
+	 */
+	public function test_reapply_query_parameters_reapplies_fragment(
+		string $original_url,
+		string $suffix
+	): void {
+		// ARRANGE: A clean destination URL.
+		$clean_url = 'https://destination.example.com/wp-content/uploads/guide.pdf';
+
+		// ACT: Reapply the source URL's query and fragment.
+		$result = Media_Importer::reapply_query_parameters( $original_url, $clean_url );
+
+		// ASSERT: The fragment follows the query.
+		$this->assertSame( $clean_url . $suffix, $result );
+	}
+
+	/**
+	 * Provides source URLs with a fragment, with and without a query.
+	 *
+	 * @return array<string, array{string, string}>
+	 */
+	public static function fragment_url_provider(): array {
+		return array(
+			'fragment'           => array( 'https://source.example.com/uploads/guide.pdf#page=2', '#page=2' ),
+			'query and fragment' => array( 'https://source.example.com/uploads/guide.pdf?v=2#page=4', '?v=2#page=4' ),
+		);
+	}
+
+	/**
 	 * Verifies that get_download_url drops the query and the fragment, so both
 	 * name the file their plain URL names.
 	 *

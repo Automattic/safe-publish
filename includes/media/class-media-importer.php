@@ -1037,27 +1037,30 @@ class Media_Importer {
 	}
 
 	/**
-	 * Returns a URL with the query string parameters from another URL reapplied
-	 * onto it.
+	 * Returns a URL with the query string parameters and fragment from another
+	 * URL reapplied onto it.
 	 *
-	 * @param string $original_url The source URL whose query parameters should be reapplied.
-	 * @param string $clean_url    The target URL, which has no query parameters.
-	 * @return string The target URL with the source query parameters appended.
+	 * @param string $original_url The source URL whose query parameters and
+	 *                             fragment should be reapplied.
+	 * @param string $clean_url    The target URL, which has no query parameters
+	 *                             or fragment.
+	 * @return string The target URL with the source query parameters and
+	 *                fragment appended.
 	 */
 	public static function reapply_query_parameters( string $original_url, string $clean_url ): string {
-		$query = (string) wp_parse_url(
-			URL_Validator::normalize_url_whitespace( $original_url ),
-			PHP_URL_QUERY
-		);
+		$original_url = URL_Validator::normalize_url_whitespace( $original_url );
+		$query        = (string) wp_parse_url( $original_url, PHP_URL_QUERY );
+		$fragment     = (string) wp_parse_url( $original_url, PHP_URL_FRAGMENT );
+		$fragment     = '' === $fragment ? '' : '#' . $fragment;
 
 		if ( ! $query ) {
-			return $clean_url;
+			return $clean_url . $fragment;
 		}
 
 		$params = array();
 		parse_str( $query, $params );
 
-		return $clean_url . '?' . http_build_query( $params );
+		return $clean_url . '?' . http_build_query( $params ) . $fragment;
 	}
 
 	/**
