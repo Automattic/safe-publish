@@ -180,7 +180,7 @@ function HeaderBar( {
 				</>
 			) }
 			{ updateError && (
-				<Text role="alert" style={ { color: 'var(--safe-publish-status-error)', whiteSpace: 'nowrap' } }>
+				<Text role="alert" style={ { color: 'var(--safe-publish-status-error)' } }>
 					<IsolatedErrorMessage error={ updateError } />
 				</Text>
 			) }

@@ -8,6 +8,12 @@ import type { Page } from '@playwright/test';
 // sideways scrolling.
 const REFLOW_WIDTH = 320;
 
+// A source-site failure long enough to need more than one line at the
+// reflow width.
+const LONG_ERROR =
+	'Could not reach the source site: cURL error 28: Operation timed out ' +
+	'after 10001 milliseconds with 0 bytes received.';
+
 const titles: string[] = [];
 
 /**
@@ -172,5 +178,38 @@ test.describe( 'Compare toolbar', () => {
 		// and no control's label spills.
 		expect( layout.overflow ).toBeLessThanOrEqual( 1 );
 		expect( layout.spilled ).toEqual( [] );
+	} );
+
+	test( 'should wrap a long update error', async ( {
+		admin,
+		page,
+	} ) => {
+		// ARRANGE: Compare at the reflow width, with an update that fails
+		// with a long message.
+		await openCompare(
+			admin,
+			page,
+			paragraph( 'Original paragraph.' ),
+			REFLOW_WIDTH
+		);
+		await page.route( '**/admin-ajax.php', async ( route ) => {
+			const body = route.request().postData() ?? '';
+			if ( body.includes( 'safe_publish_create_draft' ) ) {
+				await route.fulfill( {
+					json: { success: false, data: { message: LONG_ERROR } },
+				} );
+				return;
+			}
+			await route.continue();
+		} );
+		const toolbar = page.locator( '.safe-publish-compare-modal__toggles' );
+
+		// ACT: Submit the update, and measure once the error shows.
+		await toolbar.getByRole( 'button', { name: 'Update' } ).click();
+		await expect( toolbar.getByRole( 'alert' ) ).toHaveText( LONG_ERROR );
+		const layout = await measureLayout( page );
+
+		// ASSERT: The error wraps instead of widening the body.
+		expect( layout.overflow ).toBeLessThanOrEqual( 1 );
 	} );
 } );
