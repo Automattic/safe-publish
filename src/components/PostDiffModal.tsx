@@ -134,6 +134,7 @@ function HeaderBar( {
 			alignment="center"
 			spacing={ 6 }
 			expanded={ false }
+			wrap
 		>
 			{ showViewOptions && (
 				<>
