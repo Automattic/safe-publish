@@ -933,10 +933,11 @@ class Content_Processor {
 		// "source.example.company.com"). A source on a non-default port matches
 		// only with that port, and the lookahead rejects any other. The same
 		// host on another port is another site, such as the destination itself
-		// when both share a host.
+		// when both share a host. The lookahead also rejects a "-", which
+		// continues a longer host name, and an "@", which ends a user name.
 		$authority = preg_quote( $source_host, '/' )
 			. ( null !== $source_port ? ':' . $source_port : '' );
-		$pattern   = '/https?:\/\/' . $authority . '(?=[^a-zA-Z0-9.:]|$)/';
+		$pattern   = '/https?:\/\/' . $authority . '(?=[^a-zA-Z0-9.:@-]|$)/';
 
 		$result = preg_replace( $pattern, $current_site_url, $content );
 
@@ -1142,7 +1143,8 @@ class Content_Processor {
 					$source_site_url,
 					self::string_attr( $block, 'url' ),
 					'url',
-					'id'
+					'id',
+					true
 				);
 				break;
 
@@ -1162,7 +1164,8 @@ class Content_Processor {
 					$source_site_url,
 					$this->extract_media_text_src( $block ),
 					null,
-					'mediaId'
+					'mediaId',
+					true
 				);
 				break;
 
@@ -1394,12 +1397,18 @@ class Content_Processor {
 	 * for core/media-text, whose mediaUrl attr is not stored in the block. A
 	 * third-party (null) or failed (false) import leaves the attrs untouched.
 	 *
+	 * When the block's save() derives a wp-image class from the ID, the class
+	 * is repointed with it. An ID that is absent or zero at the source is kept
+	 * as is: For an image, the editor would expect a class the markup lacks.
+	 *
 	 * @param array       $block           Block data.
 	 * @param string      $source_site_url Source site URL.
 	 * @param string      $media_url       Source media URL to import.
 	 * @param string|null $url_attr        Attr to set to the local URL, or null
 	 *                                     when the block stores no URL attr.
 	 * @param string      $id_attr         Attr to set to the attachment ID.
+	 * @param bool        $id_in_class     Whether save() derives an image's
+	 *                                     wp-image class from the ID attr.
 	 * @return array Processed block.
 	 */
 	private function process_media_block(
@@ -1407,7 +1416,8 @@ class Content_Processor {
 		string $source_site_url,
 		string $media_url,
 		?string $url_attr,
-		string $id_attr
+		string $id_attr,
+		bool $id_in_class = false
 	): array {
 		if ( '' === $media_url ) {
 			return $this->process_block_inner_html( $block, $source_site_url );
@@ -1452,30 +1462,79 @@ class Content_Processor {
 		if ( null !== $url_attr ) {
 			$block['attrs'][ $url_attr ] = $new_url;
 		}
-		$block['attrs'][ $id_attr ] = $attachment_id;
+		if ( ! $id_in_class || 0 !== ( $block['attrs'][ $id_attr ] ?? 0 ) ) {
+			$block['attrs'][ $id_attr ] = $attachment_id;
+		}
 
 		if ( ! empty( $block['innerHTML'] ) ) {
-			$block['innerHTML'] = $this->replace_standalone_media_url(
+			$block['innerHTML'] = $this->replace_media_url_forms(
 				$block['innerHTML'],
 				$media_url,
-				$new_url
+				$new_url,
+				$source_site_url
 			);
+			if ( $id_in_class ) {
+				$block['innerHTML'] = $this->repoint_wp_image_class(
+					$block['innerHTML'],
+					$attachment_id
+				);
+			}
 		}
 
 		if ( ! empty( $block['innerContent'] ) && is_array( $block['innerContent'] ) ) {
 			foreach ( $block['innerContent'] as $index => $content ) {
 				if ( is_string( $content ) ) {
-					$block['innerContent'][ $index ] =
-						$this->replace_standalone_media_url(
+					$content = $this->replace_media_url_forms(
+						$content,
+						$media_url,
+						$new_url,
+						$source_site_url
+					);
+					if ( $id_in_class ) {
+						$content = $this->repoint_wp_image_class(
 							$content,
-							$media_url,
-							$new_url
+							$attachment_id
 						);
+					}
+					$block['innerContent'][ $index ] = $content;
 				}
 			}
 		}
 
 		return $this->process_block_inner_html( $block, $source_site_url );
+	}
+
+	/**
+	 * Repoints existing wp-image class tokens at a new attachment, adding none:
+	 * A media-text deprecation carries mediaId without the class.
+	 *
+	 * @param string $html          HTML content.
+	 * @param int    $attachment_id Destination attachment ID.
+	 * @return string Updated HTML content.
+	 */
+	private function repoint_wp_image_class(
+		string $html,
+		int $attachment_id
+	): string {
+		$processor = new WP_HTML_Tag_Processor( $html );
+
+		while ( $processor->next_tag() ) {
+			$class = $processor->get_attribute( 'class' );
+			if ( ! is_string( $class ) ) {
+				continue;
+			}
+
+			$new_class = preg_replace(
+				'/(?<![\w-])wp-image-\d+(?![\w-])/',
+				'wp-image-' . $attachment_id,
+				$class
+			);
+			if ( is_string( $new_class ) && $new_class !== $class ) {
+				$processor->set_attribute( 'class', $new_class );
+			}
+		}
+
+		return $processor->get_updated_html();
 	}
 
 	/**
@@ -1758,10 +1817,11 @@ class Content_Processor {
 				$attrs[ $key ] = $new_url;
 
 				if ( isset( $block['innerHTML'] ) && '' !== $block['innerHTML'] ) {
-					$block['innerHTML'] = $this->replace_standalone_media_url(
+					$block['innerHTML'] = $this->replace_media_url_forms(
 						$block['innerHTML'],
 						$value,
-						$new_url
+						$new_url,
+						$source_site_url
 					);
 				}
 
@@ -1773,10 +1833,11 @@ class Content_Processor {
 					foreach ( $block['innerContent'] as $idx => $content ) {
 						if ( is_string( $content ) ) {
 							$block['innerContent'][ $idx ] =
-								$this->replace_standalone_media_url(
+								$this->replace_media_url_forms(
 									$content,
 									$value,
-									$new_url
+									$new_url,
+									$source_site_url
 								);
 						}
 					}
@@ -1785,6 +1846,62 @@ class Content_Processor {
 		}
 
 		return $attrs;
+	}
+
+	/**
+	 * Replaces a source media URL in each form that names the same file: as
+	 * given, absolute in either scheme, and protocol-relative, each also
+	 * without its query. Inline CSS can hold a form other than the block
+	 * attr's, and no later pass imports URLs inside CSS.
+	 *
+	 * @param string $content         Content containing the URL.
+	 * @param string $media_url       Source media URL, as the block holds it.
+	 * @param string $new_url         Imported media URL.
+	 * @param string $source_site_url Source site URL.
+	 * @return string Updated content.
+	 */
+	private function replace_media_url_forms(
+		string $content,
+		string $media_url,
+		string $new_url,
+		string $source_site_url
+	): string {
+		// Each copy keeps its own fragment, so the forms leave the attr's out.
+		$media_url             = (string) strtok( $media_url, '#' );
+		$protocol_relative_url = (string) preg_replace(
+			'~^https?:(?=//)~i',
+			'',
+			URL_Validator::resolve_relative_url( $media_url, $source_site_url )
+		);
+		// The importer takes only source-host media, so each form names the
+		// same file. Each added form starts with the host, so it can't match a
+		// path inside another host's URL. A repeated form is harmless: Its
+		// first pass leaves nothing to match.
+		$forms = array(
+			$media_url,
+			'https:' . $protocol_relative_url,
+			'http:' . $protocol_relative_url,
+			$protocol_relative_url,
+		);
+
+		// A copy without the attr's query gets the new URL without its query,
+		// and any query of its own stays.
+		$query_free_new_url = (string) strtok( $new_url, '?' );
+
+		foreach ( $forms as $old_url ) {
+			$content = $this->replace_standalone_media_url(
+				$content,
+				$old_url,
+				$new_url
+			);
+			$content = $this->replace_standalone_media_url(
+				$content,
+				(string) strtok( $old_url, '?' ),
+				$query_free_new_url
+			);
+		}
+
+		return $content;
 	}
 
 	/**
@@ -1806,7 +1923,7 @@ class Content_Processor {
 		$pattern = '/(?<![a-zA-Z0-9_\.\/:\-])'
 			. '(?:' . preg_quote( $old_url, '/' )
 			. '|' . preg_quote( $encoded, '/' ) . ')'
-			. '(?![a-zA-Z0-9_\.\/%=+\-])/';
+			. '(?![a-zA-Z0-9_\.\/%=+@~\-])/';
 		$updated = preg_replace_callback(
 			$pattern,
 			static fn ( array $matches ): string => $old_url === $matches[0]

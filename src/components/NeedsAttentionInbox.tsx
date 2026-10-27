@@ -43,6 +43,7 @@ import type {
 interface NeedsAttentionInboxProps {
 	ajaxurl: string;
 	nonce: string;
+	isActive: boolean;
 	onCountChange?: ( count: number ) => void;
 }
 
@@ -130,6 +131,7 @@ const resolvabilityLabel = ( item: AttentionIssue ): string => {
 const NeedsAttentionInbox = ( {
 	ajaxurl,
 	nonce,
+	isActive,
 	onCountChange,
 }: NeedsAttentionInboxProps ): JSX.Element => {
 	const [ view, setView ] = useState< View >( {
@@ -165,6 +167,12 @@ const NeedsAttentionInbox = ( {
 	);
 
 	useEffect( () => {
+		// The panel stays mounted while hidden, so fetch on each activation:
+		// Imports on the Posts tab change this list without refetching it.
+		if ( ! isActive ) {
+			return;
+		}
+
 		const controller = new AbortController();
 
 		const formData = new FormData();
@@ -239,6 +247,7 @@ const NeedsAttentionInbox = ( {
 
 		return () => controller.abort();
 	}, [
+		isActive,
 		ajaxurl,
 		nonce,
 		view.page,
@@ -418,19 +427,8 @@ const NeedsAttentionInbox = ( {
 					<p>{ __( 'Loading…', 'safe-publish' ) }</p>
 				</div>
 			) }
-			{ hasFetchedOnce && ! error && 0 === items.length && ! isLoading && (
-				<div className="safe-publish-no-data" role="status">
-					<p>
-						{ 'ignored' === viewMode
-							? __( 'No ignored items.', 'safe-publish' )
-							: __(
-									'Nothing needs attention.',
-									'safe-publish'
-							  ) }
-					</p>
-				</div>
-			) }
-			{ hasFetchedOnce && items.length > 0 && (
+			{ /* Keep DataViews when empty so Refresh stays reachable. */ }
+			{ hasFetchedOnce && ! error && (
 				<DataViews
 					getItemId={ ( item: NeedsAttentionRow ) => item.row_id }
 					data={ items }
@@ -455,6 +453,18 @@ const NeedsAttentionInbox = ( {
 							label={ __( 'Refresh', 'safe-publish' ) }
 							onClick={ refresh }
 						/>
+					}
+					empty={
+						! isLoading && (
+							<p role="status">
+								{ 'ignored' === viewMode
+									? __( 'No ignored items.', 'safe-publish' )
+									: __(
+											'Nothing needs attention.',
+											'safe-publish'
+									  ) }
+							</p>
+						)
 					}
 				/>
 			) }
