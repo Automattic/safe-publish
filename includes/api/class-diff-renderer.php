@@ -12,6 +12,9 @@ namespace Safe_Publish\API;
 use Safe_Publish\Auth\Permissions;
 
 use Safe_Publish\Admin\Content_Logger;
+use Safe_Publish\Admin\Content_Processor;
+use Safe_Publish\Content\Content_Media_Processor;
+use Safe_Publish\Content\Shortcode_ID_Rewriter;
 use Safe_Publish\Media\Media_Importer;
 use Safe_Publish\Utils\Options;
 use Safe_Publish\Utils\Post_Type_Map;
@@ -38,6 +41,19 @@ if ( ! defined( 'ABSPATH' ) ) {
 final class Diff_Renderer {
 
 	/**
+	 * Attributes that open content in the browser's top layer, above the admin.
+	 *
+	 * @var array<string, true>
+	 */
+	private const TOP_LAYER_TRIGGERS = array(
+		'command'             => true,
+		'commandfor'          => true,
+		'interestfor'         => true,
+		'popovertarget'       => true,
+		'popovertargetaction' => true,
+	);
+
+	/**
 	 * Logger instance.
 	 *
 	 * @var Content_Logger
@@ -52,9 +68,10 @@ final class Diff_Renderer {
 	}
 
 	/**
-	 * Renders a comprehensive diff preview for a source post. The post and
-	 * featured-media fetches are tagged Request_Actions::PREVIEW; the
-	 * rest_base lookup is tagged Request_Actions::LIST_ITEMS.
+	 * Renders a comprehensive diff preview for a source post. Fetches of the
+	 * post, its featured media and the attachments it names are tagged
+	 * Request_Actions::PREVIEW; the rest_base lookup is tagged
+	 * Request_Actions::LIST_ITEMS.
 	 *
 	 * @param WP_REST_Request $request      REST request object.
 	 * @param callable        $make_request fn($url, $action, $credentials): array|WP_Error.
@@ -112,6 +129,13 @@ final class Diff_Renderer {
 			$resolved_post_data['raw_values']
 		);
 
+		$incoming['content'] = $this->preview_incoming_content(
+			$incoming['content'],
+			untrailingslashit( (string) $source_site_url ),
+			$source_post_id,
+			$credentials
+		);
+
 		// Extract current local data.
 		$current = $this->extract_current_data( $local_post );
 
@@ -146,24 +170,18 @@ final class Diff_Renderer {
 		// Generate block-level diffs if content has blocks.
 		$block_diffs = $this->generate_block_diffs( $current['content'], $incoming['content'] );
 
-		// Generate rendered previews.
-		$current_rendered  = $this->render_content( $current['content'] );
-		$incoming_rendered = $this->render_content( $incoming['content'] );
-
 		$non_content_diffs['featuredMedia'] = $featured_media_html;
 
 		return array(
-			'contentDiffHtml'      => $content_diff_html,
-			'blockDiffs'           => $block_diffs,
-			'nonContentDiffs'      => $non_content_diffs,
-			'current'              => array(
+			'contentDiffHtml' => $content_diff_html,
+			'blockDiffs'      => $block_diffs,
+			'nonContentDiffs' => $non_content_diffs,
+			'current'         => array(
 				'title'   => $current['title'] ?? null,
 				'excerpt' => $current['excerpt'] ?? null,
 				'meta'    => $current['meta'] ?? null,
 				'terms'   => $current['terms'] ?? null,
 			),
-			'incomingRenderedHtml' => $incoming_rendered,
-			'currentRenderedHtml'  => $current_rendered,
 		);
 	}
 
@@ -367,6 +385,49 @@ final class Diff_Renderer {
 		$incoming['has_term_fields'] = null !== $source_terms;
 
 		return $incoming;
+	}
+
+	/**
+	 * Rewrites incoming content the way the import would, so the comparison
+	 * reports what an update changes rather than the rewrite itself.
+	 *
+	 * Media resolves against what the import already sideloaded, downloading
+	 * nothing. Content is returned as it came in when no source is connected
+	 * or a pass fails, leaving the unrewritten comparison.
+	 *
+	 * @param string $content         Raw source content.
+	 * @param string $source_site_url Connected source site URL, untrailingslashed.
+	 * @param int    $source_post_id  Source post ID, for the gallery id self check.
+	 * @param array  $credentials     Source REST auth credentials.
+	 *
+	 * @return string Content as the import would store it.
+	 */
+	private function preview_incoming_content(
+		string $content,
+		string $source_site_url,
+		int $source_post_id,
+		array $credentials
+	): string {
+		if ( '' === $source_site_url || '' === $content ) {
+			return $content;
+		}
+
+		$media_importer = new Media_Importer( new HTTP_Client(), true );
+
+		$preview = ( new Content_Processor(
+			$media_importer,
+			new Content_Media_Processor( $media_importer ),
+			new Shortcode_ID_Rewriter()
+		) )->preview_content(
+			$content,
+			$source_site_url,
+			array(
+				'source_post_id'   => $source_post_id,
+				'auth_credentials' => $credentials,
+			)
+		);
+
+		return is_string( $preview ) ? $preview : $content;
 	}
 
 	/**
@@ -697,12 +758,17 @@ final class Diff_Renderer {
 			// Normalize self-closing tags spacing.
 			$html = preg_replace( '/\s+\/>/', '/>', $html );
 
-			// Normalize wp-image-* numeric class volatility (retain class marker).
-			$html = preg_replace( '/wp-image-\d+/', 'wp-image-XXX', $html );
-
 			// Trim again.
 			return trim( $html );
 		};
+
+		// Previews render inline in the admin, so they drop top-layer triggers.
+		$preview_html = array_map(
+			static fn ( mixed $attributes ): mixed => is_array( $attributes )
+				? array_diff_key( $attributes, self::TOP_LAYER_TRIGGERS )
+				: $attributes,
+			wp_kses_allowed_html( 'post' )
+		);
 
 		$current_blocks  = parse_blocks( $current ?? '' );
 		$incoming_blocks = parse_blocks( $incoming ?? '' );
@@ -721,8 +787,8 @@ final class Diff_Renderer {
 			$inc_name = $inc['blockName'] ?? null;
 
 			// An update writes saved markup, so the verdict reads that. A
-			// render drops whatever wp_kses_post() filters, and invents
-			// changes from the counters some blocks assign per render.
+			// render drops whatever kses filters, and invents changes from the
+			// counters some blocks assign per render.
 			$cur_signal = $cur
 				? $normalize_block_html( serialize_block( $cur ) )
 				: '';
@@ -731,8 +797,12 @@ final class Diff_Renderer {
 				: '';
 
 			// Rendering serves the previews alone.
-			$cur_filtered = $cur ? wp_kses_post( render_block( $cur ) ) : '';
-			$inc_filtered = $inc ? wp_kses_post( render_block( $inc ) ) : '';
+			$cur_filtered = $cur
+				? wp_kses( render_block( $cur ), $preview_html )
+				: '';
+			$inc_filtered = $inc
+				? wp_kses( render_block( $inc ), $preview_html )
+				: '';
 
 			// Skip empty freeform whitespace slots — parse_blocks emits them
 			// between real blocks and they carry no visible signal.
@@ -770,32 +840,6 @@ final class Diff_Renderer {
 		}
 
 		return $block_diffs;
-	}
-
-	/**
-	 * Renders content with WordPress filters and block rendering.
-	 *
-	 * @param string $content Content to render.
-	 *
-	 * @return string Rendered content.
-	 */
-	private function render_content( string $content ): string {
-		$rendered = $content;
-
-		// Render blocks if present.
-		if ( function_exists( 'has_blocks' ) && function_exists( 'do_blocks' ) ) {
-			if ( has_blocks( $rendered ) ) {
-				$rendered = do_blocks( $rendered );
-			}
-		}
-
-		// Apply standard content filters (shortcodes, embeds, formatting).
-		if ( function_exists( 'apply_filters' ) ) {
-			// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound
-			$rendered = apply_filters( 'the_content', $rendered );
-		}
-
-		return $rendered;
 	}
 
 	/**

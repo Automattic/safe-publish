@@ -71,7 +71,7 @@ These apply to comments in every language, not just PHP.
 
 - Follow the templates under `.github/`, including when passing `--body` to `gh` skips them.
 - Label issues from the capitalized set (`Bug`, `Enhancement`, `Maintenance`, and so on); lowercase labels belong to GitHub and bots. Ask when none fit.
-- Match the issue title to its label: a `Bug` states the defect, an `Enhancement` states the change in the imperative.
+- Keep the issue title short and match it to its label: a `Bug` states the defect, an `Enhancement` states the change in the imperative.
 - Branch with a `fix/`, `add/`, or `update/` prefix, or another that fits.
 - Use short, imperative commit messages, PR titles, and branch titles; keep the PR and branch titles as identical as possible.
 - Keep PR descriptions short, focusing on decisions instead of small technical details; don't add any line wrapping.

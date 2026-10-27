@@ -460,6 +460,19 @@ html:has(body.toplevel_page_safe-publish) {
 			align-items: center;
 		}
 
+		// Preview wrappers hold rendered post HTML. Paint containment confines
+		// positioned descendants to the wrapper and clips them. Inline-size
+		// containment keeps wide content from widening the modal; scrolling
+		// keeps it reachable. Browsers without inline-size keep paint alone.
+		&__col,
+		&__added,
+		&__removed,
+		&__unchanged {
+			contain: paint;
+			contain: inline-size paint;
+			overflow-x: auto;
+		}
+
 		&__modified {
 			display: flex;
 			gap: 10px;
@@ -468,7 +481,6 @@ html:has(body.toplevel_page_safe-publish) {
 				flex: 1;
 				padding: 8px;
 				max-width: 50%;
-				overflow-x: auto;
 			}
 		}
 
@@ -532,6 +544,40 @@ html:has(body.toplevel_page_safe-publish) {
 		background: var(--safe-publish-diff-removed-bg);
 		text-decoration: line-through;
 		border-radius: 2px;
+	}
+
+	// Cells do not inherit their row's strike-through, so they repeat it.
+	.safe-publish-inline-removed td,
+	.safe-publish-inline-removed th {
+		text-decoration: line-through;
+	}
+
+	// Outlines changes with no text position: an attribute edit on its element,
+	// and a block whose change cannot be marked.
+	.safe-publish-inline-attr-changed,
+	.safe-publish-block-diff__col--unmarked {
+		outline: 1px dashed var(--safe-publish-primary);
+	}
+
+	// Text equivalent of the outline above, announced but not shown.
+	.safe-publish-sr-only {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		margin: -1px;
+		padding: 0;
+		border: 0;
+		overflow: hidden;
+		clip-path: inset(50%);
+		white-space: nowrap;
+	}
+
+	// WP admin strips every div's outline, so this ring marks keyboard focus.
+	.safe-publish-block-diff__col:focus-visible,
+	.safe-publish-block-diff__added:focus-visible,
+	.safe-publish-block-diff__removed:focus-visible,
+	.safe-publish-block-diff__unchanged:focus-visible {
+		outline: 2px solid var(--wp-admin-theme-color);
 	}
 
 	.safe-publish-block-diff__col img,

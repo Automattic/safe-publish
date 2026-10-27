@@ -48,6 +48,8 @@ class Content_Processor_Relative_Media_Url_Test extends Integration_Test_Case {
 		self::SOURCE . self::SUBSITE_UPLOAD,
 		self::SUBSITE . '/bare.jpg',
 		self::SOURCE . '/combo.jpg',
+		self::SOURCE . '/wp-content/uploads/2024/01/mixed-cover.jpg',
+		self::SOURCE . '/wp-content/uploads/2024/01/mixed-image.jpg',
 	);
 
 	/**
@@ -398,5 +400,256 @@ class Content_Processor_Relative_Media_Url_Test extends Integration_Test_Case {
 		// ASSERT: The destination host replaced the source host.
 		$this->assertStringNotContainsString( 'source.example.com', $result );
 		$this->assertStringContainsString( home_url( '/about' ), $result );
+	}
+
+	/**
+	 * Verifies that a media block's relative URL is not replaced inside the
+	 * absolute URL of the same file in its markup, which left the source host
+	 * glued to the destination URL.
+	 */
+	public function test_media_block_keeps_absolute_src_whole(): void {
+		// ARRANGE: A cover whose url is root-relative and whose src is absolute.
+		$path = '/wp-content/uploads/2024/01/mixed-cover.jpg';
+		$html = '<!-- wp:cover {"url":"' . $path . '"} -->'
+			. '<div class="wp-block-cover">'
+			. '<img src="' . self::SOURCE . $path . '" alt=""/>'
+			. '</div><!-- /wp:cover -->';
+
+		// ACT: Run the full pipeline.
+		$result = (string) $this->processor->process_content( $html, self::SOURCE );
+
+		// ASSERT: The src names the same destination file as the url attr.
+		$url = parse_blocks( $result )[0]['attrs']['url'];
+		$this->assertStringContainsString( 'src="' . $url . '"', $result );
+	}
+
+	/**
+	 * Verifies that an image block's relative URL is not replaced inside the
+	 * absolute URL of the same file when the src does not match it exactly.
+	 */
+	public function test_image_block_keeps_absolute_src_whole(): void {
+		// ARRANGE: An image whose url is root-relative and whose src is absolute.
+		$path = '/wp-content/uploads/2024/01/mixed-image.jpg';
+		$html = '<!-- wp:image {"url":"' . $path . '"} -->'
+			. '<figure class="wp-block-image">'
+			. '<img src="' . self::SOURCE . $path . '" alt=""/>'
+			. '</figure><!-- /wp:image -->';
+
+		// ACT: Run the full pipeline.
+		$result = (string) $this->processor->process_content( $html, self::SOURCE );
+
+		// ASSERT: The src names the same destination file as the url attr.
+		$url = parse_blocks( $result )[0]['attrs']['url'];
+		$this->assertStringContainsString( 'src="' . $url . '"', $result );
+	}
+
+	/**
+	 * Verifies that a CSS background URL names the same destination file as
+	 * the block's media attr, in whichever form each holds the URL.
+	 *
+	 * @dataProvider css_url_form_provider
+	 * @param string $block_name Block name.
+	 * @param string $attr       Attr that holds the media URL.
+	 * @param string $attr_url   Media URL in the attr.
+	 * @param string $css_url    Media URL in the inline CSS.
+	 */
+	public function test_css_url_follows_attr(
+		string $block_name,
+		string $attr,
+		string $attr_url,
+		string $css_url
+	): void {
+		// ARRANGE: A block whose CSS holds another form of the attr's URL.
+		$html = sprintf(
+			'<!-- wp:%1$s {"%2$s":"%3$s"} -->'
+				. '<div style="background-image:url(%4$s)"></div>'
+				. '<!-- /wp:%1$s -->',
+			$block_name,
+			$attr,
+			$attr_url,
+			$css_url
+		);
+
+		// ACT: Run the full pipeline.
+		$result = (string) $this->processor->process_content(
+			$html,
+			self::SOURCE
+		);
+
+		// ASSERT: The CSS names the attr's destination file.
+		$url = parse_blocks( $result )[0]['attrs'][ $attr ];
+		$this->assertStringContainsString( 'url(' . $url . ')', $result );
+	}
+
+	/**
+	 * Provides blocks whose attr and CSS hold one URL, in the same or another
+	 * form.
+	 *
+	 * @return array<string, array{string, string, string, string}>
+	 */
+	public static function css_url_form_provider(): array {
+		$path = '/wp-content/uploads/2024/01/mixed-cover.jpg';
+		$url  = self::SOURCE . $path;
+
+		// The same file in the other scheme, and protocol-relative.
+		$http    = 'http://source.example.com' . $path;
+		$network = '//source.example.com' . $path;
+
+		return array(
+			'cover, relative attr'  => array( 'cover', 'url', $path, $url ),
+			'custom, relative attr' => array( 'acme/hero', 'bg', $path, $url ),
+			'cover, same form'      => array( 'cover', 'url', $path, $path ),
+			'cover, http CSS'       => array( 'cover', 'url', $url, $http ),
+			'cover, //host CSS'     => array( 'cover', 'url', $url, $network ),
+		);
+	}
+
+	/**
+	 * Verifies that another host's URL keeps its path when that path matches
+	 * the block's media file.
+	 */
+	public function test_other_host_url_with_media_path_stays(): void {
+		// ARRANGE: A cover whose CSS names another host's file at the same
+		// path, after an IPv6 host that ends in "]".
+		$path  = '/wp-content/uploads/2024/01/mixed-cover.jpg';
+		$other = 'https://[2001:db8::1]' . $path;
+		$html  = '<!-- wp:cover {"url":"' . self::SOURCE . $path . '"} -->'
+			. '<div style="background-image:url(' . $other . ')"></div>'
+			. '<!-- /wp:cover -->';
+
+		// ACT: Run the full pipeline.
+		$result = (string) $this->processor->process_content(
+			$html,
+			self::SOURCE
+		);
+
+		// ASSERT: The other host's URL is unchanged.
+		$this->assertStringContainsString( 'url(' . $other . ')', $result );
+	}
+
+	/**
+	 * Verifies that a CSS copy without the attr's query names the attr's
+	 * destination file and keeps any query of its own.
+	 *
+	 * @dataProvider css_query_provider
+	 * @param string $css_query Query on the CSS copy, or '' for none.
+	 */
+	public function test_css_url_without_attr_query_follows_attr(
+		string $css_query
+	): void {
+		// ARRANGE: A cover whose attr has a query that its CSS copy lacks.
+		$url  = self::SOURCE . '/wp-content/uploads/2024/01/mixed-cover.jpg';
+		$html = '<!-- wp:cover {"url":"' . $url . '?v=1"} -->'
+			. '<div style="background-image:url(' . $url . $css_query . ')">'
+			. '</div><!-- /wp:cover -->';
+
+		// ACT: Run the full pipeline.
+		$result = (string) $this->processor->process_content(
+			$html,
+			self::SOURCE
+		);
+
+		// ASSERT: The CSS names the attr's file, with only its own query.
+		$attr_url = parse_blocks( $result )[0]['attrs']['url'];
+		$this->assertStringEndsWith( '?v=1', $attr_url );
+		$this->assertStringContainsString(
+			'url(' . strtok( $attr_url, '?' ) . $css_query . ')',
+			$result
+		);
+	}
+
+	/**
+	 * Provides queries for a CSS copy whose attr has another query.
+	 *
+	 * @return array<string, array{string}>
+	 */
+	public static function css_query_provider(): array {
+		return array(
+			'no query'    => array( '' ),
+			'other query' => array( '?w=2' ),
+		);
+	}
+
+	/**
+	 * Verifies that a longer file name that starts with the media file's name
+	 * is left alone.
+	 *
+	 * @dataProvider longer_file_name_provider
+	 * @param string $attr_query Query on the attr URL, or '' for none.
+	 * @param string $suffix     Text that makes the longer file name.
+	 */
+	public function test_longer_file_name_stays(
+		string $attr_query,
+		string $suffix
+	): void {
+		// ARRANGE: A cover whose CSS names another file with a longer name.
+		$path = '/wp-content/uploads/2024/01/mixed-cover.jpg';
+		$html = '<!-- wp:cover {"url":"' . self::SOURCE . $path . $attr_query
+			. '"} --><div style="background-image:url('
+			. self::SOURCE . $path . $suffix . ')"></div><!-- /wp:cover -->';
+
+		// ACT: Run the full pipeline.
+		$result = (string) $this->processor->process_content(
+			$html,
+			self::SOURCE
+		);
+
+		// ASSERT: The longer file keeps its path, and only its host changes.
+		$this->assertStringContainsString(
+			'url(' . home_url( $path . $suffix ) . ')',
+			$result
+		);
+	}
+
+	/**
+	 * Provides attr queries and suffixes that make a longer file name.
+	 *
+	 * @return array<string, array{string, string}>
+	 */
+	public static function longer_file_name_provider(): array {
+		return array(
+			'"@" suffix'             => array( '', '@2x.jpg' ),
+			'"@" suffix, attr query' => array( '?v=1', '@2x.jpg' ),
+			'"~" suffix'             => array( '', '~old.jpg' ),
+		);
+	}
+
+	/**
+	 * Verifies that a CSS copy keeps its own fragment.
+	 *
+	 * @dataProvider css_fragment_provider
+	 * @param string $css_url CSS copy of the attr URL, with %s for the path.
+	 */
+	public function test_css_url_keeps_its_fragment( string $css_url ): void {
+		// ARRANGE: A cover whose attr and CSS both end in a fragment.
+		$path = '/wp-content/uploads/2024/01/mixed-cover.jpg?v=1';
+		$html = '<!-- wp:cover {"url":"' . $path . '#top"} -->'
+			. '<div style="background-image:url('
+			. sprintf( $css_url, $path ) . '#top)"></div><!-- /wp:cover -->';
+
+		// ACT: Run the full pipeline.
+		$result = (string) $this->processor->process_content(
+			$html,
+			self::SOURCE
+		);
+
+		// ASSERT: The CSS names the attr's file and keeps its fragment.
+		$attr_url = parse_blocks( $result )[0]['attrs']['url'];
+		$this->assertStringContainsString(
+			'url(' . $attr_url . '#top)',
+			$result
+		);
+	}
+
+	/**
+	 * Provides CSS copies of a relative attr URL, with %s for the path.
+	 *
+	 * @return array<string, array{string}>
+	 */
+	public static function css_fragment_provider(): array {
+		return array(
+			'same form'  => array( '%s' ),
+			'other form' => array( self::SOURCE . '%s' ),
+		);
 	}
 }

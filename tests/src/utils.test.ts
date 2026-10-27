@@ -22,6 +22,7 @@ import {
 import type {
 	AttentionIssue,
 	AuthorFallbackWarning,
+	DeferredNavigationUrlWarning,
 	HistoryWriteFailedWarning,
 	NavRefRewriteFailedWarning,
 	ParentOrphanedWarning,
@@ -450,6 +451,22 @@ describe( 'renderWarningMessage', () => {
 		expect( message ).toContain( 'nav' );
 	} );
 
+	it( 'Verifies that deferred URL warnings explain the repair', () => {
+		// ARRANGE: A mapped link whose target path is not final.
+		const warning: DeferredNavigationUrlWarning = {
+			type: 'deferred_navigation_url',
+			source_id: 9701,
+		};
+
+		// ACT: Render the single-import warning.
+		const message = renderWarningMessage( warning );
+
+		// ASSERT: The source ID and Needs attention repair are readable.
+		expect( message ).toContain( '9701' );
+		expect( message ).toContain( 'Retry from Needs attention' );
+		expect( message ).not.toContain( '[object Object]' );
+	} );
+
 	it( 'should render the Patterns hint for a core/block unmapped reference', () => {
 		// ARRANGE: An unresolved core/block ref (reusable block).
 		const warning: UnmappedBlockReferenceWarning = {
@@ -623,6 +640,20 @@ describe( 'renderWarningShortLabel', () => {
 		expect( label ).toBe( 'unmapped block reference' );
 	} );
 
+	it( 'Verifies that deferred URLs have a bulk-result label', () => {
+		// ARRANGE: A deferred navigation warning in an import result.
+		const warning: DeferredNavigationUrlWarning = {
+			type: 'deferred_navigation_url',
+			source_id: 9701,
+		};
+
+		// ACT: Render the bulk-result label.
+		const label = renderWarningShortLabel( warning );
+
+		// ASSERT: The short label is readable and comma-joinable.
+		expect( label ).toBe( 'deferred navigation URL' );
+	} );
+
 	it( 'should return "reusable block reference" for a core/block unmapped reference', () => {
 		// ARRANGE: An unresolved core/block ref.
 		const warning: UnmappedBlockReferenceWarning = {
@@ -740,6 +771,23 @@ function makeIssue( overrides: Partial< AttentionIssue > ): AttentionIssue {
 }
 
 describe( 'renderIssueMessage', () => {
+	it( 'keeps deferred URL guidance within the inbox detail band', () => {
+		// ARRANGE: A deferred URL with a five-digit source ID.
+		const issue = makeIssue( {
+			issue_type: 'deferred_navigation_url',
+			target_ref: 59001,
+		} );
+
+		// ACT: Render its issue guidance.
+		const message = renderIssueMessage( issue );
+
+		// ASSERT: The message stays within the 82-character inbox band.
+		expect( message ).toBe(
+			'Source post 59001 awaits a final URL. Publish it or register its type, then Retry.'
+		);
+		expect( message.length ).toBeLessThanOrEqual( 82 );
+	} );
+
 	it( 'renders retry-oriented copy for an unmapped post reference', () => {
 		// ARRANGE: An unmapped post-reference issue.
 		const issue = makeIssue( {

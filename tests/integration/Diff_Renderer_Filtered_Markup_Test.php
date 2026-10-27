@@ -23,7 +23,9 @@ class Diff_Renderer_Filtered_Markup_Test extends Integration_Test_Case {
 
 	use Unfiltered_Html_Trait;
 
-	private const SOURCE         = 'https://example.com';
+	// Distinct from the example.com URLs the fixtures embed, so the import
+	// rewrite leaves them alone and each case turns on its markup.
+	private const SOURCE         = 'https://source.example.com';
 	private const SOURCE_POST_ID = 123;
 
 	/**
@@ -132,6 +134,86 @@ class Diff_Renderer_Filtered_Markup_Test extends Integration_Test_Case {
 				'<iframe',
 				(string) $diffs[0][ $side ]['rendered'],
 				sprintf( 'Preview %s.rendered should stay filtered.', $side )
+			);
+		}
+	}
+
+	/**
+	 * Verifies that previews drop top-layer triggers and keep the other markup.
+	 */
+	public function test_previews_drop_top_layer_triggers(): void {
+		// ARRANGE: Allow every trigger on every version, plus an element with
+		// no attributes; wp_kses_post() alone keeps all six trigger attributes.
+		add_filter(
+			'wp_kses_allowed_html',
+			static function ( array $tags, string $context ): array {
+				if ( 'post' === $context ) {
+					$tags['button']['command']    = true;
+					$tags['button']['commandfor'] = true;
+					$tags['a']['interestfor']     = true;
+					$tags['output']               = true;
+				}
+				return $tags;
+			},
+			10,
+			2
+		);
+		$html     = '<button type="button" popovertarget="p"'
+			. ' popovertargetaction="show">Show</button>'
+			. '<button type="button" POPOVERTARGET="p">Upper</button>'
+			. '<button type="button" command="show-modal"'
+			. ' commandfor="d">Open</button>'
+			. '<a href="https://example.com" interestfor="p">Hover</a>'
+			. '<div popover="manual" id="p">Overlay</div>'
+			. '<output>Kept</output>';
+		$triggers = '/\s(command|commandfor|interestfor|popovertarget|'
+			. 'popovertargetaction)=/i';
+		$this->assertSame(
+			6,
+			preg_match_all( $triggers, wp_kses_post( $html ) )
+		);
+
+		// ACT: Diff a Custom HTML block holding the markup.
+		$block = '<!-- wp:html -->' . $html . '<!-- /wp:html -->';
+		$diffs = $this->render_block_diffs( $block, $block );
+
+		// ASSERT: Both previews drop every trigger and keep the rest.
+		$this->assertCount( 1, $diffs );
+		foreach ( array( 'current', 'incoming' ) as $side ) {
+			$rendered = (string) $diffs[0][ $side ]['rendered'];
+			$this->assertDoesNotMatchRegularExpression( $triggers, $rendered );
+			$this->assertStringContainsString(
+				'<button type="button">Show</button>',
+				$rendered
+			);
+			$this->assertStringContainsString( 'popover="manual"', $rendered );
+			$this->assertStringContainsString(
+				'<output>Kept</output>',
+				$rendered
+			);
+		}
+	}
+
+	/**
+	 * Verifies that previews drop a trigger in a MathML textarea, which a tag
+	 * processor skips as text but a browser builds, so kses must drop it.
+	 */
+	public function test_previews_drop_trigger_inside_mathml_textarea(): void {
+		// ARRANGE: Force legacy kses, as the HTML API parser drops this markup.
+		add_filter( 'wp_kses_force_legacy_parser', '__return_true' );
+		$block = '<!-- wp:html --><math><textarea><mi>'
+			. '<button popovertarget="p">Show</button>'
+			. '</mi></textarea></math><!-- /wp:html -->';
+
+		// ACT: Diff the block against itself.
+		$diffs = $this->render_block_diffs( $block, $block );
+
+		// ASSERT: Both previews keep the button without its trigger.
+		$this->assertCount( 1, $diffs );
+		foreach ( array( 'current', 'incoming' ) as $side ) {
+			$this->assertStringContainsString(
+				'<button>Show</button>',
+				(string) $diffs[0][ $side ]['rendered']
 			);
 		}
 	}

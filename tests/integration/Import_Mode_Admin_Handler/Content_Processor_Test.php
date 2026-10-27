@@ -430,14 +430,156 @@ class Content_Processor_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Verifies that a domain that starts with the source domain but continues
-	 * with more characters is not replaced.
+	 * Verifies that a source served on a port has the port replaced along with
+	 * the host, rather than left behind after the destination's URL.
 	 */
-	public function test_replace_source_urls_does_not_replace_longer_domain(): void {
+	public function test_replace_source_urls_consumes_the_source_port(): void {
+		// ARRANGE: A link to a source site that answers on a port.
+		$source_site_url = 'https://source.example.com:8889';
+		$current_url     = get_site_url();
+		$content         = '<a href="' . $source_site_url . '/page">L</a>';
+
+		// ACT: Call replace_source_urls() directly.
+		$processed = $this->processor->replace_source_urls(
+			$content,
+			$source_site_url
+		);
+
+		// ASSERT: The whole origin was replaced, port included.
+		$this->assertSame(
+			'<a href="' . $current_url . '/page">L</a>',
+			$processed,
+			'The source port must be consumed by the replacement'
+		);
+	}
+
+	/**
+	 * Verifies that a source sharing the destination's host on another port is
+	 * treated as a separate site, so its URLs are replaced and the
+	 * destination's own URLs are left alone.
+	 *
+	 * @dataProvider shared_host_sites_provider
+	 * @param string $source_suffix      Source port after the shared host.
+	 * @param string $destination_suffix Destination port or path after it.
+	 */
+	public function test_replace_source_urls_separates_sites_by_port(
+		string $source_suffix,
+		string $destination_suffix
+	): void {
+		// ARRANGE: A source on the destination's host but another port, and an
+		// image the media import already pointed at the destination.
+		$host = (string) wp_parse_url( get_site_url(), PHP_URL_HOST );
+		add_filter(
+			'option_siteurl',
+			static fn (): string => 'http://' . $host . $destination_suffix
+		);
+		$current_url     = get_site_url();
+		$source_site_url = 'http://' . $host . $source_suffix;
+		$image           = '<img src="' . $current_url . '/a.jpg">';
+		$link            = '<a href="' . $source_site_url . '/p">L</a>';
+
+		// ACT: Call replace_source_urls() directly.
+		$processed = $this->processor->replace_source_urls(
+			$image . $link,
+			$source_site_url
+		);
+
+		// ASSERT: Only the source link moved to the destination.
+		$this->assertSame(
+			$image . '<a href="' . $current_url . '/p">L</a>',
+			$processed,
+			'A different port on the same host is a different site'
+		);
+	}
+
+	/**
+	 * Provides source and destination sites that share a host.
+	 *
+	 * @return array<string, array{string, string}>
+	 */
+	public static function shared_host_sites_provider(): array {
+		return array(
+			'destination on a port'         => array( '', ':8888' ),
+			'destination in a subdirectory' => array( ':8889', '/sub' ),
+		);
+	}
+
+	/**
+	 * Verifies that a source URL naming a default port still matches links
+	 * that omit it, as a site's own URLs do.
+	 *
+	 * @dataProvider default_port_source_provider
+	 * @param string $source_site_url Source site URL with a default port.
+	 */
+	public function test_replace_source_urls_treats_default_port_as_none(
+		string $source_site_url
+	): void {
+		// ARRANGE: A link that omits the port the source URL names.
+		$current_url = get_site_url();
+		$content     = '<a href="https://source.example.com/page">L</a>';
+
+		// ACT: Call replace_source_urls() directly.
+		$processed = $this->processor->replace_source_urls(
+			$content,
+			$source_site_url
+		);
+
+		// ASSERT: The link now points at the destination.
+		$this->assertSame(
+			'<a href="' . $current_url . '/page">L</a>',
+			$processed
+		);
+	}
+
+	/**
+	 * Provides source URLs that name their scheme's default port.
+	 *
+	 * @return array<string, array{string}>
+	 */
+	public static function default_port_source_provider(): array {
+		return array(
+			'https on 443' => array( 'https://source.example.com:443' ),
+			'http on 80'   => array( 'http://source.example.com:80' ),
+		);
+	}
+
+	/**
+	 * Verifies that a destination URL naming a default port is the same site
+	 * as a source on its host without one, so the content is left alone.
+	 */
+	public function test_replace_source_urls_skips_same_site_with_default_port(): void {
+		// ARRANGE: The destination names port 80, and the source omits it.
+		$host = (string) wp_parse_url( get_site_url(), PHP_URL_HOST );
+		add_filter(
+			'option_siteurl',
+			static fn (): string => 'http://' . $host . ':80'
+		);
+		$content = '<a href="http://' . $host . '/page">L</a>';
+
+		// ACT: Call replace_source_urls() directly.
+		$processed = $this->processor->replace_source_urls(
+			$content,
+			'http://' . $host
+		);
+
+		// ASSERT: The content is unchanged.
+		$this->assertSame( $content, $processed );
+	}
+
+	/**
+	 * Verifies that a domain that starts with the source domain but continues
+	 * with more characters, or names it as a user before its own host, is not
+	 * replaced.
+	 *
+	 * @dataProvider longer_domain_provider
+	 * @param string $longer_url URL whose host only starts with the source's.
+	 */
+	public function test_replace_source_urls_does_not_replace_longer_domain(
+		string $longer_url
+	): void {
 		// ARRANGE: Content with a URL to a longer domain that starts with the
 		// source domain string.
 		$source_site_url = 'https://source.example.com';
-		$longer_url      = 'https://source.example.company.com/page';
 		$content         = '<a href="' . $longer_url . '">Link</a>';
 
 		// ACT: Call replace_source_urls() directly.
@@ -451,6 +593,19 @@ class Content_Processor_Test extends Integration_Test_Case {
 			'href="' . $longer_url . '"',
 			$processed,
 			'URL with a longer domain must not be rewritten'
+		);
+	}
+
+	/**
+	 * Provides URLs whose host starts with the source domain but is another.
+	 *
+	 * @return array<string, array{string}>
+	 */
+	public static function longer_domain_provider(): array {
+		return array(
+			'dotted suffix' => array( 'https://source.example.company.com/p' ),
+			'hyphen suffix' => array( 'https://source.example.com-cdn.net/p' ),
+			'user name'     => array( 'https://source.example.com@x.org/p' ),
 		);
 	}
 
@@ -1442,6 +1597,313 @@ class Content_Processor_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that scheme-less custom block media attributes are imported.
+	 *
+	 * @dataProvider scheme_less_custom_media_provider
+	 * @param string $serialized_url URL in the serialized block comment.
+	 * @param string $media_url      Parsed attribute URL to import.
+	 * @param string $resolved_url   Expected source request URL.
+	 */
+	public function test_process_custom_block_imports_scheme_less_media_from_attrs(
+		string $serialized_url,
+		string $media_url,
+		string $resolved_url
+	): void {
+		// ARRANGE: Store media in attrs alongside a bare design token.
+		$source_site_url    = 'https://source.example.com';
+		$content            = '<!-- wp:my-plugin/hero {"backgroundUrl":"'
+			. $serialized_url . '","icon":"star.png"} -->'
+			. '<div class="wp-block-my-plugin-hero">'
+			. '<img src="' . $media_url . '">'
+			. '<img src="' . $resolved_url . '">'
+			. '<span data-alternate="' . $media_url . '.webp"></span>'
+			. '</div>'
+			. '<!-- /wp:my-plugin/hero -->';
+		$attachments_before = $this->get_attachment_count();
+		$this->assertSame(
+			$media_url,
+			parse_blocks( $content )[0]['attrs']['backgroundUrl']
+		);
+
+		// ACT: Process the custom block through the Gutenberg path.
+		$processed = $this->processor->process_content(
+			$content,
+			$source_site_url
+		);
+
+		// ASSERT: Only the media URL is requested and localized.
+		$this->assertSame( array( $resolved_url ), $this->requested_urls );
+		$this->assertSame(
+			$attachments_before + 1,
+			$this->get_attachment_count()
+		);
+		$blocks      = parse_blocks( $processed );
+		$local_url   = $blocks[0]['attrs']['backgroundUrl'];
+		$attachments = get_posts(
+			array(
+				'post_type'      => 'attachment',
+				'post_status'    => 'inherit',
+				'posts_per_page' => 1,
+				'orderby'        => 'ID',
+				'order'          => 'DESC',
+			)
+		);
+		$this->assertCount( 1, $attachments );
+		$this->assertSame(
+			wp_get_attachment_url( $attachments[0]->ID ),
+			$local_url
+		);
+		$this->assertSame(
+			2,
+			substr_count( $processed, '<img src="' . $local_url . '">' )
+		);
+		$this->assertStringContainsString(
+			'<span data-alternate="' . $media_url . '.webp"></span>',
+			$processed
+		);
+		$this->assertStringContainsString( '"icon":"star.png"', $processed );
+		$this->assertSame( array(), $this->processor->get_failed_media() );
+	}
+
+	/**
+	 * Provides scheme-less custom block media URLs and their resolved forms.
+	 *
+	 * @return array<string, array{string, string, string}>
+	 */
+	public static function scheme_less_custom_media_provider(): array {
+		return array(
+			'protocol-relative'  => array(
+				'//source.example.com/custom.jpg',
+				'//source.example.com/custom.jpg',
+				'https://source.example.com/custom.jpg',
+			),
+			'root-relative'      => array(
+				'/wp-content/uploads/custom.jpg',
+				'/wp-content/uploads/custom.jpg',
+				'https://source.example.com/wp-content/uploads/custom.jpg',
+			),
+			'escaped-slashes'    => array(
+				'\/wp-content\/uploads\/custom.jpg',
+				'/wp-content/uploads/custom.jpg',
+				'https://source.example.com/wp-content/uploads/custom.jpg',
+			),
+			'leading-whitespace' => array(
+				' /wp-content/uploads/custom.jpg',
+				' /wp-content/uploads/custom.jpg',
+				'https://source.example.com/wp-content/uploads/custom.jpg',
+			),
+		);
+	}
+
+	/**
+	 * Verifies that a markup copy of a custom block media URL is rewritten when
+	 * a query, fragment, or delimiter follows it, keeping what follows.
+	 *
+	 * @dataProvider suffixed_media_copy_provider
+	 * @param string $markup Markup copy, with %s for the media URL.
+	 */
+	public function test_process_custom_block_rewrites_suffixed_media_copies(
+		string $markup
+	): void {
+		// ARRANGE: An absolute attr URL whose markup copy carries a suffix.
+		$source_site_url = 'https://source.example.com';
+		$media_url       = $source_site_url . '/hero.jpg';
+		$content         = '<!-- wp:my-plugin/hero {"backgroundUrl":"'
+			. $media_url . '"} -->'
+			. '<div class="wp-block-my-plugin-hero">'
+			. sprintf( $markup, $media_url )
+			. '</div>'
+			. '<!-- /wp:my-plugin/hero -->';
+
+		// ACT: Process the custom block through the Gutenberg path.
+		$processed = $this->processor->process_content(
+			$content,
+			$source_site_url
+		);
+
+		// ASSERT: One download feeds the attr and the suffixed copy.
+		$local_url = wp_get_attachment_url(
+			$this->media_importer->get_newly_created_attachment_ids()[0]
+		);
+		$this->assertSame( array( $media_url ), $this->requested_urls );
+		$this->assertSame(
+			$local_url,
+			parse_blocks( $processed )[0]['attrs']['backgroundUrl']
+		);
+		$this->assertStringContainsString(
+			sprintf( $markup, $local_url ),
+			$processed
+		);
+	}
+
+	/**
+	 * Provides markup copies of a media URL, each followed by a suffix.
+	 *
+	 * @return array<string, array{string}>
+	 */
+	public static function suffixed_media_copy_provider(): array {
+		return array(
+			'query in style'     => array(
+				'<div style="background-image:url(%s?w=1200)"></div>',
+			),
+			'fragment in data'   => array( '<div data-bg="%s#center"></div>' ),
+			'fragment in link'   => array( '<a href="%s#zoom">Zoom</a>' ),
+			'entity-quoted JSON' => array(
+				'<div data-settings="{&quot;bg&quot;:&quot;%s&quot;}"></div>',
+			),
+			'colon in text'      => array( '<p>%s: hero</p>' ),
+		);
+	}
+
+	/**
+	 * Verifies that a block's media URL attr keeps the source URL's query, as
+	 * its markup copy does.
+	 *
+	 * @dataProvider media_attr_query_provider
+	 * @param string $block  Block markup, with %s for the media URL.
+	 * @param string $attr   Attr that holds the media URL after import.
+	 * @param string $suffix Markup text that follows the media URL.
+	 */
+	public function test_process_media_attr_keeps_query(
+		string $block,
+		string $attr,
+		string $suffix
+	): void {
+		// ARRANGE: A block whose source media URL carries a query.
+		$media_url = 'https://source.example.com/hero.jpg?w=300';
+
+		// ACT: Process the block through the Gutenberg path.
+		$processed = $this->processor->process_content(
+			str_replace( '%s', $media_url, $block ),
+			'https://source.example.com'
+		);
+
+		// ASSERT: The attr and its markup copy hold the local URL and query.
+		$local_url = wp_get_attachment_url(
+			$this->media_importer->get_newly_created_attachment_ids()[0]
+		) . '?w=300';
+		$this->assertSame(
+			$local_url,
+			parse_blocks( $processed )[0]['attrs'][ $attr ]
+		);
+		$this->assertStringContainsString(
+			'src="' . $local_url . $suffix . '"',
+			$processed
+		);
+	}
+
+	/**
+	 * Provides one block per media URL attr writer.
+	 *
+	 * @return array<string, array{string, string, string}>
+	 */
+	public static function media_attr_query_provider(): array {
+		return array(
+			'image with URL only in markup' => array(
+				'<!-- wp:image --><figure class="wp-block-image">'
+					. '<img src="%s" alt=""/></figure><!-- /wp:image -->',
+				'url',
+				'',
+			),
+			'cover'                         => array(
+				'<!-- wp:cover {"url":"%s"} --><div class="wp-block-cover">'
+					. '<img class="wp-block-cover__image-background" alt=""'
+					. ' src="%s"/></div><!-- /wp:cover -->',
+				'url',
+				'',
+			),
+			'custom with longer query'      => array(
+				'<!-- wp:my-plugin/hero {"backgroundUrl":"%s"} -->'
+					. '<div class="wp-block-my-plugin-hero">'
+					. '<img src="%s&amp;h=600"/></div>'
+					. '<!-- /wp:my-plugin/hero -->',
+				'backgroundUrl',
+				'&amp;h=600',
+			),
+		);
+	}
+
+	/**
+	 * Verifies that a custom block's markup copy of a media URL is rewritten
+	 * when it HTML-encodes the query's ampersands.
+	 */
+	public function test_process_custom_block_rewrites_encoded_copy(): void {
+		// ARRANGE: A data attribute, which no later pass repoints, encodes "&".
+		$media_url = 'https://source.example.com/hero.jpg?w=300&h=200';
+		$content   = '<!-- wp:my-plugin/hero {"backgroundUrl":"' . $media_url
+			. '"} --><div class="wp-block-my-plugin-hero" data-bg="'
+			. esc_attr( $media_url ) . '"></div><!-- /wp:my-plugin/hero -->';
+
+		// ACT: Process the custom block through the Gutenberg path.
+		$processed = $this->processor->process_content(
+			$content,
+			'https://source.example.com'
+		);
+
+		// ASSERT: The copy holds the local URL, still encoded.
+		$local_url = wp_get_attachment_url(
+			$this->media_importer->get_newly_created_attachment_ids()[0]
+		);
+		$this->assertStringContainsString(
+			'data-bg="' . $local_url . '?w=300&amp;h=200"',
+			$processed
+		);
+	}
+
+	/**
+	 * Verifies that a markup copy whose path continues past a custom block
+	 * media URL, naming another file, is left unchanged.
+	 *
+	 * @dataProvider longer_media_path_provider
+	 * @param string $markup Markup copy, with %s for the media URL.
+	 */
+	public function test_process_custom_block_keeps_longer_media_paths(
+		string $markup
+	): void {
+		// ARRANGE: A root-relative attr URL that starts a longer markup path.
+		$media_url = '/hero.jpg';
+		$content   = '<!-- wp:my-plugin/hero {"backgroundUrl":"'
+			. $media_url . '"} -->'
+			. '<div class="wp-block-my-plugin-hero">'
+			. sprintf( $markup, $media_url )
+			. '</div>'
+			. '<!-- /wp:my-plugin/hero -->';
+
+		// ACT: Process the custom block through the Gutenberg path.
+		$processed = $this->processor->process_content(
+			$content,
+			'https://source.example.com'
+		);
+
+		// ASSERT: The attr is localized while the longer path is unchanged.
+		$this->assertSame(
+			wp_get_attachment_url(
+				$this->media_importer->get_newly_created_attachment_ids()[0]
+			),
+			parse_blocks( $processed )[0]['attrs']['backgroundUrl']
+		);
+		$this->assertStringContainsString(
+			sprintf( $markup, $media_url ),
+			$processed
+		);
+	}
+
+	/**
+	 * Provides markup copies that continue a media URL's path.
+	 *
+	 * @return array<string, array{string}>
+	 */
+	public static function longer_media_path_provider(): array {
+		return array(
+			'hyphen'  => array( '<span data-copy="%s-copy.jpg"></span>' ),
+			'slash'   => array( '<span data-copy="%s/copy.jpg"></span>' ),
+			'percent' => array( '<span data-copy="%s%%20copy.jpg"></span>' ),
+			'plus'    => array( '<span data-copy="%s+copy.jpg"></span>' ),
+			'equals'  => array( '<span data-copy="%s=copy.jpg"></span>' ),
+		);
+	}
+
+	/**
 	 * Verifies that an absolute source media URL whose path carries non-ASCII
 	 * characters is downloaded from that URL unchanged.
 	 *
@@ -2055,10 +2517,6 @@ class Content_Processor_Test extends Integration_Test_Case {
 	/**
 	 * Verifies that a custom block attr holding a .webp URL that serves an HTML
 	 * page is kept as a link, not sideloaded as a bogus WebP attachment.
-	 *
-	 * This path registers the WebP upload shim, which would otherwise re-assert
-	 * image/webp for the page during the content check; is_media_content() strips
-	 * it so the real type (text/html) is seen and the link is preserved.
 	 */
 	public function test_process_media_looking_webp_page_link_in_custom_attr_is_kept_as_link(): void {
 		// ARRANGE: A custom block attr holding a .webp URL that serves HTML.
@@ -2091,6 +2549,31 @@ class Content_Processor_Test extends Integration_Test_Case {
 			array(),
 			$this->processor->get_failed_media(),
 			'WebP-looking page link in attrs must not be recorded as a failure'
+		);
+	}
+
+	/**
+	 * Verifies that an image block whose .webp src serves an HTML page records
+	 * a media failure instead of sideloading the page as a WebP attachment.
+	 */
+	public function test_webp_src_serving_html_is_a_media_failure(): void {
+		// ARRANGE: An image block whose .webp src serves an HTML page.
+		$source_site_url = 'https://source.example.com';
+		$image_url       = $source_site_url . '/serves-html/photo.webp';
+		$content         = '<!-- wp:image {"id":7} -->'
+			. '<figure class="wp-block-image"><img src="' . $image_url
+			. '" class="wp-image-7"/></figure><!-- /wp:image -->';
+
+		$attachments_before = $this->get_attachment_count();
+
+		// ACT: Process the block through the full Gutenberg path.
+		$this->processor->process_content( $content, $source_site_url );
+
+		// ASSERT: Nothing was sideloaded, and the src is a media failure.
+		$this->assert_no_new_attachments( $attachments_before );
+		$this->assertSame(
+			array( $image_url => 'core/image' ),
+			$this->processor->get_failed_media()
 		);
 	}
 
@@ -2503,6 +2986,254 @@ class Content_Processor_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that a failed protocol-relative image names the requested URL.
+	 */
+	public function test_failed_protocol_relative_image_names_requested_url(): void {
+		// ARRANGE: A core/image block with a protocol-relative source URL.
+		// The link triggers the existing block media pass.
+		$raw_url = '//source.example.com/gone.jpg';
+		$url     = 'https://source.example.com/gone.jpg';
+		$content = '<!-- wp:image {"url":"' . $raw_url . '"} -->'
+			. '<figure class="wp-block-image"><img src="' . $raw_url . '"/></figure>'
+			. '<!-- /wp:image -->'
+			. '<p>Source <a href="https://source.example.com/page">page</a></p>';
+
+		// ACT: Force the resolved download to fail.
+		$this->process_with_all_downloads_failing( $content );
+
+		// ASSERT: The report names the URL actually requested and its block.
+		$this->assertSame(
+			array( $url => 'core/image' ),
+			$this->processor->get_failed_media()
+		);
+		$this->assertContains( $url, $this->requested_urls );
+		$this->assertSame(
+			'Import failed: 1 media file(s) could not be imported: '
+				. $url . ' (core/image)',
+			$this->processor->get_failed_media_error_message()
+		);
+	}
+
+	/**
+	 * Verifies that a failed srcset URL names the resolved request URL.
+	 */
+	public function test_failed_srcset_names_requested_url(): void {
+		// ARRANGE: Classic content with a protocol-relative srcset candidate.
+		$raw_url = '//source.example.com/gone-2x.jpg';
+		$url     = 'https://source.example.com/gone-2x.jpg';
+		$content = '<img src="https://third.example.com/other.jpg" srcset="'
+			. $raw_url . ' 2x">';
+
+		// ACT: Force the resolved download to fail.
+		$this->process_with_all_downloads_failing( $content );
+
+		// ASSERT: The failed candidate reports the URL actually requested.
+		$this->assertContains( $url, $this->requested_urls );
+		$this->assertSame( array( $url => '' ), $this->processor->get_failed_media() );
+		$this->assertSame(
+			'Import failed: 1 media file(s) could not be imported: ' . $url,
+			$this->processor->get_failed_media_error_message()
+		);
+	}
+
+	/**
+	 * Verifies that a failed shortcode URL names the requested URL.
+	 */
+	public function test_failed_shortcode_names_requested_url(): void {
+		// ARRANGE: A video shortcode with a protocol-relative source URL.
+		$raw_url = '//source.example.com/gone.mp4';
+		$url     = 'https://source.example.com/gone.mp4';
+		$content = '[video src="' . $raw_url . '"]';
+
+		// ACT: Force the resolved download to fail.
+		$this->process_with_all_downloads_failing( $content );
+
+		// ASSERT: The failed shortcode reports the URL actually requested.
+		$this->assertContains( $url, $this->requested_urls );
+		$this->assertSame( array( $url => '' ), $this->processor->get_failed_media() );
+		$this->assertSame(
+			'Import failed: 1 media file(s) could not be imported: ' . $url,
+			$this->processor->get_failed_media_error_message()
+		);
+	}
+
+	/**
+	 * Verifies that query variants of a failed block media URL share one report key.
+	 */
+	public function test_failed_block_query_variants_name_one_request_url(): void {
+		// ARRANGE: Two image blocks resolve to the same download URL.
+		$url     = 'https://source.example.com/gone-block.jpg';
+		$content = '';
+		foreach ( array( '?v=1', '?v=2' ) as $query ) {
+			$variant  = $url . $query;
+			$content .= '<!-- wp:image {"url":"' . $variant . '"} -->'
+				. '<figure class="wp-block-image"><img src="' . $variant . '"/></figure>'
+				. '<!-- /wp:image -->';
+		}
+
+		// ACT: Fail the first download; the second variant uses the failure cache.
+		$this->process_with_all_downloads_failing( $content );
+
+		// ASSERT: The shared download has one block-labeled report entry.
+		$this->assert_failed_query_variants( $url, 'core/image' );
+	}
+
+	/**
+	 * Verifies that a malformed query variant does not duplicate a failed
+	 * download already reported by block attributes.
+	 */
+	public function test_failed_query_variant_is_not_also_unprocessable(): void {
+		// ARRANGE: The block attr fails while malformed markup repeats its URL.
+		$url     = 'https://source.example.com/gone-malformed.jpg';
+		$content = '<!-- wp:image {"url":"' . $url . '?v=1"} -->'
+			. '<img src="' . $url . '?v=2'
+			. '<!-- /wp:image -->';
+
+		// ACT: The one download fails.
+		$this->process_with_all_downloads_failing( $content );
+
+		// ASSERT: Query variants share one failed URL and no duplicate report.
+		$this->assert_failed_query_variants( $url, 'core/image' );
+	}
+
+	/**
+	 * Verifies that a shared failed URL keeps its first originating block label.
+	 */
+	public function test_shared_failed_url_keeps_first_block_label(): void {
+		// ARRANGE: Two block types refer to one unavailable media file.
+		$url     = 'https://source.example.com/shared-missing.jpg';
+		$content = '<!-- wp:image {"url":"' . $url . '?v=1"} /-->'
+			. '<!-- wp:cover {"url":"' . $url . '?v=2"} /-->';
+
+		// ACT: Both paths report the same failed download.
+		$this->process_with_all_downloads_failing( $content );
+
+		// ASSERT: The first block's label wins, consistent with map merging.
+		$this->assert_failed_query_variants( $url, 'core/image' );
+	}
+
+	/**
+	 * Verifies that every block media path deduplicates query variants by the
+	 * URL actually requested.
+	 *
+	 * @dataProvider failed_query_block_cases
+	 * @param string $block_name Block under test.
+	 * @param string $url_attr   Block attribute that holds the media URL.
+	 */
+	public function test_failed_query_variants_in_other_blocks(
+		string $block_name,
+		string $url_attr
+	): void {
+		// ARRANGE: Two references with distinct queries share a download URL.
+		$url     = 'https://source.example.com/gone-' . str_replace( '/', '-', $block_name ) . '.jpg';
+		$content = '';
+		foreach ( array( '?v=1', '?v=2' ) as $query ) {
+			$variant  = $url . $query;
+			$attrs    = 'core/media-text' === $block_name
+				? array( 'mediaType' => 'image' )
+				: array( $url_attr => $variant );
+			$inner    = 'core/media-text' === $block_name
+				? '<figure class="wp-block-media-text__media"><img src="'
+					. $variant . '"></figure>'
+				: '';
+			$name     = str_starts_with( $block_name, 'core/' )
+				? substr( $block_name, 5 )
+				: $block_name;
+			$content .= '<!-- wp:' . $name . ' ' . wp_json_encode( $attrs ) . ' -->'
+				. $inner . '<!-- /wp:' . $name . ' -->';
+		}
+
+		// ACT: Fail the shared download.
+		$this->process_with_all_downloads_failing( $content );
+
+		// ASSERT: One request and one report retain the block name.
+		$this->assert_failed_query_variants( $url, $block_name );
+	}
+
+	/**
+	 * Supplies the block media paths that use dedicated or generic attrs.
+	 *
+	 * @return array<string, array{string, string}> Block name and URL attribute.
+	 */
+	public static function failed_query_block_cases(): array {
+		return array(
+			'video'      => array( 'core/video', 'src' ),
+			'audio'      => array( 'core/audio', 'src' ),
+			'cover'      => array( 'core/cover', 'url' ),
+			'file'       => array( 'core/file', 'href' ),
+			'media-text' => array( 'core/media-text', '' ),
+			'custom'     => array( 'acme/hero', 'backgroundUrl' ),
+		);
+	}
+
+	/**
+	 * Verifies that query variants in inline image attrs share one report key.
+	 */
+	public function test_failed_inline_query_variants_name_one_request_url(): void {
+		// ARRANGE: Two classic images differ only by their query strings.
+		$url     = 'https://source.example.com/gone-inline.jpg';
+		$content = '<img src="' . $url . '?v=1"><img src="' . $url . '?v=2">';
+
+		// ACT: Fail the first download; the second variant uses the failure cache.
+		$this->process_with_all_downloads_failing( $content );
+
+		// ASSERT: The report names the URL actually requested.
+		$this->assert_failed_query_variants( $url, '' );
+	}
+
+	/**
+	 * Verifies that query variants in srcset share one failed request URL.
+	 */
+	public function test_failed_srcset_query_variants_name_one_request_url(): void {
+		// ARRANGE: Two candidates use the same media path.
+		$url     = 'https://source.example.com/gone-srcset.jpg';
+		$content = '<img src="https://third.example.com/other.jpg" srcset="'
+			. $url . '?v=1 1x, ' . $url . '?v=2 2x">';
+
+		// ACT: Fail the first download; the second variant uses the failure cache.
+		$this->process_with_all_downloads_failing( $content );
+
+		// ASSERT: The shared download has one report entry.
+		$this->assert_failed_query_variants( $url, '' );
+	}
+
+	/**
+	 * Verifies that query variants in shortcodes share one failed request URL.
+	 */
+	public function test_failed_shortcode_query_variants_name_one_request_url(): void {
+		// ARRANGE: Two video shortcodes use the same media path.
+		$url     = 'https://source.example.com/gone-video.mp4';
+		$content = '[video src="' . $url . '?v=1"]'
+			. '[video src="' . $url . '?v=2"]';
+
+		// ACT: Fail the first download; the second variant uses the failure cache.
+		$this->process_with_all_downloads_failing( $content );
+
+		// ASSERT: The report names the shared request URL.
+		$this->assert_failed_query_variants( $url, '' );
+	}
+
+	/**
+	 * Asserts that query variants use and report one query-free URL.
+	 *
+	 * @param string $url        Expected request URL.
+	 * @param string $block_name Expected originating block name.
+	 */
+	private function assert_failed_query_variants( string $url, string $block_name ): void {
+		$this->assertSame( array( $url ), $this->requested_urls );
+		$this->assertSame(
+			array( $url => $block_name ),
+			$this->processor->get_failed_media()
+		);
+		$this->assertSame( array(), $this->processor->get_unprocessable_media() );
+		$this->assertSame(
+			'Import failed: 1 media file(s) could not be imported: '
+				. $url . ( '' === $block_name ? '' : ' (' . $block_name . ')' ),
+			$this->processor->get_failed_media_error_message()
+		);
+	}
+
+	/**
 	 * Verifies that a failed core/gallery image names the block in the message.
 	 */
 	public function test_failed_media_message_names_the_gallery_block(): void {
@@ -2659,7 +3390,7 @@ class Content_Processor_Test extends Integration_Test_Case {
 
 		// ASSERT: Each URL is followed by its originating block, comma-joined.
 		$this->assertSame(
-			'Import failed: 2 media file(s) could not be downloaded: '
+			'Import failed: 2 media file(s) could not be imported: '
 				. $image_url . ' (core/image), '
 				. $gallery_url . ' (core/gallery)',
 			$this->processor->get_failed_media_error_message()

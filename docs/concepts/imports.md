@@ -40,7 +40,7 @@ Actions are shown only when they apply to the selected row:
 | Action | Description |
 | --- | --- |
 | Import | Creates a destination draft or re-imports changed source content. |
-| Compare | Compares the current destination post with fresh source content. |
+| Compare | Compares the current destination post with what a re-import would store. |
 | Edit | Opens the destination post in the WordPress editor. |
 | Trash | Moves the destination post to trash. |
 | Roll back | Reverses the latest eligible import. |
@@ -96,7 +96,7 @@ The tab is scoped to the connected source site. Changing the connection hides th
 | Ignore    | Hides an item from Open without deleting its record. |
 | Un-ignore | Restores an ignored item to Open.                    |
 
-These actions support bulk selection where applicable. Degradations show **Resolvable now** when the referenced target has been imported and **Waiting on import** while it is still missing. Importing the target does not automatically retry existing degradations. A bulk Retry reports how many issues resolved, are still waiting on an import, or failed. Remove remains available for failures in the Ignored view.
+These actions support bulk selection where applicable. Degradations show **Resolvable now** when their target is ready and **Waiting on import** while it is missing. A deferred navigation URL shows **Waiting on final URL** until Retry can repair it. Importing the target does not automatically retry existing degradations. A bulk Retry reports how many issues resolved, await import, await a final URL, or failed. Remove remains available for failures in the Ignored view.
 
 Removing a failure affects only its history record. To recover, fix the cause and import the source post again from the Posts tab. Any later import attempt for the same source supersedes its previous failure. If the later attempt also fails, the new failure appears instead.
 
@@ -106,7 +106,7 @@ Ignore is reversible with Un-ignore. A fresh failed attempt creates a new open f
 
 Rollback eligibility comes from a post's latest active import-history row, and only `success` and `updated` rows qualify.
 
-Rolling back a successful new import deletes the destination post and the media that import created. Media another post still shows is kept: as a featured image, inline in content, or by ID in a gallery or playlist shortcode. The holding post counts whatever its post type or status, trashed and hidden included. Media whose usage cannot be determined is kept too, with the omission recorded in the Audit Log.
+Rolling back a successful new import deletes the destination post and the media that import created. Media another post still shows is kept: as a featured image, inline in content, or by ID in a gallery or playlist shortcode. The holding post counts whatever its post type or status, trashed and hidden included. Media whose usage cannot be determined, or that WordPress fails to delete, is kept too, with the omission recorded in the Audit Log.
 
 Rolling back an update restores the captured post fields, author, parent, post type, featured image, editor and tracking metadata, and previous assignments for the taxonomies the import payload carried. Restored content passes through WordPress' normal save filters for the acting user. If a filter changes the content or excerpt, rollback reports an error and does not mark the item rolled back, since WordPress may already have persisted the filtered value.
 

@@ -418,8 +418,8 @@ final class History_Repository {
 	/**
 	 * Looks up the most recent active item row for a given imported post.
 	 *
-	 * Rolled-back rows are excluded so the result reflects the post's
-	 * current content.
+	 * Rolled-back and failed rows are excluded so the result reflects the
+	 * post's current content.
 	 *
 	 * @param int $post_id WordPress post ID.
 	 * @return array|null Item row or null if no matching item exists.
@@ -777,8 +777,9 @@ final class History_Repository {
 	 * Drives the Manage listing — one query for the whole page
 	 * instead of N. Relies on the (post_id, import_date_gmt) composite
 	 * index for the inner aggregation. Rolled-back rows are excluded so the
-	 * result reflects each post's current content. Ties on import_date_gmt
-	 * resolve to the highest id.
+	 * result reflects each post's current content. Unlike
+	 * get_item_for_post(), failed rows count. Ties on import_date_gmt resolve
+	 * to the highest id.
 	 *
 	 * @param int[] $post_ids Post IDs to look up.
 	 * @return array<int, array> Map of post_id → most recent item row.

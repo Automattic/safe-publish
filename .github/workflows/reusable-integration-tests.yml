@@ -29,7 +29,7 @@ jobs:
       - uses: actions/checkout@v7.0.1
 
       - name: Setup PHP
-        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
+        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
         with:
           php-version: ${{ inputs.php-version }}
 
@@ -57,6 +57,16 @@ jobs:
 
       - name: Start WordPress environment
         run: npx wp-env start
+
+      # wp-env loads trunk's test library for an -alpha core, which a
+      # maintenance branch reports between patch releases. Use the library
+      # from the same branch as core instead. Must run after the last start.
+      - name: Match the PHPUnit library to the WordPress branch
+        run: |
+          path="$(npx wp-env status --json | jq -r .installPath)"
+          dir="$path/tests-WordPress-PHPUnit"
+          git -C "$dir" fetch --depth 1 origin '${{ inputs.wordpress-version }}'
+          git -C "$dir" checkout --force FETCH_HEAD
 
       - name: Verify WordPress environment
         run: |

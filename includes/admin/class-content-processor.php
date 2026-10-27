@@ -52,6 +52,14 @@ class Content_Processor {
 	public const META_GALLERY_REF_REPOINTED_AT = '_safe_publish_gallery_ref_repointed_at';
 
 	/**
+	 * Reconcile outcome detail for a deferred navigation URL.
+	 *
+	 * @var string
+	 */
+	public const DEFERRED_URL_DETAIL =
+		'Navigation URL awaits a final target path or registered post type.';
+
+	/**
 	 * Block-name => list of post-ID attrs, optionally gated on sibling attrs
 	 * (e.g. core/navigation-link.id only when kind=post-type) and optionally
 	 * naming a url_attr to re-derive from the resolved destination id.
@@ -216,6 +224,83 @@ class Content_Processor {
 		string $source_site_url,
 		array $context = array()
 	): string|WP_Error {
+		return $this->replace_source_urls(
+			$this->run_content_passes(
+				$content,
+				$source_site_url,
+				$context,
+				true
+			),
+			$source_site_url
+		);
+	}
+
+	/**
+	 * Reports the content process_content() would store, importing nothing.
+	 *
+	 * Runs the same passes as the import, so a caller compares against what an
+	 * update would produce. The cross-post and attached media-set passes are
+	 * skipped, as they exist to write; media downloads are avoided by
+	 * injecting a resolve-only Media_Importer. Media this site has not imported
+	 * keeps its source URL, as the copy an update would create does not exist.
+	 *
+	 * @param string               $content         Post content to preview.
+	 * @param string               $source_site_url Source site URL.
+	 * @param array<string, mixed> $context         Optional. As process_content(),
+	 *                                              except `attached_media`, which
+	 *                                              only the skipped pass reads.
+	 * @return string|WP_Error Previewed content, or WP_Error on failure.
+	 */
+	public function preview_content(
+		string $content,
+		string $source_site_url,
+		array $context = array()
+	): string|WP_Error {
+		$preview = $this->run_content_passes(
+			$content,
+			$source_site_url,
+			$context,
+			false
+		);
+
+		// Media state collected here describes no import, so it is dropped.
+		$this->failed_media        = array();
+		$this->unprocessable_media = array();
+		$this->warnings            = array();
+
+		// Hold media this site has no file for out of the URL swap, so it
+		// keeps its source URL and a local copy at the same path keeps its own.
+		$placeholders = array_map(
+			static fn ( int $i ): string => "\0" . $i . "\0",
+			array_flip( $this->media_importer->take_unresolved_urls() )
+		);
+
+		$preview = $this->replace_source_urls(
+			strtr( $preview, $placeholders ),
+			$source_site_url
+		);
+
+		return is_string( $preview )
+			? strtr( $preview, array_flip( $placeholders ) )
+			: $preview;
+	}
+
+	/**
+	 * Runs the content passes shared by the import and its preview.
+	 *
+	 * @param string               $content           Post content to process.
+	 * @param string               $source_site_url   Source site URL.
+	 * @param array<string, mixed> $context           process_content() context.
+	 * @param bool                 $import_media_sets Import the cross-post and
+	 *                                                attached media sets.
+	 * @return string Processed content, before the source URL swap.
+	 */
+	private function run_content_passes(
+		string $content,
+		string $source_site_url,
+		array $context,
+		bool $import_media_sets
+	): string {
 		$this->failed_media        = array();
 		$this->unprocessable_media = array();
 		$this->warnings            = array();
@@ -274,16 +359,18 @@ class Content_Processor {
 			$context
 		);
 
-		// Pull each referenced post's rendered set so the remapped shortcode
-		// fills on the destination.
-		$this->import_referenced_media_sets(
-			$referenced,
-			$source_site_url,
-			$context
-		);
+		if ( $import_media_sets ) {
+			// Pull each referenced post's rendered set so the remapped
+			// shortcode fills on the destination.
+			$this->import_referenced_media_sets(
+				$referenced,
+				$source_site_url,
+				$context
+			);
 
-		// Import the bare [gallery]/[playlist] attached set (no rewrite).
-		$this->import_attached_media_set( $context, $source_site_url );
+			// Import the bare [gallery]/[playlist] attached set (no rewrite).
+			$this->import_attached_media_set( $context, $source_site_url );
+		}
 
 		// Import [audio]/[video] shortcode media before replace_source_urls(),
 		// so download failures are recorded rather than masked by the swap.
@@ -315,17 +402,19 @@ class Content_Processor {
 		$this->unprocessable_media = self::normalize_media_map_keys( $this->unprocessable_media );
 
 		// The per-block markup pass can't see block-level download failures.
-		$this->unprocessable_media = array_diff_key(
-			$this->unprocessable_media,
-			$this->failed_media
-		);
+		foreach ( $this->unprocessable_media as $url => $_ ) {
+			$download_url = Media_Importer::get_download_url( $url, $source_site_url );
+			if ( array_key_exists( $download_url, $this->failed_media ) ) {
+				unset( $this->unprocessable_media[ $url ] );
+			}
+		}
 
 		$this->content_media_processor->reset_failed_media();
 		$this->content_media_processor->reset_unprocessable_media();
 		$this->shortcode_media_rewriter->reset_failed_media();
 		$this->media_importer->reset_failed_media();
 
-		return $this->replace_source_urls( $processed_content, $source_site_url );
+		return $processed_content;
 	}
 
 	/**
@@ -808,7 +897,8 @@ class Content_Processor {
 	 * markup (entity encoding, self-closing tags, whitespace, etc.).
 	 *
 	 * @param string $content         Content to process.
-	 * @param string $source_site_url Source site URL (scheme://host).
+	 * @param string $source_site_url Source site URL, with its port and path
+	 *                                when it has them.
 	 * @return string|WP_Error Content with URLs replaced, or WP_Error on failure.
 	 */
 	public function replace_source_urls( string $content, string $source_site_url ): string|WP_Error {
@@ -819,9 +909,16 @@ class Content_Processor {
 		$current_site_url = get_site_url();
 		$source_host      = wp_parse_url( $source_site_url, PHP_URL_HOST );
 		$current_host     = wp_parse_url( $current_site_url, PHP_URL_HOST );
+		$source_port      = URL_Validator::non_default_port( $source_site_url );
+		$current_port     = URL_Validator::non_default_port(
+			$current_site_url
+		);
 
-		// Skip if URLs are the same.
-		if ( $source_host === $current_host ) {
+		// Skip if both sites share a host and port.
+		if (
+			$source_host === $current_host
+			&& $source_port === $current_port
+		) {
 			return $content;
 		}
 
@@ -833,9 +930,14 @@ class Content_Processor {
 		// Match both http and https variants of the source URL so that legacy
 		// http:// references are also replaced. The lookahead prevents partial
 		// domain matches (e.g., "source.example.com" must not match inside
-		// "source.example.company.com").
-		$pattern = '/https?:\/\/' . preg_quote( $source_host, '/' )
-			. '(?=[^a-zA-Z0-9.]|$)/';
+		// "source.example.company.com"). A source on a non-default port matches
+		// only with that port, and the lookahead rejects any other. The same
+		// host on another port is another site, such as the destination itself
+		// when both share a host. The lookahead also rejects a "-", which
+		// continues a longer host name, and an "@", which ends a user name.
+		$authority = preg_quote( $source_host, '/' )
+			. ( null !== $source_port ? ':' . $source_port : '' );
+		$pattern   = '/https?:\/\/' . $authority . '(?=[^a-zA-Z0-9.:@-]|$)/';
 
 		$result = preg_replace( $pattern, $current_site_url, $content );
 
@@ -886,7 +988,7 @@ class Content_Processor {
 
 		return sprintf(
 			/* translators: 1: number of failed media files, 2: comma-separated list of failed media file URLs, each optionally followed by the originating block name in parentheses */
-			__( 'Import failed: %1$d media file(s) could not be downloaded: %2$s', 'safe-publish' ),
+			__( 'Import failed: %1$d media file(s) could not be imported: %2$s', 'safe-publish' ),
 			count( $this->failed_media ),
 			self::format_media_list( $this->failed_media )
 		);
@@ -961,6 +1063,22 @@ class Content_Processor {
 		}
 
 		return $normalized;
+	}
+
+	/**
+	 * Records a failed download URL with its originating block.
+	 *
+	 * @param string $url             Source media URL.
+	 * @param string $source_site_url Source site URL.
+	 * @param string $block_name      Originating block name.
+	 */
+	private function record_failed_media(
+		string $url,
+		string $source_site_url,
+		string $block_name
+	): void {
+		$download_url                          = Media_Importer::get_download_url( $url, $source_site_url );
+		$this->failed_media[ $download_url ] ??= $block_name;
 	}
 
 	/**
@@ -1164,14 +1282,22 @@ class Content_Processor {
 		}
 
 		if ( false === $attachment_id ) {
-			$this->failed_media[ $original_url ] = $block['blockName'];
+			$this->record_failed_media(
+				$original_url,
+				$source_site_url,
+				$block['blockName']
+			);
 			return $this->process_block_inner_html( $block, $source_site_url );
 		}
 
 		$new_url = wp_get_attachment_url( $attachment_id );
 
 		if ( false === $new_url ) {
-			$this->failed_media[ $original_url ] = $block['blockName'];
+			$this->record_failed_media(
+				$original_url,
+				$source_site_url,
+				$block['blockName']
+			);
 			return $this->process_block_inner_html( $block, $source_site_url );
 		}
 
@@ -1179,6 +1305,11 @@ class Content_Processor {
 		if ( ! isset( $block['attrs'] ) ) {
 			$block['attrs'] = array();
 		}
+
+		$new_url = Media_Importer::reapply_query_parameters(
+			$original_url,
+			$new_url
+		);
 
 		// Update block attributes with local URL and attachment ID.
 		$block['attrs']['url'] = $new_url;
@@ -1189,11 +1320,9 @@ class Content_Processor {
 			$block['attrs']['src'] = $new_url;
 		}
 
-		$url_with_parameters = Media_Importer::reapply_query_parameters( $original_url, $new_url );
-
 		// Update innerHTML with the appropriate URL for correct rendering.
 		if ( ! empty( $block['innerHTML'] ) ) {
-			$updated_html       = $this->update_img_src_in_html( $block['innerHTML'], $original_url, $url_with_parameters );
+			$updated_html       = $this->update_img_src_in_html( $block['innerHTML'], $original_url, $new_url );
 			$updated_html       = $this->update_wp_image_class( $updated_html, $attachment_id );
 			$block['innerHTML'] = $updated_html;
 		}
@@ -1202,7 +1331,7 @@ class Content_Processor {
 		if ( ! empty( $block['innerContent'] ) && is_array( $block['innerContent'] ) ) {
 			foreach ( $block['innerContent'] as $index => $content ) {
 				if ( is_string( $content ) ) {
-					$updated_content                 = $this->update_img_src_in_html( $content, $original_url, $url_with_parameters );
+					$updated_content                 = $this->update_img_src_in_html( $content, $original_url, $new_url );
 					$updated_content                 = $this->update_wp_image_class( $updated_content, $attachment_id );
 					$block['innerContent'][ $index ] = $updated_content;
 				}
@@ -1297,43 +1426,54 @@ class Content_Processor {
 		}
 
 		if ( false === $attachment_id ) {
-			$this->failed_media[ $media_url ] = $block['blockName'];
+			$this->record_failed_media(
+				$media_url,
+				$source_site_url,
+				$block['blockName']
+			);
 			return $this->process_block_inner_html( $block, $source_site_url );
 		}
 
 		$new_url = wp_get_attachment_url( $attachment_id );
 
 		if ( false === $new_url ) {
-			$this->failed_media[ $media_url ] = $block['blockName'];
+			$this->record_failed_media(
+				$media_url,
+				$source_site_url,
+				$block['blockName']
+			);
 			return $this->process_block_inner_html( $block, $source_site_url );
 		}
+
+		$new_url = Media_Importer::reapply_query_parameters(
+			$media_url,
+			$new_url
+		);
 
 		if ( null !== $url_attr ) {
 			$block['attrs'][ $url_attr ] = $new_url;
 		}
 		$block['attrs'][ $id_attr ] = $attachment_id;
 
-		$url_with_parameters = Media_Importer::reapply_query_parameters(
-			$media_url,
-			$new_url
-		);
-
 		if ( ! empty( $block['innerHTML'] ) ) {
-			$block['innerHTML'] = str_replace(
+			$block['innerHTML'] = $this->replace_media_url_forms(
+				$block['innerHTML'],
 				$media_url,
-				$url_with_parameters,
-				$block['innerHTML']
+				$new_url,
+				$source_site_url
 			);
 		}
 
 		if ( ! empty( $block['innerContent'] ) && is_array( $block['innerContent'] ) ) {
 			foreach ( $block['innerContent'] as $index => $content ) {
 				if ( is_string( $content ) ) {
-					$block['innerContent'][ $index ] = str_replace(
-						$media_url,
-						$url_with_parameters,
-						$content
-					);
+					$block['innerContent'][ $index ] =
+						$this->replace_media_url_forms(
+							$content,
+							$media_url,
+							$new_url,
+							$source_site_url
+						);
 				}
 			}
 		}
@@ -1504,8 +1644,8 @@ class Content_Processor {
 			return $updated_html;
 		}
 
-		// Fallback to simple string replacement.
-		return str_replace( $old_url, $new_url, $html );
+		// Fall back to replacing standalone occurrences anywhere in the markup.
+		return $this->replace_standalone_media_url( $html, $old_url, $new_url );
 	}
 
 	/**
@@ -1550,8 +1690,9 @@ class Content_Processor {
 	 *
 	 * Walks all string values in $attrs. For each value that is a valid URL
 	 * on the source domain, the URL is sideloaded and replaced with the local
-	 * attachment URL. Matching occurrences in $block['innerHTML'] and
-	 * $block['innerContent'] are also updated so they stay consistent.
+	 * attachment URL, keeping its query. Matching occurrences in
+	 * $block['innerHTML'] and $block['innerContent'] are also updated so they
+	 * stay consistent.
 	 *
 	 * @param array  $attrs           Attributes array to walk (possibly nested).
 	 * @param string $source_site_url Source site URL.
@@ -1573,7 +1714,13 @@ class Content_Processor {
 				);
 			} elseif (
 				is_string( $value ) &&
-				URL_Validator::is_absolute_http_url( $value ) &&
+				(
+					URL_Validator::is_absolute_http_url( $value ) ||
+					str_starts_with(
+						URL_Validator::normalize_url_whitespace( $value ),
+						'/'
+					)
+				) &&
 				$this->content_media_processor
 					->has_uploadable_file_extension( $value )
 			) {
@@ -1588,24 +1735,37 @@ class Content_Processor {
 				}
 
 				if ( false === $attachment_id ) {
-					$this->failed_media[ $value ] = $block['blockName'];
+					$this->record_failed_media(
+						$value,
+						$source_site_url,
+						$block['blockName']
+					);
 					continue;
 				}
 
 				$new_url = wp_get_attachment_url( $attachment_id );
 
 				if ( false === $new_url ) {
-					$this->failed_media[ $value ] = $block['blockName'];
+					$this->record_failed_media(
+						$value,
+						$source_site_url,
+						$block['blockName']
+					);
 					continue;
 				}
 
+				$new_url       = Media_Importer::reapply_query_parameters(
+					$value,
+					$new_url
+				);
 				$attrs[ $key ] = $new_url;
 
 				if ( isset( $block['innerHTML'] ) && '' !== $block['innerHTML'] ) {
-					$block['innerHTML'] = str_replace(
+					$block['innerHTML'] = $this->replace_media_url_forms(
+						$block['innerHTML'],
 						$value,
 						$new_url,
-						$block['innerHTML']
+						$source_site_url
 					);
 				}
 
@@ -1616,11 +1776,13 @@ class Content_Processor {
 				) {
 					foreach ( $block['innerContent'] as $idx => $content ) {
 						if ( is_string( $content ) ) {
-							$block['innerContent'][ $idx ] = str_replace(
-								$value,
-								$new_url,
-								$content
-							);
+							$block['innerContent'][ $idx ] =
+								$this->replace_media_url_forms(
+									$content,
+									$value,
+									$new_url,
+									$source_site_url
+								);
 						}
 					}
 				}
@@ -1628,6 +1790,93 @@ class Content_Processor {
 		}
 
 		return $attrs;
+	}
+
+	/**
+	 * Replaces a source media URL in each form that names the same file: as
+	 * given, absolute in either scheme, and protocol-relative, each also
+	 * without its query. Inline CSS can hold a form other than the block
+	 * attr's, and no later pass imports URLs inside CSS.
+	 *
+	 * @param string $content         Content containing the URL.
+	 * @param string $media_url       Source media URL, as the block holds it.
+	 * @param string $new_url         Imported media URL.
+	 * @param string $source_site_url Source site URL.
+	 * @return string Updated content.
+	 */
+	private function replace_media_url_forms(
+		string $content,
+		string $media_url,
+		string $new_url,
+		string $source_site_url
+	): string {
+		// Each copy keeps its own fragment, so the forms leave the attr's out.
+		$media_url             = (string) strtok( $media_url, '#' );
+		$protocol_relative_url = (string) preg_replace(
+			'~^https?:(?=//)~i',
+			'',
+			URL_Validator::resolve_relative_url( $media_url, $source_site_url )
+		);
+		// The importer takes only source-host media, so each form names the
+		// same file. Each added form starts with the host, so it can't match a
+		// path inside another host's URL. A repeated form is harmless: Its
+		// first pass leaves nothing to match.
+		$forms = array(
+			$media_url,
+			'https:' . $protocol_relative_url,
+			'http:' . $protocol_relative_url,
+			$protocol_relative_url,
+		);
+
+		// A copy without the attr's query gets the new URL without its query,
+		// and any query of its own stays.
+		$query_free_new_url = (string) strtok( $new_url, '?' );
+
+		foreach ( $forms as $old_url ) {
+			$content = $this->replace_standalone_media_url(
+				$content,
+				$old_url,
+				$new_url
+			);
+			$content = $this->replace_standalone_media_url(
+				$content,
+				(string) strtok( $old_url, '?' ),
+				$query_free_new_url
+			);
+		}
+
+		return $content;
+	}
+
+	/**
+	 * Replaces a media URL, but not as the tail of a longer URL or the start of
+	 * a longer path. A query or fragment that follows the URL is kept. A copy
+	 * that encodes the query's "&" as "&amp;", as markup does, keeps that form.
+	 *
+	 * @param string $content Content containing the URL.
+	 * @param string $old_url Source media URL.
+	 * @param string $new_url Imported media URL.
+	 * @return string Updated content.
+	 */
+	private function replace_standalone_media_url(
+		string $content,
+		string $old_url,
+		string $new_url
+	): string {
+		$encoded = str_replace( '&', '&amp;', $old_url );
+		$pattern = '/(?<![a-zA-Z0-9_\.\/:\-])'
+			. '(?:' . preg_quote( $old_url, '/' )
+			. '|' . preg_quote( $encoded, '/' ) . ')'
+			. '(?![a-zA-Z0-9_\.\/%=+@~\-])/';
+		$updated = preg_replace_callback(
+			$pattern,
+			static fn ( array $matches ): string => $old_url === $matches[0]
+				? $new_url
+				: str_replace( '&', '&amp;', $new_url ),
+			$content
+		);
+
+		return is_string( $updated ) ? $updated : $content;
 	}
 
 	/**
@@ -1666,7 +1915,8 @@ class Content_Processor {
 	 * Two-pass: Collect unresolved IDs, bulk-lookup per kind, apply on a
 	 * second walk. Unmapped IDs stay in place with a warning. For nav-link and
 	 * submenu blocks the link url is re-derived from the resolved destination
-	 * id; replace_source_urls still swaps the host for any url left untouched.
+	 * id; replace_source_urls still swaps the source's host and port for any
+	 * url left untouched.
 	 *
 	 * @param array<array<string, mixed>> $blocks          Parsed block tree.
 	 * @param string                      $source_site_url Source site URL.
@@ -1721,9 +1971,9 @@ class Content_Processor {
 	 * @param int    $target_ref       Source id to repoint.
 	 * @param string $target_kind      'post' or 'term'.
 	 * @param string $source_site_url  Source identity scoping the lookup.
-	 * @return Reconcile_Outcome Resolved when every match repointed;
-	 *                           target_absent, write_failed, or unresolved
-	 *                           otherwise.
+	 * @return Reconcile_Outcome Resolved when every match and URL is repaired;
+	 *                           deferred_url while a mapped URL awaits its path,
+	 *                           or another failure outcome otherwise.
 	 */
 	public function repoint_block_reference(
 		int $affected_post_id,
@@ -1765,6 +2015,7 @@ class Content_Processor {
 
 		$changed    = false;
 		$mismatched = false;
+		$deferred   = false;
 		$blocks     = $this->repoint_refs(
 			parse_blocks( $post->post_content ),
 			$registry,
@@ -1772,7 +2023,8 @@ class Content_Processor {
 			$target_ref,
 			$candidates,
 			$changed,
-			$mismatched
+			$mismatched,
+			$deferred
 		);
 
 		if ( $changed ) {
@@ -1802,6 +2054,9 @@ class Content_Processor {
 				'Target term is not imported into the declared taxonomy.'
 			);
 		}
+		if ( $deferred ) {
+			return Reconcile_Outcome::deferred_url( self::DEFERRED_URL_DETAIL );
+		}
 
 		if ( ! $changed ) {
 			return Reconcile_Outcome::unresolved(
@@ -1810,6 +2065,135 @@ class Content_Processor {
 		}
 
 		return Reconcile_Outcome::resolved();
+	}
+
+	/**
+	 * Re-derives a deferred URL after the destination target path and type
+	 * are final.
+	 *
+	 * @param int    $affected_post_id Post holding the link.
+	 * @param int    $target_ref       Source post id of its mapped target.
+	 * @param string $source_site_url  Source identity scoping the lookup.
+	 * @return Reconcile_Outcome Result of the URL-only repair.
+	 */
+	public function repair_deferred_link_url(
+		int $affected_post_id,
+		int $target_ref,
+		string $source_site_url
+	): Reconcile_Outcome {
+		$candidates = $this->resolve_target_candidates(
+			$target_ref,
+			'post',
+			$source_site_url
+		);
+		if ( array() === $candidates ) {
+			return Reconcile_Outcome::target_absent(
+				'Target post is not imported on the destination.'
+			);
+		}
+		$post = get_post( $affected_post_id );
+		if ( ! $post instanceof WP_Post || '' === $post->post_content ) {
+			return Reconcile_Outcome::unresolved(
+				'Affected post is missing or has no content.'
+			);
+		}
+
+		$found   = false;
+		$changed = false;
+		$pending = false;
+		$blocks  = $this->repair_link_urls(
+			parse_blocks( $post->post_content ),
+			$candidates,
+			$found,
+			$changed,
+			$pending
+		);
+		if ( $pending ) {
+			return Reconcile_Outcome::deferred_url( self::DEFERRED_URL_DETAIL );
+		}
+		if ( ! $found ) {
+			return Reconcile_Outcome::unresolved(
+				'No matching navigation URL found in the post content.'
+			);
+		}
+		if ( $changed ) {
+			if ( ! $this->persist_repointed_content(
+				$affected_post_id,
+				serialize_blocks( $blocks )
+			) ) {
+				return Reconcile_Outcome::write_failed(
+					'Failed to persist the repaired navigation URL.'
+				);
+			}
+			clean_post_cache( $affected_post_id );
+		}
+
+		return Reconcile_Outcome::resolved();
+	}
+
+	/**
+	 * Repairs URL attrs whose ID already names the mapped destination post.
+	 *
+	 * @param array<array<string, mixed>> $blocks     Parsed block tree.
+	 * @param int[]                       $candidates Mapped destination IDs.
+	 * @param bool                        $found      Whether a link matched.
+	 * @param bool                        $changed    Whether its URL changed.
+	 * @param bool                        $pending    Whether a path is not final.
+	 * @return array<array<string, mixed>> Mutated block tree.
+	 */
+	private function repair_link_urls(
+		array $blocks,
+		array $candidates,
+		bool &$found,
+		bool &$changed,
+		bool &$pending
+	): array {
+		foreach ( $blocks as $i => $block ) {
+			$name  = (string) ( $block['blockName'] ?? '' );
+			$attrs = is_array( $block['attrs'] ?? null )
+				? $block['attrs']
+				: array();
+			foreach ( self::POST_ID_BLOCK_ATTRS[ $name ] ?? array() as $rule ) {
+				if ( ! isset( $rule['url_attr'] )
+					|| ! self::gate_passes( $rule, $attrs ) ) {
+					continue;
+				}
+				$dest_id = self::select_candidate(
+					$candidates,
+					'post',
+					$attrs
+				);
+				if ( $dest_id <= 0
+					|| (int) ( $attrs[ $rule['attr'] ] ?? 0 ) !== $dest_id ) {
+					continue;
+				}
+				$found = true;
+				if ( ! $this->is_post_path_final( $dest_id ) ) {
+					$pending = true;
+					continue;
+				}
+				$repaired = $this->rederive_link_url(
+					$attrs,
+					$rule['url_attr'],
+					$dest_id,
+					'post'
+				);
+				if ( $repaired !== $attrs ) {
+					$blocks[ $i ]['attrs'] = $repaired;
+					$changed               = true;
+				}
+			}
+			if ( is_array( $block['innerBlocks'] ?? null ) ) {
+				$blocks[ $i ]['innerBlocks'] = $this->repair_link_urls(
+					$block['innerBlocks'],
+					$candidates,
+					$found,
+					$changed,
+					$pending
+				);
+			}
+		}
+		return $blocks;
 	}
 
 	/**
@@ -1929,6 +2313,9 @@ class Content_Processor {
 		int $dest_post_id,
 		string $source_site_url
 	): void {
+		// Start a new media pass so earlier media failures are retried.
+		$this->media_importer->reset_failed_media();
+
 		$auth = Auth_Credential_Provider::get_credentials();
 
 		$references = $this->shortcode_id_rewriter->collect_cross_post_references(
@@ -2053,6 +2440,7 @@ class Content_Processor {
 	 * @param int[]                                                                                       $candidates Destination ids, newest first.
 	 * @param bool                                                                                        $changed    Set true, by reference, on any repoint.
 	 * @param bool                                                                                        $mismatched Set true, by reference, on a taxonomy mismatch.
+	 * @param bool                                                                                        $deferred   Set true when a URL cannot be derived yet.
 	 * @return array<array<string, mixed>> Mutated tree.
 	 */
 	private function repoint_refs(
@@ -2062,7 +2450,8 @@ class Content_Processor {
 		int $target_ref,
 		array $candidates,
 		bool &$changed,
-		bool &$mismatched
+		bool &$mismatched,
+		bool &$deferred
 	): array {
 		foreach ( $blocks as $i => $block ) {
 			$name  = isset( $block['blockName'] ) ? (string) $block['blockName'] : '';
@@ -2093,7 +2482,13 @@ class Content_Processor {
 				}
 
 				if ( isset( $rule['url_attr'] ) ) {
-					$attrs = $this->rederive_link_url(
+					$deferred = $deferred || $this->defers_link_url(
+						$attrs,
+						$rule['url_attr'],
+						$dest_id,
+						$kind
+					);
+					$attrs    = $this->rederive_link_url(
 						$attrs,
 						$rule['url_attr'],
 						$dest_id,
@@ -2117,7 +2512,8 @@ class Content_Processor {
 					$target_ref,
 					$candidates,
 					$changed,
-					$mismatched
+					$mismatched,
+					$deferred
 				);
 			}
 		}
@@ -2658,7 +3054,7 @@ class Content_Processor {
 	 * When a rule names a url_attr, the link url is re-derived from the
 	 * resolved destination id, and a post link's declared type is realigned
 	 * with the post it lands on. Logs a warning for each matched attr whose
-	 * source ID was not resolvable so the admin can surface and fix it.
+	 * source ID was not resolvable or whose link url is deferred.
 	 *
 	 * @param array<string, mixed>                                                                        $attrs    Block attrs.
 	 * @param string                                                                                      $name     Block name.
@@ -2707,12 +3103,24 @@ class Content_Processor {
 				}
 
 				if ( isset( $rule['url_attr'] ) ) {
-					$attrs = $this->rederive_link_url(
+					$deferred = $this->defers_link_url(
 						$attrs,
 						$rule['url_attr'],
 						$dest_id,
 						$kind
 					);
+					$attrs    = $this->rederive_link_url(
+						$attrs,
+						$rule['url_attr'],
+						$dest_id,
+						$kind
+					);
+					if ( $deferred ) {
+						$this->warnings[] = array(
+							'type'      => 'deferred_navigation_url',
+							'source_id' => $source_id,
+						);
+					}
 				}
 			} else {
 				$warning = array(
@@ -2745,9 +3153,9 @@ class Content_Processor {
 	 *
 	 * The source url's query is carried over with post/term identity vars
 	 * removed (so a plain-permalink source's stale id cannot override the new
-	 * path) and its fragment preserved. A post target whose path still holds an
-	 * unsettled slug is left alone, since re-deriving would store a temporary
-	 * url.
+	 * path) and its fragment preserved. A post target with an unsettled path or
+	 * unregistered type is left alone, since re-deriving would store a
+	 * temporary url.
 	 *
 	 * @param array<string, mixed> $attrs    Block attrs.
 	 * @param string               $url_attr Attr holding the link url.
@@ -2766,7 +3174,7 @@ class Content_Processor {
 			return $attrs;
 		}
 
-		if ( 'term' !== $kind && $this->has_unsettled_path( $dest_id ) ) {
+		if ( 'term' !== $kind && ! $this->is_post_path_final( $dest_id ) ) {
 			return $attrs;
 		}
 
@@ -2794,6 +3202,43 @@ class Content_Processor {
 		$attrs[ $url_attr ] = $result;
 
 		return $attrs;
+	}
+
+	/**
+	 * Whether a post link keeps its url until the target's permalink is final.
+	 *
+	 * @param array<string, mixed> $attrs    Block attrs.
+	 * @param string               $url_attr Attr holding the link url.
+	 * @param int                  $dest_id  Resolved destination id.
+	 * @param string               $kind     'post' or 'term'.
+	 * @return bool
+	 */
+	private function defers_link_url(
+		array $attrs,
+		string $url_attr,
+		int $dest_id,
+		string $kind
+	): bool {
+		$url = $attrs[ $url_attr ] ?? null;
+
+		return 'post' === $kind
+			&& is_string( $url )
+			&& '' !== $url
+			&& ! $this->is_post_path_final( $dest_id );
+	}
+
+	/**
+	 * Whether a destination post's permalink can be derived now.
+	 *
+	 * @param int $post_id Destination post id.
+	 * @return bool True when its type is registered and its path is settled.
+	 */
+	public function is_post_path_final( int $post_id ): bool {
+		$post = get_post( $post_id );
+
+		return $post instanceof WP_Post
+			&& post_type_exists( $post->post_type )
+			&& ! $this->has_unsettled_path( $post_id );
 	}
 
 	/**

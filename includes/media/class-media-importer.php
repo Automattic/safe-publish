@@ -28,6 +28,10 @@ if ( ! defined( 'ABSPATH' ) ) {
  *
  * Handles importing media files from the source site into the WordPress media
  * library.
+ *
+ * A resolve-only instance downloads nothing, so a caller can preview an import:
+ * It returns media an earlier import already sideloaded and yields null for
+ * anything else. A source ID is still looked up, as a preview, for its URL.
  */
 class Media_Importer {
 
@@ -72,13 +76,36 @@ class Media_Importer {
 	private array $library_metadata_map = array();
 
 	/**
+	 * Whether this instance resolves already-imported media only, never
+	 * downloading.
+	 *
+	 * @var bool
+	 */
+	private bool $resolve_only;
+
+	/**
+	 * Source media URLs a resolve-only instance found no earlier import of,
+	 * keyed by query-stripped URL. An ambiguous URL is left out, since the
+	 * import may keep it as a link.
+	 *
+	 * @var array<string, true>
+	 */
+	private array $unresolved_urls = array();
+
+	/**
 	 * Constructs the Media_Importer instance.
 	 *
-	 * @param HTTP_Client $http_client HTTP client for downloading files.
+	 * @param HTTP_Client $http_client  HTTP client for downloading files.
+	 * @param bool        $resolve_only Optional. Resolve already-imported media
+	 *                                  without downloading. Default false.
 	 */
-	public function __construct( HTTP_Client $http_client ) {
-		$this->http_client = $http_client;
-		$this->logger      = new Media_Logger();
+	public function __construct(
+		HTTP_Client $http_client,
+		bool $resolve_only = false
+	) {
+		$this->http_client  = $http_client;
+		$this->logger       = new Media_Logger();
+		$this->resolve_only = $resolve_only;
 	}
 
 	/**
@@ -95,8 +122,9 @@ class Media_Importer {
 	 *                                    otherwise. Meaningful only on a string
 	 *                                    return.
 	 * @return string|false|null New media URL on success, false on failure, null
-	 *                           when the URL belongs to a third-party domain, or
-	 *                           when it is not media and $skip_if_not_media is set.
+	 *                           when the URL belongs to a third-party domain, when
+	 *                           it is not media and $skip_if_not_media is set, or
+	 *                           when a resolve-only instance has not imported it.
 	 */
 	public function import_source_media(
 		string $media_url,
@@ -128,13 +156,21 @@ class Media_Importer {
 		}
 
 		// Strip query parameters for consistency with import_source_media_as_attachment().
-		$media_url = strtok( $media_url, '?' );
+		$media_url = self::get_download_url( $media_url, $source_site_url );
 
 		// Check if we already imported this media.
 		$existing_attachment = self::get_attachment_by_url( $media_url );
 		if ( $existing_attachment ) {
 			$imported_id = $existing_attachment;
 			return wp_get_attachment_url( $existing_attachment );
+		}
+
+		if ( $this->resolve_only ) {
+			if ( ! $skip_if_not_media ) {
+				$this->unresolved_urls[ $media_url ] = true;
+			}
+
+			return null;
 		}
 
 		if ( isset( $this->failed_media[ $media_url ] ) ) {
@@ -252,8 +288,9 @@ class Media_Importer {
 	 *                                  an allowed upload type, for ambiguous URLs
 	 *                                  that may be a page link rather than media.
 	 * @return int|false|null Attachment ID on success, false on failure, null
-	 *                        when the URL belongs to a third-party domain, or
-	 *                        when it is not media and $skip_if_not_media is set.
+	 *                        when the URL belongs to a third-party domain, when
+	 *                        it is not media and $skip_if_not_media is set, or
+	 *                        when a resolve-only instance has not imported it.
 	 */
 	public function import_source_media_as_attachment(
 		string $media_url,
@@ -300,18 +337,19 @@ class Media_Importer {
 	 *
 	 * @param string $media_url       Source media URL.
 	 * @param string $source_site_url Source site URL for resolving relative URLs.
-	 * @return int|false Attachment ID on success, false on failure.
+	 * @return int|false|null Attachment ID on success, false on failure, null
+	 *                        when a resolve-only instance has not imported it.
 	 */
 	public function import_owned_media_as_attachment(
 		string $media_url,
 		string $source_site_url
-	): int|false {
+	): int|false|null {
 		$media_url = URL_Validator::resolve_relative_url(
 			$media_url,
 			$source_site_url
 		);
 
-		return $this->sideload_media( $media_url, $source_site_url ) ?? false;
+		return $this->sideload_media( $media_url, $source_site_url );
 	}
 
 	/**
@@ -324,19 +362,28 @@ class Media_Importer {
 	 * @param bool   $skip_if_not_media Return null instead of false when the
 	 *                                  download is not an allowed media type.
 	 * @return int|false|null Attachment ID on success, false on failure, null
-	 *                        when it is not media and $skip_if_not_media is set.
+	 *                        when it is not media and $skip_if_not_media is set,
+	 *                        or when a resolve-only instance has not imported it.
 	 */
 	private function sideload_media(
 		string $media_url,
 		string $source_site_url,
 		bool $skip_if_not_media = false
 	): int|false|null {
-		$media_url = strtok( $media_url, '?' ); // Remove query parameters.
+		$media_url = self::get_download_url( $media_url, $source_site_url );
 
 		// Check if we already imported this media.
 		$existing_attachment = self::get_attachment_by_url( $media_url );
 		if ( $existing_attachment ) {
 			return $existing_attachment;
+		}
+
+		if ( $this->resolve_only ) {
+			if ( ! $skip_if_not_media ) {
+				$this->unresolved_urls[ $media_url ] = true;
+			}
+
+			return null;
 		}
 
 		if ( isset( $this->failed_media[ $media_url ] ) ) {
@@ -345,18 +392,21 @@ class Media_Importer {
 
 		$this->ensure_media_functions_loaded();
 
-		// Temporarily enable WebP uploads during import.
+		// Temporarily allow WebP uploads when the destination does not list
+		// the type. Add it last so a site filter cannot drop it again; core's
+		// content check still applies.
 		$webp_filter_added = false;
 		if ( ! $this->is_webp_supported() ) {
 			// phpcs:ignore WordPressVIPMinimum.Hooks.RestrictedHooks.upload_mimes
-			add_filter( 'upload_mimes', array( $this, 'add_webp_mime_type' ) );
+			add_filter(
+				'upload_mimes',
+				array( $this, 'add_webp_mime_type' ),
+				PHP_INT_MAX
+			);
 			$webp_filter_added = true;
 		}
 
-		// Also add a filter specifically for media_handle_sideload to bypass restrictions.
-		add_filter( 'wp_check_filetype_and_ext', array( $this, 'handle_webp_filetype' ), 10, 3 );
-
-		// Guarantee the upload filters are removed on every exit, including the
+		// Guarantee the upload filter is removed on every exit, including the
 		// early returns for a failed download or unsupported file type.
 		try {
 			return $this->download_and_create_attachment(
@@ -366,15 +416,18 @@ class Media_Importer {
 			);
 		} finally {
 			if ( $webp_filter_added ) {
-				remove_filter( 'upload_mimes', array( $this, 'add_webp_mime_type' ) );
+				remove_filter(
+					'upload_mimes',
+					array( $this, 'add_webp_mime_type' ),
+					PHP_INT_MAX
+				);
 			}
-			remove_filter( 'wp_check_filetype_and_ext', array( $this, 'handle_webp_filetype' ) );
 		}
 	}
 
 	/**
 	 * Downloads a media URL and creates the attachment, assuming the WebP
-	 * upload filters are already registered.
+	 * upload filter is registered when needed.
 	 *
 	 * @param string $media_url         Query-stripped source media URL.
 	 * @param string $source_site_url   Source site URL, recorded as import origin.
@@ -536,6 +589,19 @@ class Media_Importer {
 	 */
 	public function get_newly_created_attachment_ids(): array {
 		return $this->newly_created_attachment_ids;
+	}
+
+	/**
+	 * Returns the source media URLs this resolve-only instance found no earlier
+	 * import of, then forgets them.
+	 *
+	 * @return list<string> Query-stripped source media URLs.
+	 */
+	public function take_unresolved_urls(): array {
+		$urls                  = array_keys( $this->unresolved_urls );
+		$this->unresolved_urls = array();
+
+		return $urls;
 	}
 
 	/**
@@ -721,8 +787,9 @@ class Media_Importer {
 	 * @param array  $auth_credentials Optional. Authentication credentials. Default empty array.
 	 * @return int|false|null Destination attachment ID on success, null when the
 	 *                        source record is unreachable or carries no
-	 *                        source_url (a dangling reference), false when the
-	 *                        resolved URL fails to sideload.
+	 *                        source_url (a dangling reference) or when a
+	 *                        resolve-only instance has not imported it, false
+	 *                        when the resolved URL fails to sideload.
 	 */
 	public function import_source_media_by_id(
 		int $source_id,
@@ -734,9 +801,12 @@ class Media_Importer {
 			$media_api_url = add_query_arg( 'context', 'edit', $media_api_url );
 		}
 
+		// A preview imports nothing, so the source must not log an export.
 		$response = $this->http_client->make_request(
 			$media_api_url,
-			Request_Actions::MEDIA_IMPORT,
+			$this->resolve_only
+				? Request_Actions::PREVIEW
+				: Request_Actions::MEDIA_IMPORT,
 			$auth_credentials
 		);
 
@@ -791,8 +861,8 @@ class Media_Importer {
 	 * Fetches a source post's attached media set of a given type: The ordered
 	 * { id, menu_order } list a cross-post [gallery id="B"]/[playlist id="B"]
 	 * renders. Reads the source's referenced-media enrichment field, since the
-	 * media REST omits menu_order. Any fetch or shape failure yields an empty
-	 * set so the caller degrades rather than aborts.
+	 * media REST omits menu_order. Any fetch or shape failure is logged and
+	 * yields an empty set so the caller degrades rather than aborts.
 	 *
 	 * @param int    $source_post_id   Referenced source post ID.
 	 * @param string $source_post_type Its post type slug, to resolve the REST base.
@@ -815,6 +885,11 @@ class Media_Importer {
 			$auth_credentials
 		);
 		if ( is_wp_error( $rest_base ) ) {
+			$this->logger->source_media_fetch_failed(
+				$source_post_id,
+				$source_site_url,
+				$rest_base->get_error_message()
+			);
 			return array();
 		}
 
@@ -831,6 +906,11 @@ class Media_Importer {
 		);
 
 		if ( is_wp_error( $response ) ) {
+			$this->logger->source_media_fetch_failed(
+				$source_post_id,
+				$source_site_url,
+				$response->get_error_message()
+			);
 			return array();
 		}
 
@@ -838,10 +918,19 @@ class Media_Importer {
 		$field = is_array( $data )
 			? ( $data[ Source_Media_REST_Field::REFERENCED_FIELD_NAME ] ?? null )
 			: null;
+		$items = is_array( $field )
+			? ( $field[ $mime_group ] ?? array() )
+			: null;
+		if ( ! is_array( $items ) ) {
+			$this->logger->source_media_fetch_failed(
+				$source_post_id,
+				$source_site_url,
+				'Source post returned a malformed referenced media set.'
+			);
+			return array();
+		}
 
-		return Source_Media_REST_Field::normalize_menu_order_set(
-			is_array( $field ) ? ( $field[ $mime_group ] ?? null ) : null
-		);
+		return Source_Media_REST_Field::normalize_menu_order_set( $items );
 	}
 
 	/**
@@ -975,6 +1064,19 @@ class Media_Importer {
 	}
 
 	/**
+	 * Returns the resolved URL used for a media download.
+	 *
+	 * @param string $media_url       Source media URL.
+	 * @param string $source_site_url Source site URL for relative URLs.
+	 * @return string URL without query parameters.
+	 */
+	public static function get_download_url( string $media_url, string $source_site_url ): string {
+		$resolved_url = URL_Validator::resolve_relative_url( $media_url, $source_site_url );
+
+		return (string) strtok( $resolved_url, '?' );
+	}
+
+	/**
 	 * Gets attachment ID from URL using VIP-optimized function when available.
 	 *
 	 * @param string $url Attachment URL.
@@ -1011,29 +1113,6 @@ class Media_Importer {
 	public function add_webp_mime_type( array $mime_types ): array {
 		$mime_types['webp'] = 'image/webp';
 		return $mime_types;
-	}
-
-	/**
-	 * Handles WebP file type validation during upload.
-	 *
-	 * @param array  $wp_check_filetype_and_ext File data with 'ext', 'type', 'proper_filename' keys.
-	 * @param string $_file                     Full path to the file.
-	 * @param string $filename                  File name (may differ from $file if in tmp dir).
-	 * @return array Modified file data.
-	 */
-	public function handle_webp_filetype(
-		array $wp_check_filetype_and_ext,
-		string $_file,
-		string $filename
-	): array {
-		if ( ! $wp_check_filetype_and_ext['type'] && ! $wp_check_filetype_and_ext['ext'] ) {
-			$info = pathinfo( $filename );
-			if ( isset( $info['extension'] ) && 'webp' === strtolower( $info['extension'] ) ) {
-				$wp_check_filetype_and_ext['ext']  = 'webp';
-				$wp_check_filetype_and_ext['type'] = 'image/webp';
-			}
-		}
-		return $wp_check_filetype_and_ext;
 	}
 
 	/**
@@ -1079,22 +1158,7 @@ class Media_Importer {
 	 * @return bool True when the content is an allowed upload type.
 	 */
 	private function is_media_content( string $temp_file, string $filename ): bool {
-		// Verify the content without the WebP shim, which would otherwise
-		// re-assert image/webp for a page served at a .webp URL and pass it off
-		// as media. Restore it afterward for the sideload that follows.
-		$shim_priority = has_filter(
-			'wp_check_filetype_and_ext',
-			array( $this, 'handle_webp_filetype' )
-		);
-		if ( false !== $shim_priority ) {
-			remove_filter( 'wp_check_filetype_and_ext', array( $this, 'handle_webp_filetype' ) );
-		}
-
 		$verified = wp_check_filetype_and_ext( $temp_file, $filename );
-
-		if ( false !== $shim_priority ) {
-			add_filter( 'wp_check_filetype_and_ext', array( $this, 'handle_webp_filetype' ), 10, 3 );
-		}
 
 		return false !== $verified['type'];
 	}

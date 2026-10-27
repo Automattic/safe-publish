@@ -98,7 +98,9 @@ An inline `<img>` carries two attachment-ID references alongside its URL — the
 
 ### URL Replacement
 
-After media processing, all remaining source-domain URLs in the content are replaced with the destination site URL. This catches URLs outside media elements, such as normal links, block comment attributes, and text references.
+After media processing, all remaining URLs on the source site's host and port are replaced with the destination site URL. This catches URLs outside media elements, such as normal links, block comment attributes, and text references.
+
+The **Compare** action runs this whole transform over the incoming content before diffing it, resolving media against what earlier imports already sideloaded rather than downloading anything, so the comparison reports what a re-import would change instead of the rewrite it already applied. Media the destination has never imported cannot be resolved this way, so it keeps its source URL: it still reads as a difference, and the comparison shows the source file. A file link, which the import may keep as a link (step 6), is left to the URL replacement instead.
 
 ### Content and Excerpt Filtering
 
@@ -256,7 +258,7 @@ Bulk imports process multiple posts sequentially:
 - **Meta/term failures**: Import is aborted; for new posts, the post and its attachments are deleted. For updates, the post is rolled back to its pre-update state.
 - **Network timeouts on API requests**: No automatic retry; on WordPress VIP, consecutive failures will temporarily block further requests for up to 20 seconds to protect performance.
 
-Cleanup deletes only the media the aborted run itself downloaded; a file an earlier import already brought in is left alone. An attachment the cleanup cannot remove is named in the reported error, except after an inline-media failure.
+Cleanup deletes only the media the aborted run itself downloaded; a file an earlier import already brought in is left alone. An attachment the cleanup cannot remove is named in the reported error.
 
 ### Error Reporting
 
@@ -310,15 +312,13 @@ Internal links inside post body content (for example `<a href>` in paragraphs an
 
 A permalink stored in a custom or third-party block's attributes — for example a block that saves a post's own URL — is treated the same way: host-swapped, but not re-derived. Rewriting an arbitrary attribute that merely looks like a permalink could point it at the wrong content, so only blocks whose attributes carry an explicit, known entity reference are re-derived.
 
-Navigation links and submenus are the exception: they carry an explicit entity reference, so their URLs are re-derived to the destination permalink automatically — unless the target was a draft at import, or sat under a draft or trashed parent (see [below](#navigation-links-to-draft-targets-or-their-children-may-404-or-open-the-wrong-page)).
+Navigation links and submenus are the exception: they carry an explicit entity reference, so their URLs are re-derived to the destination permalink when the target post type is registered and its path is settled. Otherwise, the link ID is still mapped, and the URL is deferred (see [below](#navigation-links-with-deferred-urls)).
 
-### Navigation links to draft targets or their children may 404 or open the wrong page
+### Navigation links with deferred URLs
 
-WordPress settles a post's slug only when it leaves draft or pending, so a link to a target in either status keeps the host-swapped source path instead of a URL that would move later. The same applies when a parent page the target sits under is a draft, pending, or in the trash (where its slug carries a temporary `__trashed` suffix), because the parent's slug forms part of the child's path. Under plain permalinks, a page's URL uses its ID instead of a path, so its parents don't matter.
+WordPress settles a post's slug only when it leaves draft or pending. A target in either status keeps the host-swapped source path instead of a URL that would move later. The same applies when a parent page the target sits under is a draft, pending, or in the trash (where its slug carries a temporary `__trashed` suffix), because the parent's slug forms part of the child's path. Under plain permalinks, a page's URL uses its ID instead of a path, so its parents do not matter. An unregistered target post type also prevents a final permalink from being derived.
 
-Such a link behaves like an [internal body link](#internal-body-links-may-404-or-open-the-wrong-page) — it can 404 or open the wrong page under a slug collision or a different permalink structure. Re-import the referring content after the target and its parents are published to re-derive the URL; the Retry action does not cover this case.
-
-Scheduled targets, and targets in a non-public custom status, are re-derived normally — their slug is already settled, so the link gets the address the target will be served at.
+A deferred link can 404 or open the wrong page under a slug collision or a different permalink structure. Needs attention records the deferred URL. Once the target's path is settled and its post type is registered, use Retry to repair the URL without changing the mapped ID. Scheduled targets and targets in a non-public custom status can be re-derived during import because their slugs are already settled.
 
 ### Navigation links to a term in another taxonomy are left unrepointed
 

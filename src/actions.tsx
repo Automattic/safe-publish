@@ -299,7 +299,14 @@ const retryOutcomeNotice = (
 	outcome: RetryAttentionIssueResponse[ 'outcome' ],
 	issue: AttentionIssue
 ): ActionNotice => {
+	const deferredRow = issue.issue_type === 'deferred_navigation_url';
+
 	switch ( outcome ) {
+		case 'deferred_url':
+			return {
+				status: 'warning',
+				message: __( 'The target ID is mapped but awaits its final URL. Publish the target and its ancestors, register its post type, or finalize its path, then Retry.', 'safe-publish' ),
+			};
 		case 'write_failed':
 			return {
 				status: 'error',
@@ -312,8 +319,32 @@ const retryOutcomeNotice = (
 		case 'target_absent':
 			return {
 				status: 'warning',
-				message: renderIssueMessage( issue ),
+				message: deferredRow
+					? sprintf(
+						/* translators: %d: source target post ID */
+						__(
+							"Source post %d isn't on this site. Restore it from the trash, or re-import this post.",
+							'safe-publish'
+						),
+						issue.target_ref
+					)
+					: renderIssueMessage( issue ),
 			};
+		case 'unresolved':
+			if ( deferredRow ) {
+				return {
+					status: 'warning',
+					message: sprintf(
+						/* translators: %d: source target post ID */
+						__(
+							'The link no longer points at source post %d on this site. Re-import this post to relink it.',
+							'safe-publish'
+						),
+						issue.target_ref
+					),
+				};
+			}
+		// Falls through.
 		default:
 			return {
 				status: 'warning',
@@ -557,8 +588,8 @@ const dispatchSingleRetry = (
 
 /**
  * Sums a bulk retry's per-outcome counts into one notice: An error if any write
- * failed, a warning if any are unresolved, target-absent, or skipped, else
- * success.
+ * failed, a warning if any are unresolved, target-absent, deferred, or skipped,
+ * else success.
  *
  * @param {BulkRetryAttentionResponse} counts                Per-outcome counts.
  * @param {number}                     [skippedNonRetryable] Rows dropped as non-retryable.
@@ -570,13 +601,14 @@ const bulkRetryNotice = (
 ): ActionNotice => {
 	const skipped = counts.skipped + skippedNonRetryable;
 	let message = sprintf(
-		/* translators: 1: resolved count, 2: waiting-on-import count, 3: failed count */
+		/* translators: 1: resolved, 2: awaiting import, 3: awaiting URL, 4: failed */
 		__(
-			'%1$d resolved, %2$d waiting on import, %3$d failed.',
+			'%1$d resolved, %2$d waiting on import, %3$d awaiting a final URL, %4$d failed.',
 			'safe-publish'
 		),
 		counts.resolved,
 		counts.target_absent,
+		counts.deferred_url,
 		counts.write_failed + counts.unresolved
 	);
 
@@ -592,7 +624,9 @@ const bulkRetryNotice = (
 	if ( counts.write_failed > 0 ) {
 		return { status: 'error', message };
 	}
-	if ( counts.target_absent + counts.unresolved + skipped > 0 ) {
+	const stillOpen =
+		counts.target_absent + counts.deferred_url + counts.unresolved;
+	if ( stillOpen + skipped > 0 ) {
 		return { status: 'warning', message };
 	}
 	return { status: 'success', message };
@@ -623,6 +657,7 @@ const postBulkRetryBatches = async (
 		target_absent: 0,
 		write_failed: 0,
 		unresolved: 0,
+		deferred_url: 0,
 		skipped: 0,
 	};
 
@@ -670,6 +705,7 @@ const postBulkRetryBatches = async (
 		totals.target_absent += result.data.target_absent;
 		totals.write_failed += result.data.write_failed;
 		totals.unresolved += result.data.unresolved;
+		totals.deferred_url += result.data.deferred_url;
 		totals.skipped += result.data.skipped;
 	}
 	/* eslint-enable no-await-in-loop */
