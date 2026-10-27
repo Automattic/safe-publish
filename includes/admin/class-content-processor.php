@@ -933,10 +933,11 @@ class Content_Processor {
 		// "source.example.company.com"). A source on a non-default port matches
 		// only with that port, and the lookahead rejects any other. The same
 		// host on another port is another site, such as the destination itself
-		// when both share a host.
+		// when both share a host. The lookahead also rejects a "-", which
+		// continues a longer host name, and an "@", which ends a user name.
 		$authority = preg_quote( $source_host, '/' )
 			. ( null !== $source_port ? ':' . $source_port : '' );
-		$pattern   = '/https?:\/\/' . $authority . '(?=[^a-zA-Z0-9.:]|$)/';
+		$pattern   = '/https?:\/\/' . $authority . '(?=[^a-zA-Z0-9.:@-]|$)/';
 
 		$result = preg_replace( $pattern, $current_site_url, $content );
 
@@ -1455,10 +1456,11 @@ class Content_Processor {
 		$block['attrs'][ $id_attr ] = $attachment_id;
 
 		if ( ! empty( $block['innerHTML'] ) ) {
-			$block['innerHTML'] = $this->replace_standalone_media_url(
+			$block['innerHTML'] = $this->replace_media_url_forms(
 				$block['innerHTML'],
 				$media_url,
-				$new_url
+				$new_url,
+				$source_site_url
 			);
 		}
 
@@ -1466,10 +1468,11 @@ class Content_Processor {
 			foreach ( $block['innerContent'] as $index => $content ) {
 				if ( is_string( $content ) ) {
 					$block['innerContent'][ $index ] =
-						$this->replace_standalone_media_url(
+						$this->replace_media_url_forms(
 							$content,
 							$media_url,
-							$new_url
+							$new_url,
+							$source_site_url
 						);
 				}
 			}
@@ -1758,10 +1761,11 @@ class Content_Processor {
 				$attrs[ $key ] = $new_url;
 
 				if ( isset( $block['innerHTML'] ) && '' !== $block['innerHTML'] ) {
-					$block['innerHTML'] = $this->replace_standalone_media_url(
+					$block['innerHTML'] = $this->replace_media_url_forms(
 						$block['innerHTML'],
 						$value,
-						$new_url
+						$new_url,
+						$source_site_url
 					);
 				}
 
@@ -1773,10 +1777,11 @@ class Content_Processor {
 					foreach ( $block['innerContent'] as $idx => $content ) {
 						if ( is_string( $content ) ) {
 							$block['innerContent'][ $idx ] =
-								$this->replace_standalone_media_url(
+								$this->replace_media_url_forms(
 									$content,
 									$value,
-									$new_url
+									$new_url,
+									$source_site_url
 								);
 						}
 					}
@@ -1785,6 +1790,62 @@ class Content_Processor {
 		}
 
 		return $attrs;
+	}
+
+	/**
+	 * Replaces a source media URL in each form that names the same file: as
+	 * given, absolute in either scheme, and protocol-relative, each also
+	 * without its query. Inline CSS can hold a form other than the block
+	 * attr's, and no later pass imports URLs inside CSS.
+	 *
+	 * @param string $content         Content containing the URL.
+	 * @param string $media_url       Source media URL, as the block holds it.
+	 * @param string $new_url         Imported media URL.
+	 * @param string $source_site_url Source site URL.
+	 * @return string Updated content.
+	 */
+	private function replace_media_url_forms(
+		string $content,
+		string $media_url,
+		string $new_url,
+		string $source_site_url
+	): string {
+		// Each copy keeps its own fragment, so the forms leave the attr's out.
+		$media_url             = (string) strtok( $media_url, '#' );
+		$protocol_relative_url = (string) preg_replace(
+			'~^https?:(?=//)~i',
+			'',
+			URL_Validator::resolve_relative_url( $media_url, $source_site_url )
+		);
+		// The importer takes only source-host media, so each form names the
+		// same file. Each added form starts with the host, so it can't match a
+		// path inside another host's URL. A repeated form is harmless: Its
+		// first pass leaves nothing to match.
+		$forms = array(
+			$media_url,
+			'https:' . $protocol_relative_url,
+			'http:' . $protocol_relative_url,
+			$protocol_relative_url,
+		);
+
+		// A copy without the attr's query gets the new URL without its query,
+		// and any query of its own stays.
+		$query_free_new_url = (string) strtok( $new_url, '?' );
+
+		foreach ( $forms as $old_url ) {
+			$content = $this->replace_standalone_media_url(
+				$content,
+				$old_url,
+				$new_url
+			);
+			$content = $this->replace_standalone_media_url(
+				$content,
+				(string) strtok( $old_url, '?' ),
+				$query_free_new_url
+			);
+		}
+
+		return $content;
 	}
 
 	/**
@@ -1806,7 +1867,7 @@ class Content_Processor {
 		$pattern = '/(?<![a-zA-Z0-9_\.\/:\-])'
 			. '(?:' . preg_quote( $old_url, '/' )
 			. '|' . preg_quote( $encoded, '/' ) . ')'
-			. '(?![a-zA-Z0-9_\.\/%=+\-])/';
+			. '(?![a-zA-Z0-9_\.\/%=+@~\-])/';
 		$updated = preg_replace_callback(
 			$pattern,
 			static fn ( array $matches ): string => $old_url === $matches[0]
