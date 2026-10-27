@@ -585,21 +585,21 @@ describe( 'BlockDiffViewer', () => {
 		expect( note ).toBeNull();
 	} );
 
-	it( 'copies a raw-text element whole instead of marking inside it', () => {
-		// ARRANGE: One modified block whose only change is inside an iframe.
-		// Its children are raw text, so a marker there would render as markup.
+	it( 'copies an iframe whole instead of marking its srcdoc', () => {
+		// ARRANGE: One modified block whose iframe document changes.
+		// A marker inside srcdoc would become part of that document.
 		const { container } = renderModified(
-			'<div><iframe>old</iframe><p>Body copy.</p></div>',
-			'<div><iframe>new</iframe><p>Body copy.</p></div>',
+			'<div><iframe srcdoc="<p>old</p>"></iframe><p>Body copy.</p></div>',
+			'<div><iframe srcdoc="<p>new</p>"></iframe><p>Body copy.</p></div>',
 			'core/html'
 		);
 
 		// ACT: Read the element the incoming column renders.
 		const frame = incomingColumn( container ).querySelector( 'iframe' );
 
-		// ASSERT: The content is exactly the incoming one and the card reports
-		// the change it could not mark.
-		expect( frame?.innerHTML ).toBe( 'new' );
+		// ASSERT: The embedded document is unchanged by inline markers, and
+		// the card reports the change it could not mark.
+		expect( frame?.getAttribute( 'srcdoc' ) ).toBe( '<p>new</p>' );
 		expect( badge() ).toBeInTheDocument();
 	} );
 
