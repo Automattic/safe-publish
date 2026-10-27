@@ -212,4 +212,39 @@ test.describe( 'Compare toolbar', () => {
 		// ASSERT: The error wraps instead of widening the body.
 		expect( layout.overflow ).toBeLessThanOrEqual( 1 );
 	} );
+
+	test( 'should keep backward focus out from behind the toolbar', async ( {
+		admin,
+		page,
+	} ) => {
+		// ARRANGE: Compare at the reflow width, where the sticky toolbar wraps
+		// onto several rows, over a column of links.
+		const links = Array.from( { length: 12 }, ( _, i ) =>
+			paragraph( `<a href="https://example.com/${ i }">Link ${ i }</a>` )
+		).join( '\n\n' );
+		await openCompare( admin, page, links, REFLOW_WIDTH );
+		await page.getByRole( 'checkbox', { name: 'Show unchanged' } ).check();
+		const toolbar = page.locator( '.safe-publish-compare-modal__toggles' );
+		const link = ( i: number ) =>
+			page.getByRole( 'link', { name: `Link ${ i }`, exact: true } );
+
+		// ACT: Move focus backward from the last link, which scrolls each
+		// earlier link in from above, and record the links the toolbar
+		// covers completely.
+		await link( 11 ).focus();
+		const hidden: string[] = [];
+		for ( let i = 10; i >= 0; i-- ) {
+			await page.keyboard.press( 'Shift+Tab' );
+			await expect( link( i ) ).toBeFocused();
+			const bar = ( await toolbar.boundingBox() )!;
+			const box = ( await link( i ).boundingBox() )!;
+			if ( box.y >= bar.y && box.y + box.height <= bar.y + bar.height ) {
+				hidden.push( `Link ${ i }` );
+			}
+		}
+
+		// ASSERT: No focused link sits entirely behind the toolbar (WCAG 2.2
+		// SC 2.4.11, Focus Not Obscured).
+		expect( hidden ).toEqual( [] );
+	} );
 } );
