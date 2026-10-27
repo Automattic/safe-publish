@@ -2220,11 +2220,37 @@ class Session_Rollback_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Verifies that rolling back an import a newer one superseded is refused
-	 * and leaves the post untouched.
+	 * Provides each kind of import a later update can supersede.
+	 *
+	 * @return array<string, array{string, array}> Status and changes per kind.
 	 */
-	public function test_rollback_item_refuses_a_superseded_item(): void {
-		// ARRANGE: Two updates of one post, as a listing loaded before the
+	public static function superseded_import_provider(): array {
+		return array(
+			'creation' => array( 'success', array() ),
+			'update'   => array(
+				'updated',
+				array(
+					'previous_content' => 'Original content.',
+					'action'           => 'updated_existing',
+				),
+			),
+		);
+	}
+
+	/**
+	 * Verifies that rolling back an import a newer one superseded is refused
+	 * and leaves the post and its history untouched.
+	 *
+	 * @dataProvider superseded_import_provider
+	 *
+	 * @param string $status  Superseded import's status.
+	 * @param array  $changes Superseded import's changes.
+	 */
+	public function test_rollback_item_refuses_a_superseded_item(
+		string $status,
+		array $changes
+	): void {
+		// ARRANGE: Two imports of one post, as a listing loaded before the
 		// second one would still offer the first.
 		$session_id = $this->repository->create_session( 'https://example.com', 'bulk' );
 		$post_id    = $this->factory()->post->create(
@@ -2234,15 +2260,12 @@ class Session_Rollback_Test extends Integration_Test_Case {
 			$session_id,
 			1,
 			'Post',
-			'updated',
+			$status,
 			$post_id,
 			null,
-			array(
-				'previous_content' => 'Original content.',
-				'action'           => 'updated_existing',
-			)
+			$changes
 		);
-		$this->repository->log_import_action(
+		$second_id  = $this->repository->log_import_action(
 			$session_id,
 			1,
 			'Post',
@@ -2266,6 +2289,12 @@ class Session_Rollback_Test extends Integration_Test_Case {
 		$post = get_post( $post_id );
 		$this->assertNotNull( $post );
 		$this->assertSame( 'Second import content.', $post->post_content );
+
+		// ASSERT: Neither row was claimed, so the second import stays active.
+		$first = $this->repository->get_item( $first_id );
+		$this->assertSame( 0, (int) $first['rolled_back'] );
+		$active = $this->repository->get_item_for_post( $post_id );
+		$this->assertSame( $second_id, (int) $active['id'] );
 	}
 
 	/**
