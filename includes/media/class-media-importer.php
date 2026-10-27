@@ -155,16 +155,19 @@ class Media_Importer {
 			return null;
 		}
 
-		// Strip the query and fragment for consistency with
-		// import_source_media_as_attachment().
-		$media_url = self::get_download_url( $media_url, $source_site_url );
-
 		// Check if we already imported this media.
-		$existing_attachment = self::get_attachment_by_url( $media_url );
+		$existing_attachment = self::find_attachment_by_source_url(
+			$media_url,
+			$source_site_url
+		);
 		if ( $existing_attachment ) {
 			$imported_id = $existing_attachment;
 			return wp_get_attachment_url( $existing_attachment );
 		}
+
+		// Strip the query and fragment for consistency with
+		// import_source_media_as_attachment().
+		$media_url = self::get_download_url( $media_url, $source_site_url );
 
 		if ( $this->resolve_only ) {
 			if ( ! $skip_if_not_media ) {
@@ -371,13 +374,16 @@ class Media_Importer {
 		string $source_site_url,
 		bool $skip_if_not_media = false
 	): int|false|null {
-		$media_url = self::get_download_url( $media_url, $source_site_url );
-
 		// Check if we already imported this media.
-		$existing_attachment = self::get_attachment_by_url( $media_url );
+		$existing_attachment = self::find_attachment_by_source_url(
+			$media_url,
+			$source_site_url
+		);
 		if ( $existing_attachment ) {
 			return $existing_attachment;
 		}
+
+		$media_url = self::get_download_url( $media_url, $source_site_url );
 
 		if ( $this->resolve_only ) {
 			if ( ! $skip_if_not_media ) {
@@ -1029,8 +1035,9 @@ class Media_Importer {
 			return 0;
 		}
 
-		$attachment_id = self::get_attachment_by_url(
-			self::get_download_url( $source_url, $source_site_url )
+		$attachment_id = self::find_attachment_by_source_url(
+			$source_url,
+			$source_site_url
 		);
 
 		return false !== $attachment_id ? $attachment_id : 0;
@@ -1251,6 +1258,36 @@ class Media_Importer {
 		$candidate = strtok( $media_url, '?' );
 
 		return $candidate === $base || str_starts_with( $candidate, $base . '/' );
+	}
+
+	/**
+	 * Gets the attachment imported from a source media URL. Falls back to the
+	 * key that imports recorded before fragments were ignored: The URL cut only
+	 * at its query, which kept a fragment when there was no query.
+	 *
+	 * @param string $media_url       Source media URL.
+	 * @param string $source_site_url Source site URL for relative URLs.
+	 * @return int|false Attachment ID on success, false on failure.
+	 */
+	private static function find_attachment_by_source_url(
+		string $media_url,
+		string $source_site_url
+	): int|false {
+		$download_url  = self::get_download_url( $media_url, $source_site_url );
+		$attachment_id = self::get_attachment_by_url( $download_url );
+
+		if ( false !== $attachment_id ) {
+			return $attachment_id;
+		}
+
+		$legacy_url = (string) strtok(
+			URL_Validator::resolve_relative_url( $media_url, $source_site_url ),
+			'?'
+		);
+
+		return $legacy_url === $download_url
+			? false
+			: self::get_attachment_by_url( $legacy_url );
 	}
 
 	/**

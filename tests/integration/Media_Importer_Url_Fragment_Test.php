@@ -104,4 +104,80 @@ class Media_Importer_Url_Fragment_Test extends WP_UnitTestCase {
 		$this->assert_no_new_attachments( $count );
 		$this->assertSame( $attachment_id, $found );
 	}
+
+	/**
+	 * Verifies that a URL with a fragment reuses an attachment that an earlier
+	 * import recorded under the URL with its fragment.
+	 */
+	public function test_fragment_url_reuses_attachment_recorded_with_fragment(): void {
+		// ARRANGE: An attachment recorded under the fragment URL.
+		$fragment_url  = self::PLAIN_URL . '#page=2';
+		$attachment_id = self::factory()->attachment->create_object(
+			array(
+				'file'           => '2024/01/guide.jpgpage2.jpg',
+				'post_mime_type' => 'image/jpeg',
+			)
+		);
+		update_post_meta(
+			$attachment_id,
+			Options::META_ORIGINAL_URL,
+			$fragment_url
+		);
+		$importer = new Media_Importer( new HTTP_Client() );
+		$count    = $this->get_attachment_count();
+
+		// ACT: Resolve the fragment URL through each lookup.
+		$inline_id = null;
+		$importer->import_source_media(
+			$fragment_url,
+			self::SOURCE_SITE,
+			false,
+			$inline_id
+		);
+		$block_id = $importer->import_source_media_as_attachment(
+			$fragment_url,
+			self::SOURCE_SITE
+		);
+		$found    = Media_Importer::find_imported_attachment_id(
+			self::UNKNOWN_MEDIA_ID,
+			self::SOURCE_SITE,
+			$fragment_url
+		);
+
+		// ASSERT: Each lookup reuses the recorded attachment.
+		$this->assertSame( $attachment_id, $inline_id );
+		$this->assertSame( $attachment_id, $block_id );
+		$this->assertSame( $attachment_id, $found );
+		$this->assert_no_new_attachments( $count );
+	}
+
+	/**
+	 * Verifies that a URL with a fragment prefers the plain URL's attachment
+	 * over one an earlier import recorded under the URL with its fragment.
+	 */
+	public function test_fragment_url_prefers_plain_attachment(): void {
+		// ARRANGE: Attachments recorded under the plain and the fragment URL.
+		$ids  = array();
+		$urls = array( self::PLAIN_URL, self::PLAIN_URL . '#page=2' );
+		foreach ( $urls as $url ) {
+			$ids[ $url ] = self::factory()->attachment->create_object(
+				array(
+					'file'           => '2024/01/'
+						. sanitize_file_name( wp_basename( $url ) ),
+					'post_mime_type' => 'image/jpeg',
+				)
+			);
+			update_post_meta( $ids[ $url ], Options::META_ORIGINAL_URL, $url );
+		}
+
+		// ACT: Look up the fragment URL.
+		$found = Media_Importer::find_imported_attachment_id(
+			self::UNKNOWN_MEDIA_ID,
+			self::SOURCE_SITE,
+			self::PLAIN_URL . '#page=2'
+		);
+
+		// ASSERT: The plain URL's attachment wins.
+		$this->assertSame( $ids[ self::PLAIN_URL ], $found );
+	}
 }
