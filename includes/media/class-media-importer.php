@@ -69,7 +69,7 @@ class Media_Importer {
 
 	/**
 	 * Source URL => library metadata applied to the attachment sideloaded from
-	 * that URL, keyed by the query-stripped source URL.
+	 * that URL, keyed by the query- and fragment-stripped source URL.
 	 *
 	 * @var array<string, array<string, string>>
 	 */
@@ -85,8 +85,8 @@ class Media_Importer {
 
 	/**
 	 * Source media URLs a resolve-only instance found no earlier import of,
-	 * keyed by query-stripped URL. An ambiguous URL is left out, since the
-	 * import may keep it as a link.
+	 * keyed by query- and fragment-stripped URL. An ambiguous URL is left out,
+	 * since the import may keep it as a link.
 	 *
 	 * @var array<string, true>
 	 */
@@ -155,7 +155,8 @@ class Media_Importer {
 			return null;
 		}
 
-		// Strip query parameters for consistency with import_source_media_as_attachment().
+		// Strip the query and fragment for consistency with
+		// import_source_media_as_attachment().
 		$media_url = self::get_download_url( $media_url, $source_site_url );
 
 		// Check if we already imported this media.
@@ -429,7 +430,7 @@ class Media_Importer {
 	 * Downloads a media URL and creates the attachment, assuming the WebP
 	 * upload filter is registered when needed.
 	 *
-	 * @param string $media_url         Query-stripped source media URL.
+	 * @param string $media_url         Query- and fragment-stripped source media URL.
 	 * @param string $source_site_url   Source site URL, recorded as import origin.
 	 * @param bool   $skip_if_not_media Return null instead of false when the
 	 *                                  download is not an allowed media type.
@@ -595,7 +596,7 @@ class Media_Importer {
 	 * Returns the source media URLs this resolve-only instance found no earlier
 	 * import of, then forgets them.
 	 *
-	 * @return list<string> Query-stripped source media URLs.
+	 * @return list<string> Query- and fragment-stripped source media URLs.
 	 */
 	public function take_unresolved_urls(): array {
 		$urls                  = array_keys( $this->unresolved_urls );
@@ -685,7 +686,7 @@ class Media_Importer {
 	 * slashed because core unslashes as it saves.
 	 *
 	 * @param int    $attachment_id   Sideloaded attachment.
-	 * @param string $media_url       Query-stripped source media URL.
+	 * @param string $media_url       Query- and fragment-stripped source media URL.
 	 * @param string $source_site_url Source site URL the media came from.
 	 */
 	private function record_attachment_origin(
@@ -1028,12 +1029,8 @@ class Media_Importer {
 			return 0;
 		}
 
-		$resolved_url  = URL_Validator::resolve_relative_url(
-			$source_url,
-			$source_site_url
-		);
 		$attachment_id = self::get_attachment_by_url(
-			(string) strtok( $resolved_url, '?' )
+			self::get_download_url( $source_url, $source_site_url )
 		);
 
 		return false !== $attachment_id ? $attachment_id : 0;
@@ -1068,12 +1065,13 @@ class Media_Importer {
 	 *
 	 * @param string $media_url       Source media URL.
 	 * @param string $source_site_url Source site URL for relative URLs.
-	 * @return string URL without query parameters.
+	 * @return string URL without its query or fragment.
 	 */
 	public static function get_download_url( string $media_url, string $source_site_url ): string {
 		$resolved_url = URL_Validator::resolve_relative_url( $media_url, $source_site_url );
 
-		return (string) strtok( $resolved_url, '?' );
+		// A fragment never reaches the server, so it names the same file.
+		return substr( $resolved_url, 0, strcspn( $resolved_url, '?#' ) );
 	}
 
 	/**

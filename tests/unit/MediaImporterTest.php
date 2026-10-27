@@ -197,4 +197,37 @@ class MediaImporterTest extends TestCase {
 		$this->assertStringContainsString( 'w=1200', $url_large );
 		$this->assertNotSame( $url_small, $url_large );
 	}
+
+	/**
+	 * Verifies that get_download_url drops the query and the fragment, so both
+	 * name the file their plain URL names.
+	 *
+	 * @dataProvider download_url_provider
+	 * @param string $media_url Source media URL.
+	 */
+	public function test_get_download_url_drops_query_and_fragment( string $media_url ): void {
+		// ARRANGE: The plain URL every form names.
+		$expected = 'https://source.example.com/uploads/guide.pdf';
+
+		// ACT: Derive the download URL.
+		$result = Media_Importer::get_download_url(
+			$media_url,
+			'https://source.example.com'
+		);
+
+		// ASSERT: Only the plain URL remains.
+		$this->assertSame( $expected, $result );
+	}
+
+	/**
+	 * Provides media URLs that name the same file.
+	 *
+	 * @return array<string, array{string}>
+	 */
+	public static function download_url_provider(): array {
+		return array(
+			'fragment'           => array( 'https://source.example.com/uploads/guide.pdf#page=2' ),
+			'query and fragment' => array( 'https://source.example.com/uploads/guide.pdf?v=2#page=4' ),
+		);
+	}
 }
