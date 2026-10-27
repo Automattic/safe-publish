@@ -229,6 +229,7 @@ class MediaImporterTest extends TestCase {
 		return array(
 			'fragment'           => array( 'https://source.example.com/uploads/guide.pdf#page=2', '#page=2' ),
 			'query and fragment' => array( 'https://source.example.com/uploads/guide.pdf?v=2#page=4', '?v=2#page=4' ),
+			'empty fragment'     => array( 'https://source.example.com/uploads/guide.pdf#', '#' ),
 		);
 	}
 

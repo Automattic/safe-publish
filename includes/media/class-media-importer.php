@@ -1050,8 +1050,8 @@ class Media_Importer {
 	public static function reapply_query_parameters( string $original_url, string $clean_url ): string {
 		$original_url = URL_Validator::normalize_url_whitespace( $original_url );
 		$query        = (string) wp_parse_url( $original_url, PHP_URL_QUERY );
-		$fragment     = (string) wp_parse_url( $original_url, PHP_URL_FRAGMENT );
-		$fragment     = '' === $fragment ? '' : '#' . $fragment;
+		// Raw text, since wp_parse_url() reads a bare trailing "#" as no fragment.
+		$fragment = (string) strstr( $original_url, '#' );
 
 		if ( ! $query ) {
 			return $clean_url . $fragment;
