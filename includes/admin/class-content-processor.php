@@ -1143,7 +1143,8 @@ class Content_Processor {
 					$source_site_url,
 					self::string_attr( $block, 'url' ),
 					'url',
-					'id'
+					'id',
+					true
 				);
 				break;
 
@@ -1163,7 +1164,8 @@ class Content_Processor {
 					$source_site_url,
 					$this->extract_media_text_src( $block ),
 					null,
-					'mediaId'
+					'mediaId',
+					true
 				);
 				break;
 
@@ -1395,12 +1397,18 @@ class Content_Processor {
 	 * for core/media-text, whose mediaUrl attr is not stored in the block. A
 	 * third-party (null) or failed (false) import leaves the attrs untouched.
 	 *
+	 * When the block's save() derives a wp-image class from the ID, the class
+	 * is repointed with it. An ID that is absent or zero at the source is kept
+	 * as is: For an image, the editor would expect a class the markup lacks.
+	 *
 	 * @param array       $block           Block data.
 	 * @param string      $source_site_url Source site URL.
 	 * @param string      $media_url       Source media URL to import.
 	 * @param string|null $url_attr        Attr to set to the local URL, or null
 	 *                                     when the block stores no URL attr.
 	 * @param string      $id_attr         Attr to set to the attachment ID.
+	 * @param bool        $id_in_class     Whether save() derives an image's
+	 *                                     wp-image class from the ID attr.
 	 * @return array Processed block.
 	 */
 	private function process_media_block(
@@ -1408,7 +1416,8 @@ class Content_Processor {
 		string $source_site_url,
 		string $media_url,
 		?string $url_attr,
-		string $id_attr
+		string $id_attr,
+		bool $id_in_class = false
 	): array {
 		if ( '' === $media_url ) {
 			return $this->process_block_inner_html( $block, $source_site_url );
@@ -1453,7 +1462,9 @@ class Content_Processor {
 		if ( null !== $url_attr ) {
 			$block['attrs'][ $url_attr ] = $new_url;
 		}
-		$block['attrs'][ $id_attr ] = $attachment_id;
+		if ( ! $id_in_class || 0 !== ( $block['attrs'][ $id_attr ] ?? 0 ) ) {
+			$block['attrs'][ $id_attr ] = $attachment_id;
+		}
 
 		if ( ! empty( $block['innerHTML'] ) ) {
 			$block['innerHTML'] = $this->replace_media_url_forms(
@@ -1462,23 +1473,68 @@ class Content_Processor {
 				$new_url,
 				$source_site_url
 			);
+			if ( $id_in_class ) {
+				$block['innerHTML'] = $this->repoint_wp_image_class(
+					$block['innerHTML'],
+					$attachment_id
+				);
+			}
 		}
 
 		if ( ! empty( $block['innerContent'] ) && is_array( $block['innerContent'] ) ) {
 			foreach ( $block['innerContent'] as $index => $content ) {
 				if ( is_string( $content ) ) {
-					$block['innerContent'][ $index ] =
-						$this->replace_media_url_forms(
+					$content = $this->replace_media_url_forms(
+						$content,
+						$media_url,
+						$new_url,
+						$source_site_url
+					);
+					if ( $id_in_class ) {
+						$content = $this->repoint_wp_image_class(
 							$content,
-							$media_url,
-							$new_url,
-							$source_site_url
+							$attachment_id
 						);
+					}
+					$block['innerContent'][ $index ] = $content;
 				}
 			}
 		}
 
 		return $this->process_block_inner_html( $block, $source_site_url );
+	}
+
+	/**
+	 * Repoints existing wp-image class tokens at a new attachment, adding none:
+	 * A media-text deprecation carries mediaId without the class.
+	 *
+	 * @param string $html          HTML content.
+	 * @param int    $attachment_id Destination attachment ID.
+	 * @return string Updated HTML content.
+	 */
+	private function repoint_wp_image_class(
+		string $html,
+		int $attachment_id
+	): string {
+		$processor = new WP_HTML_Tag_Processor( $html );
+
+		while ( $processor->next_tag() ) {
+			$class = $processor->get_attribute( 'class' );
+			if ( ! is_string( $class ) ) {
+				continue;
+			}
+
+			$new_class = preg_replace(
+				'/(?<![\w-])wp-image-\d+(?![\w-])/',
+				'wp-image-' . $attachment_id,
+				$class
+			);
+			if ( is_string( $new_class ) && $new_class !== $class ) {
+				$processor->set_attribute( 'class', $new_class );
+			}
+		}
+
+		return $processor->get_updated_html();
 	}
 
 	/**
