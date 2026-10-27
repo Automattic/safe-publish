@@ -20,8 +20,9 @@ use WP_HTML_Tag_Processor;
 /**
  * Exercises the core/cover, core/file, and core/media-text handlers via the
  * public process_content() entry point, asserting that each block's sideloaded
- * media URL and its attachment-ID attr both point at the destination attachment,
- * and that third-party and failed imports leave the ID untouched.
+ * media URL, attachment-ID attr, and wp-image class point at the destination
+ * attachment. An ID that is absent or zero at the source is kept, and
+ * third-party and failed imports leave the ID untouched.
  */
 class Content_Processor_Static_Media_Id_Remap_Test extends Integration_Test_Case {
 
@@ -162,8 +163,8 @@ class Content_Processor_Static_Media_Id_Remap_Test extends Integration_Test_Case
 	}
 
 	/**
-	 * Verifies that a core/cover image background has its url sideloaded and its
-	 * id attr repointed at the destination attachment.
+	 * Verifies that a core/cover image background has its url sideloaded, and
+	 * its id attr and wp-image class repointed at the destination attachment.
 	 */
 	public function test_remaps_cover_image_id(): void {
 		// ARRANGE: A cover block whose background image and id reference the source.
@@ -175,7 +176,7 @@ class Content_Processor_Static_Media_Id_Remap_Test extends Integration_Test_Case
 		// ACT: Run the full processing pipeline.
 		$result = (string) $this->processor->process_content( $content, self::SOURCE );
 
-		// ASSERT: Exactly one attachment, and url + id both point at it.
+		// ASSERT: One attachment, and url, id, and class all point at it.
 		$this->assertSame( $before + 1, $this->get_attachment_count() );
 		$attrs = $this->block_attrs( $result, 'core/cover' );
 		$this->assertStringContainsString( 'wp-content/uploads', (string) $attrs['url'] );
@@ -184,8 +185,56 @@ class Content_Processor_Static_Media_Id_Remap_Test extends Integration_Test_Case
 			$attrs['id']
 		);
 		$this->assertNotSame( $source_id, $attrs['id'] );
+		$this->assertStringContainsString(
+			'class="wp-block-cover__image-background wp-image-'
+				. (int) $attrs['id'] . '"',
+			$result
+		);
 		$this->assertStringNotContainsString( $url, $result );
 		$this->assertSame( array(), $this->processor->get_failed_media() );
+	}
+
+	/**
+	 * Provides cover id attrs from which save() renders no wp-image class.
+	 *
+	 * @return array<string, array{int|null}>
+	 */
+	public static function classless_cover_id_provider(): array {
+		return array(
+			'inserted by URL' => array( null ),
+			'zero id'         => array( 0 ),
+		);
+	}
+
+	/**
+	 * Verifies that a core/cover image whose id renders no class has its url
+	 * sideloaded but keeps that id, which save() would otherwise render as a
+	 * missing class.
+	 *
+	 * @dataProvider classless_cover_id_provider
+	 *
+	 * @param int|null $id Source id attr, or null when absent.
+	 */
+	public function test_cover_keeps_id_that_renders_no_class(
+		?int $id
+	): void {
+		// ARRANGE: A cover block whose background image names no attachment.
+		$url     = self::SOURCE . '/bg-by-url.jpg';
+		$content = $this->cover_block( $url, $id );
+
+		// ACT: Run the full processing pipeline.
+		$result = (string) $this->processor->process_content(
+			$content,
+			self::SOURCE
+		);
+
+		// ASSERT: The url is local, and the id is unchanged.
+		$attrs = $this->block_attrs( $result, 'core/cover' );
+		$this->assertStringContainsString(
+			'wp-content/uploads',
+			(string) $attrs['url']
+		);
+		$this->assertSame( $id, $attrs['id'] ?? null );
 	}
 
 	/**
@@ -218,7 +267,8 @@ class Content_Processor_Static_Media_Id_Remap_Test extends Integration_Test_Case
 
 	/**
 	 * Verifies that a core/media-text image, whose mediaUrl is sourced from
-	 * innerHTML rather than stored in the block, has its mediaId repointed.
+	 * innerHTML rather than stored in the block, has its mediaId and wp-image
+	 * class repointed.
 	 */
 	public function test_remaps_media_text_image_media_id(): void {
 		// ARRANGE: A media-text block with an image in its media figure.
@@ -230,7 +280,7 @@ class Content_Processor_Static_Media_Id_Remap_Test extends Integration_Test_Case
 		// ACT: Run the full processing pipeline.
 		$result = (string) $this->processor->process_content( $content, self::SOURCE );
 
-		// ASSERT: One attachment; mediaId points at the swapped media src.
+		// ASSERT: One attachment, and mediaId and class both name it.
 		$this->assertSame( $before + 1, $this->get_attachment_count() );
 		$attrs   = $this->block_attrs( $result, 'core/media-text' );
 		$new_src = $this->first_media_src( $result );
@@ -240,9 +290,39 @@ class Content_Processor_Static_Media_Id_Remap_Test extends Integration_Test_Case
 			$attrs['mediaId']
 		);
 		$this->assertNotSame( $source_id, $attrs['mediaId'] );
+		$this->assertStringContainsString(
+			'class="wp-image-' . (int) $attrs['mediaId'] . ' size-full"',
+			$result
+		);
 		$this->assertStringNotContainsString( $src, $result );
 		// mediaUrl is HTML-sourced; the handler must not fabricate it as an attr.
 		$this->assertArrayNotHasKey( 'mediaUrl', $attrs );
+	}
+
+	/**
+	 * Verifies that a core/media-text image in the deprecated markup without a
+	 * wp-image class has its mediaId repointed but gains no class, which that
+	 * deprecation's save() does not render.
+	 */
+	public function test_media_text_without_image_class_gains_no_class(): void {
+		// ARRANGE: A media-text block whose image carries no class.
+		$src     = self::SOURCE . '/photo-classless.jpg';
+		$content = $this->media_text_block( $src, 900012, 'image', false );
+
+		// ACT: Run the full processing pipeline.
+		$result = (string) $this->processor->process_content(
+			$content,
+			self::SOURCE
+		);
+
+		// ASSERT: mediaId points at the swapped src, and no class is added.
+		$attrs   = $this->block_attrs( $result, 'core/media-text' );
+		$new_src = $this->first_media_src( $result );
+		$this->assertSame(
+			$this->media_importer->get_attachment_id_from_url( $new_src ),
+			$attrs['mediaId']
+		);
+		$this->assertStringNotContainsString( 'wp-image-', $result );
 	}
 
 	/**
@@ -460,22 +540,28 @@ class Content_Processor_Static_Media_Id_Remap_Test extends Integration_Test_Case
 	}
 
 	/**
-	 * Builds a core/cover block with an image background and matching id.
+	 * Builds a core/cover block with an image background and, when given, a
+	 * matching id.
 	 *
-	 * @param string $url Background image url.
-	 * @param int    $id  Attachment id attr.
+	 * @param string   $url Background image url.
+	 * @param int|null $id  Attachment id attr, or null for an image inserted by
+	 *                      URL. Like save(), a zero id renders no class.
 	 * @return string Block markup.
 	 */
-	private function cover_block( string $url, int $id ): string {
-		return '<!-- wp:cover ' . (string) wp_json_encode(
-			array(
-				'url'      => $url,
-				'id'       => $id,
-				'dimRatio' => 50,
-			)
-		) . ' -->' . "\n"
-			. '<div class="wp-block-cover"><img class="wp-block-cover__image-background wp-image-'
-			. $id . '" alt="" src="' . $url . '" data-object-fit="cover"/>'
+	private function cover_block( string $url, ?int $id ): string {
+		$attrs = array( 'url' => $url );
+		$class = 'wp-block-cover__image-background';
+		if ( null !== $id ) {
+			$attrs['id'] = $id;
+		}
+		if ( 0 !== ( $id ?? 0 ) ) {
+			$class .= ' wp-image-' . $id;
+		}
+		$attrs['dimRatio'] = 50;
+
+		return '<!-- wp:cover ' . (string) wp_json_encode( $attrs ) . ' -->'
+			. "\n" . '<div class="wp-block-cover"><img class="' . $class
+			. '" alt="" src="' . $url . '" data-object-fit="cover"/>'
 			. '<div class="wp-block-cover__inner-container"></div></div>' . "\n"
 			. '<!-- /wp:cover -->';
 	}
@@ -503,15 +589,24 @@ class Content_Processor_Static_Media_Id_Remap_Test extends Integration_Test_Case
 	/**
 	 * Builds a core/media-text block whose media figure holds an image or video.
 	 *
-	 * @param string $src   Media src.
-	 * @param int    $id    mediaId attr.
-	 * @param string $type  Media type ('image' or 'video').
+	 * @param string $src        Media src.
+	 * @param int    $id         mediaId attr.
+	 * @param string $type       Media type ('image' or 'video').
+	 * @param bool   $with_class Whether an image carries the wp-image class
+	 *                           that save() renders, or false for the
+	 *                           deprecated markup without it.
 	 * @return string Block markup.
 	 */
-	private function media_text_block( string $src, int $id, string $type ): string {
+	private function media_text_block(
+		string $src,
+		int $id,
+		string $type,
+		bool $with_class = true
+	): string {
+		$class = $with_class ? ' class="wp-image-' . $id . ' size-full"' : '';
 		$media = 'video' === $type
 			? '<video controls src="' . $src . '"></video>'
-			: '<img src="' . $src . '" alt=""/>';
+			: '<img src="' . $src . '" alt=""' . $class . '/>';
 
 		return '<!-- wp:media-text ' . (string) wp_json_encode(
 			array(
