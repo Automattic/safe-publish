@@ -1828,13 +1828,15 @@ class Content_Processor_Test extends Integration_Test_Case {
 	 * rewritten, each keeping its form of the query's ampersands.
 	 */
 	public function test_process_custom_block_keeps_ampersand_forms(): void {
-		// ARRANGE: Attribute copies encode "&" as esc_attr() and esc_url() do,
-		// and a script copy keeps it raw; no later pass repoints them.
+		// ARRANGE: Copies that no later pass repoints: Attributes encode "&" as
+		// esc_attr() and esc_url() do, or as "&#38;"; a script keeps it raw.
 		$media_url = 'https://source.example.com/hero.jpg?w=300&h=200';
 		$content   = '<!-- wp:my-plugin/hero {"backgroundUrl":"' . $media_url
 			. '"} --><div class="wp-block-my-plugin-hero" data-bg="'
-			. esc_attr( $media_url ) . '" style="background-image:url('
-			. esc_url( $media_url ) . ')"><script>var bg = "' . $media_url
+			. esc_attr( $media_url ) . '" data-ref="'
+			. str_replace( '&', '&#38;', $media_url )
+			. '" style="background-image:url(' . esc_url( $media_url )
+			. ')"><script>var bg = "' . $media_url
 			. '";</script></div><!-- /wp:my-plugin/hero -->';
 
 		// ACT: Process the custom block through the Gutenberg path.
@@ -1852,12 +1854,74 @@ class Content_Processor_Test extends Integration_Test_Case {
 			$processed
 		);
 		$this->assertStringContainsString(
+			'data-ref="' . $local_url . '?w=300&#38;h=200"',
+			$processed
+		);
+		$this->assertStringContainsString(
 			'url(' . $local_url . '?w=300&#038;h=200)',
 			$processed
 		);
 		$this->assertStringContainsString(
 			'<script>var bg = "' . $local_url . '?w=300&h=200";</script>',
 			$processed
+		);
+	}
+
+	/**
+	 * Verifies that a block's markup copy of its media URL in esc_url() form
+	 * ends up with the same URL as the block's attr.
+	 *
+	 * @dataProvider esc_url_copy_provider
+	 * @param string $block Block markup, with %1$s for the media URL and %2$s
+	 *                      for its esc_url() form.
+	 * @param string $attr  Attr that holds the media URL after import.
+	 * @param string $copy  Markup attribute that holds the encoded copy.
+	 */
+	public function test_process_block_rewrites_esc_url_copies(
+		string $block,
+		string $attr,
+		string $copy
+	): void {
+		// ARRANGE: The import reformats this query, so a copy that kept its own
+		// would differ from the attr.
+		$media_url = 'https://source.example.com/hero.jpg?fit=300,200&h=200';
+		$content   = sprintf( $block, $media_url, esc_url( $media_url ) );
+
+		// ACT: Process the block through the Gutenberg path.
+		$processed = $this->processor->process_content(
+			$content,
+			'https://source.example.com'
+		);
+
+		// ASSERT: The copy holds the attr's URL, still encoded.
+		$url = parse_blocks( $processed )[0]['attrs'][ $attr ];
+		$this->assertStringContainsString(
+			$copy . '="' . str_replace( '&', '&#038;', $url ) . '"',
+			$processed
+		);
+	}
+
+	/**
+	 * Provides blocks with a markup copy of their media URL in esc_url() form.
+	 *
+	 * @return array<string, array{string, string, string}>
+	 */
+	public static function esc_url_copy_provider(): array {
+		return array(
+			'image, lazy-load copy' => array(
+				'<!-- wp:image --><figure class="wp-block-image">'
+					. '<img src="%2$s" data-src="%2$s" alt=""/></figure>'
+					. '<!-- /wp:image -->',
+				'url',
+				'data-src',
+			),
+			'file, download link'   => array(
+				'<!-- wp:file {"href":"%1$s"} --><div class="wp-block-file">'
+					. '<a href="%2$s" download>Download</a></div>'
+					. '<!-- /wp:file -->',
+				'href',
+				'href',
+			),
 		);
 	}
 
