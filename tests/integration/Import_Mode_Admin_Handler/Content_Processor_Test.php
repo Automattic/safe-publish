@@ -1835,8 +1835,9 @@ class Content_Processor_Test extends Integration_Test_Case {
 		string $block,
 		string $attr
 	): void {
-		// ARRANGE: A block whose source media URL carries a fragment.
-		$media_url = 'https://source.example.com/hero.jpg#top';
+		// ARRANGE: A block whose source media URL carries a fragment, with a
+		// "$1" that reads like a regex backreference.
+		$media_url = 'https://source.example.com/hero.jpg#top$1';
 
 		// ACT: Process the block through the Gutenberg path.
 		$processed = $this->processor->process_content(
@@ -1847,7 +1848,7 @@ class Content_Processor_Test extends Integration_Test_Case {
 		// ASSERT: The attr and its markup copy hold the local URL and fragment.
 		$local_url = wp_get_attachment_url(
 			$this->media_importer->get_newly_created_attachment_ids()[0]
-		) . '#top';
+		) . '#top$1';
 		$this->assertSame(
 			$local_url,
 			parse_blocks( $processed )[0]['attrs'][ $attr ]
@@ -1901,32 +1902,6 @@ class Content_Processor_Test extends Integration_Test_Case {
 		);
 		$this->assertStringContainsString(
 			'href="' . $local_url . '#top"',
-			$processed
-		);
-	}
-
-	/**
-	 * Verifies that an image block's markup keeps a fragment that reads like a
-	 * regex backreference, such as "$1", as written.
-	 */
-	public function test_process_image_keeps_dollar_in_fragment(): void {
-		// ARRANGE: An image whose fragment holds "$1".
-		$html = '<!-- wp:image --><figure class="wp-block-image">'
-			. '<img src="https://source.example.com/hero.jpg#step$1" alt=""/>'
-			. '</figure><!-- /wp:image -->';
-
-		// ACT: Process the image block.
-		$processed = $this->processor->process_content(
-			$html,
-			'https://source.example.com'
-		);
-
-		// ASSERT: The src holds the local URL and the fragment as written.
-		$local_url = wp_get_attachment_url(
-			$this->media_importer->get_newly_created_attachment_ids()[0]
-		);
-		$this->assertStringContainsString(
-			'src="' . $local_url . '#step$1"',
 			$processed
 		);
 	}
