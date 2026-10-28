@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process';
+import { execFile } from 'node:child_process';
 
 import { expect, test } from '@wordpress/e2e-test-utils-playwright';
 import type { Admin } from '@wordpress/e2e-test-utils-playwright';
@@ -19,7 +19,8 @@ const LONG_ERROR =
 const titles: string[] = [];
 
 /**
- * Runs a WP-CLI command on a wp-env site.
+ * Runs a WP-CLI command on a wp-env site. It runs asynchronously, so a slow
+ * command can't hold a test past its timeout.
  *
  * @param {string}   site  'cli' for the destination, 'tests-cli' for the
  *                         source.
@@ -27,18 +28,22 @@ const titles: string[] = [];
  *                         pass values with spaces through input instead.
  * @param {string}   input Standard input, such as post content.
  *
- * @return {string} The command's trimmed output.
+ * @return {Promise<string>} The command's trimmed output.
  */
 function wpCli(
 	site: 'cli' | 'tests-cli',
 	args: string[],
 	input = ''
-): string {
-	return execFileSync( 'npx', [ 'wp-env', 'run', site, 'wp', ...args ], {
-		encoding: 'utf8',
-		input,
-		stdio: 'pipe',
-	} ).trim();
+): Promise< string > {
+	return new Promise( ( resolve, reject ) => {
+		const child = execFile(
+			'npx',
+			[ 'wp-env', 'run', site, 'wp', ...args ],
+			( error, stdout ) =>
+				error ? reject( error ) : resolve( stdout.trim() )
+		);
+		child.stdin?.end( input );
+	} );
 }
 
 /**
@@ -76,7 +81,7 @@ async function openCompare(
 ): Promise< void > {
 	const title = `Compare-toolbar-${ Date.now() }`;
 	titles.push( title );
-	const sourceId = wpCli(
+	const sourceId = await wpCli(
 		'tests-cli',
 		[
 			'post',
@@ -98,7 +103,7 @@ async function openCompare(
 	// Freshness compares whole seconds, so the change must land in a later
 	// second than the import to mark the row outdated.
 	await page.waitForTimeout( 1000 );
-	wpCli(
+	await wpCli(
 		'tests-cli',
 		[ 'post', 'update', sourceId, '-' ],
 		`${ content }\n\n${ paragraph( 'Changed on the source.' ) }`
@@ -144,10 +149,10 @@ function measureLayout(
 }
 
 test.describe( 'Compare toolbar', () => {
-	test.afterAll( () => {
+	test.afterAll( async () => {
 		for ( const title of titles ) {
 			for ( const site of [ 'cli', 'tests-cli' ] as const ) {
-				const ids = wpCli( site, [
+				const ids = await wpCli( site, [
 					'post',
 					'list',
 					'--post_type=post',
@@ -156,7 +161,7 @@ test.describe( 'Compare toolbar', () => {
 					'--format=ids',
 				] );
 				if ( '' !== ids ) {
-					wpCli( site, [
+					await wpCli( site, [
 						'post',
 						'delete',
 						...ids.split( ' ' ),
