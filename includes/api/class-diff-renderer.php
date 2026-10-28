@@ -21,6 +21,8 @@ use Safe_Publish\Utils\Post_Type_Map;
 use Safe_Publish\Utils\Source_Identity_Lookup;
 use Safe_Publish\Validators\URL_Validator;
 use stdClass;
+use Text_Diff;
+use Text_Diff_Op;
 use WP_Error;
 use WP_Post;
 use WP_Query;
@@ -52,6 +54,20 @@ final class Diff_Renderer {
 		'popovertarget'       => true,
 		'popovertargetaction' => true,
 	);
+
+	/**
+	 * Most block comparisons that pairing two runs may take.
+	 *
+	 * @var int
+	 */
+	private const MAX_PAIRING_COMPARISONS = 10000;
+
+	/**
+	 * Most word lookups that pairing two runs may take.
+	 *
+	 * @var int
+	 */
+	private const MAX_PAIRING_WORDS = 1000000;
 
 	/**
 	 * Logger instance.
@@ -728,6 +744,11 @@ final class Diff_Renderer {
 	/**
 	 * Generates block-level diffs for Gutenberg content.
 	 *
+	 * Blocks with equal saved markup align first, so an inserted or removed
+	 * block leaves the blocks around it unchanged. An entry's index is its
+	 * block's position in the incoming content, or in the current content
+	 * for a removed block.
+	 *
 	 * @param string $current  Current content.
 	 * @param string $incoming Incoming content.
 	 *
@@ -738,6 +759,59 @@ final class Diff_Renderer {
 			return array();
 		}
 
+		// Previews render inline in the admin, so they drop top-layer triggers.
+		$preview_html = array_map(
+			static fn ( mixed $attributes ): mixed => is_array( $attributes )
+				? array_diff_key( $attributes, self::TOP_LAYER_TRIGGERS )
+				: $attributes,
+			wp_kses_allowed_html( 'post' )
+		);
+
+		$cur_blocks = self::diffable_blocks( $current );
+		$inc_blocks = self::diffable_blocks( $incoming );
+
+		// Named, so every host aligns alike: 'auto' picks xdiff when loaded.
+		$diff = new Text_Diff(
+			'native',
+			array(
+				array_column( $cur_blocks, 'signal' ),
+				array_column( $inc_blocks, 'signal' ),
+			)
+		);
+
+		/** @var list<Text_Diff_Op> $ops */
+		$ops         = $diff->getDiff();
+		$block_diffs = array();
+		$cur_at      = 0;
+		$inc_at      = 0;
+
+		foreach ( $ops as $op ) {
+			$removed = array_slice( $cur_blocks, $cur_at, (int) $op->norig() );
+			$added   = array_slice( $inc_blocks, $inc_at, (int) $op->nfinal() );
+			$cur_at += count( $removed );
+			$inc_at += count( $added );
+
+			// A copied run has equal lengths, so it pairs block for block.
+			$pairs = self::pair_runs( $removed, $added );
+			foreach ( $pairs as list( $cur, $inc ) ) {
+				$block_diffs[] = self::diff_entry( $cur, $inc, $preview_html );
+			}
+		}
+
+		return $block_diffs;
+	}
+
+	/**
+	 * Lists a content's blocks with the saved markup the verdict reads.
+	 *
+	 * The empty freeform slots parse_blocks() emits between blocks show
+	 * nothing, so they are left out rather than paired.
+	 *
+	 * @param string $content Normalized content.
+	 *
+	 * @return list<array{position: int, block: array, signal: string}> Blocks in document order.
+	 */
+	private static function diffable_blocks( string $content ): array {
 		$normalize_block_html = static function ( string $html ): string {
 			// Remove leading/trailing whitespace.
 			$html = trim( $html );
@@ -752,84 +826,250 @@ final class Diff_Renderer {
 			return trim( $html );
 		};
 
-		// Previews render inline in the admin, so they drop top-layer triggers.
-		$preview_html = array_map(
-			static fn ( mixed $attributes ): mixed => is_array( $attributes )
-				? array_diff_key( $attributes, self::TOP_LAYER_TRIGGERS )
-				: $attributes,
-			wp_kses_allowed_html( 'post' )
-		);
-
-		$current_blocks  = parse_blocks( $current ?? '' );
-		$incoming_blocks = parse_blocks( $incoming ?? '' );
-		$max             = max( count( $current_blocks ), count( $incoming_blocks ) );
-		$block_diffs     = array();
-
-		for ( $i = 0; $i < $max; $i++ ) {
-			$cur = $current_blocks[ $i ] ?? null;
-			$inc = $incoming_blocks[ $i ] ?? null;
-
-			if ( ! $cur && ! $inc ) {
-				continue;
-			}
-
-			$cur_name = $cur['blockName'] ?? null;
-			$inc_name = $inc['blockName'] ?? null;
-
+		$blocks = array();
+		foreach ( parse_blocks( $content ) as $position => $block ) {
 			// An update writes saved markup, so the verdict reads that. A
 			// render drops whatever kses filters, and invents changes from the
 			// counters some blocks assign per render.
-			$cur_signal = $cur
-				? $normalize_block_html( serialize_block( $cur ) )
-				: '';
-			$inc_signal = $inc
-				? $normalize_block_html( serialize_block( $inc ) )
-				: '';
-
-			// Rendering serves the previews alone.
-			$cur_filtered = $cur
-				? wp_kses( render_block( $cur ), $preview_html )
-				: '';
-			$inc_filtered = $inc
-				? wp_kses( render_block( $inc ), $preview_html )
-				: '';
-
-			// Skip empty freeform whitespace slots — parse_blocks emits them
-			// between real blocks and they carry no visible signal.
-			$cur_empty_freeform = ! $cur || ( null === $cur_name && '' === $cur_signal );
-			$inc_empty_freeform = ! $inc || ( null === $inc_name && '' === $inc_signal );
-			if ( $cur_empty_freeform && $inc_empty_freeform ) {
+			$signal = $normalize_block_html( serialize_block( $block ) );
+			if ( null === $block['blockName'] && '' === $signal ) {
 				continue;
 			}
 
-			$status = 'unchanged';
-			if ( $cur && ! $inc ) {
-				$status = 'removed';
-			} elseif ( ! $cur && $inc ) {
-				$status = 'added';
-			} elseif ( $cur_name !== $inc_name ) {
-				$status = 'modified';
-			} elseif ( $cur && $inc && $cur_signal !== $inc_signal ) {
-				$status = 'modified';
-			}
-
-			$block_diffs[] = array(
-				'index'    => $i,
-				'status'   => $status,
-				'current'  => $cur ? array(
-					'name'     => $cur_name,
-					'attrs'    => $cur['attrs'] ?? new stdClass(),
-					'rendered' => $cur_filtered,
-				) : null,
-				'incoming' => $inc ? array(
-					'name'     => $inc_name,
-					'attrs'    => $inc['attrs'] ?? new stdClass(),
-					'rendered' => $inc_filtered,
-				) : null,
+			$blocks[] = array(
+				'position' => $position,
+				'block'    => $block,
+				'signal'   => $signal,
 			);
 		}
 
-		return $block_diffs;
+		return $blocks;
+	}
+
+	/**
+	 * Builds the block diff entry for a pair of blocks.
+	 *
+	 * @param ?array $cur          Current block, or null when added.
+	 * @param ?array $inc          Incoming block, or null when removed.
+	 * @param array  $preview_html Markup the previews may keep.
+	 *
+	 * @return array Block diff entry.
+	 */
+	private static function diff_entry(
+		?array $cur,
+		?array $inc,
+		array $preview_html
+	): array {
+		$status = 'unchanged';
+		if ( null === $inc ) {
+			$status = 'removed';
+		} elseif ( null === $cur ) {
+			$status = 'added';
+		} elseif (
+			$cur['block']['blockName'] !== $inc['block']['blockName']
+			|| $cur['signal'] !== $inc['signal']
+		) {
+			$status = 'modified';
+		}
+
+		$side = static function ( ?array $slot ) use ( $preview_html ): ?array {
+			if ( null === $slot ) {
+				return null;
+			}
+
+			// Rendering serves the previews alone.
+			$rendered = render_block( $slot['block'] );
+
+			return array(
+				'name'     => $slot['block']['blockName'],
+				'attrs'    => $slot['block']['attrs'] ?? new stdClass(),
+				'rendered' => wp_kses( $rendered, $preview_html ),
+			);
+		};
+
+		return array(
+			'index'    => ( $inc ?? $cur )['position'],
+			'status'   => $status,
+			'current'  => $side( $cur ),
+			'incoming' => $side( $inc ),
+		);
+	}
+
+	/**
+	 * Pairs a run of removed blocks with the run of added blocks next to it.
+	 *
+	 * Each block of the shorter run pairs with the block of the longer run
+	 * that best_places() picks, and the other blocks of the longer run stand
+	 * alone, in document order. BlockDiffViewer's appendRuns() applies the
+	 * same rule to child nodes.
+	 *
+	 * @param list<array> $removed Blocks only the current side has.
+	 * @param list<array> $added   Blocks only the incoming side has.
+	 *
+	 * @return list<array{0: ?array, 1: ?array}> Each pair's current and incoming block, or null.
+	 */
+	private static function pair_runs( array $removed, array $added ): array {
+		$removed_short = count( $removed ) <= count( $added );
+		$short         = $removed_short ? $removed : $added;
+		$long          = $removed_short ? $added : $removed;
+
+		// Orders each pair as current block, then incoming block.
+		$pair = static fn ( ?array $short_block, array $long_block ): array =>
+			$removed_short
+				? array( $short_block, $long_block )
+				: array( $long_block, $short_block );
+
+		$pairs = array();
+		$next  = 0;
+		foreach ( self::best_places( $short, $long ) as $index => $place ) {
+			foreach ( array_slice( $long, $next, $place - $next ) as $block ) {
+				$pairs[] = $pair( null, $block );
+			}
+			$pairs[] = $pair( $short[ $index ], $long[ $place ] );
+			$next    = $place + 1;
+		}
+		foreach ( array_slice( $long, $next ) as $block ) {
+			$pairs[] = $pair( null, $block );
+		}
+
+		return $pairs;
+	}
+
+	/**
+	 * Places each block of a run with a block of a longer run, in order, so
+	 * that the pairs are as alike as possible in total.
+	 *
+	 * Runs of equal length or too large to compare pair by position, and ties
+	 * take the earliest place, so runs without a telling difference do too.
+	 * BlockDiffViewer's bestPlaces() applies the same rule to child nodes.
+	 *
+	 * @param list<array> $short Blocks of the shorter run.
+	 * @param list<array> $long  Blocks of the longer run.
+	 *
+	 * @return list<int> Index in the longer run of each block's pair.
+	 */
+	private static function best_places( array $short, array $long ): array {
+		$count  = count( $short );
+		$skips  = count( $long ) - $count;
+		$places = array_keys( $short );
+
+		// With nothing to choose, or too much to compare, skip the search.
+		if (
+			0 === $count
+			|| 0 === $skips
+			|| $count * ( $skips + 1 ) > self::MAX_PAIRING_COMPARISONS
+		) {
+			return $places;
+		}
+
+		$short_words = array_map( self::block_words( ... ), $short );
+		$lookups     = 0;
+		foreach ( $short_words as $words ) {
+			$lookups += count( $words['text'] ) + count( $words['markup'] );
+		}
+		if ( $lookups * ( $skips + 1 ) > self::MAX_PAIRING_WORDS ) {
+			return $places;
+		}
+		$long_words = array_map( self::block_words( ... ), $long );
+
+		// $best[ $i ][ $d ] is the highest total for blocks $i onward once $d
+		// blocks of the longer run are skipped, and $skip_next[ $i ][ $d ]
+		// whether one more skip does strictly better.
+		$row       = array_fill( 0, $skips + 1, 0.0 );
+		$best      = array_fill( 0, $count + 1, $row );
+		$skip_next = array();
+		for ( $i = $count - 1; $i >= 0; $i-- ) {
+			$words = $short_words[ $i ];
+			for ( $d = $skips; $d >= 0; $d-- ) {
+				$place = self::similarity( $words, $long_words[ $i + $d ] )
+					+ $best[ $i + 1 ][ $d ];
+				$later = $d < $skips ? $best[ $i ][ $d + 1 ] : -1.0;
+
+				$skip_next[ $i ][ $d ] = $later > $place;
+				$best[ $i ][ $d ]      = max( $place, $later );
+			}
+		}
+
+		$d = 0;
+		for ( $i = 0; $i < $count; $i++ ) {
+			while ( $skip_next[ $i ][ $d ] ) {
+				++$d;
+			}
+			$places[ $i ] = $i + $d;
+		}
+
+		return $places;
+	}
+
+	/**
+	 * Lists the distinct words of a block's text and of its whole markup.
+	 *
+	 * @param array $block Block, with its saved markup as signal.
+	 *
+	 * @return array{text: array<array-key, true>, markup: array<array-key, true>} Words, as keys.
+	 */
+	private static function block_words( array $block ): array {
+		$text = (string) preg_replace( '/<[^>]*>/', ' ', $block['signal'] );
+
+		return array(
+			'text'   => self::words( $text ),
+			'markup' => self::words( $block['signal'] ),
+		);
+	}
+
+	/**
+	 * Rates how alike two blocks are, from 0 to 1.
+	 *
+	 * Text counts twice as much as markup, so a block keeps its pair across
+	 * a change of type, while markup tells apart blocks with the same text.
+	 *
+	 * @param array $a Words of one block.
+	 * @param array $b Words of the other block.
+	 *
+	 * @return float Similarity.
+	 */
+	private static function similarity( array $a, array $b ): float {
+		$text   = self::dice( $a['text'], $b['text'] );
+		$markup = self::dice( $a['markup'], $b['markup'] );
+
+		return ( 2 * $text + $markup ) / 3;
+	}
+
+	/**
+	 * Lists the distinct words of a text. Each Han or kana character counts
+	 * as a word, since those scripts put no spaces between words.
+	 *
+	 * @param string $text Text to read.
+	 *
+	 * @return array<array-key, true> Words, as keys.
+	 */
+	private static function words( string $text ): array {
+		// Possessive, so a long word cannot exhaust the PCRE JIT stack.
+		$pattern = '/[\p{Han}\p{Hiragana}\p{Katakana}]'
+			. '|(?:(?![\p{Han}\p{Hiragana}\p{Katakana}])[\p{L}\p{N}])++/u';
+
+		// Invalid UTF-8 fails the match and yields no words.
+		return false === preg_match_all( $pattern, $text, $matches )
+			? array()
+			: array_fill_keys( $matches[0], true );
+	}
+
+	/**
+	 * Rates how alike two word lists are, from 0 to 1, as the Dice
+	 * coefficient: Twice the shared words over all words.
+	 *
+	 * @param array<array-key, true> $a Words, as keys.
+	 * @param array<array-key, true> $b Words, as keys.
+	 *
+	 * @return float Dice coefficient.
+	 */
+	private static function dice( array $a, array $b ): float {
+		$total = count( $a ) + count( $b );
+		if ( 0 === $total ) {
+			return 0.0;
+		}
+
+		return 2 * count( array_intersect_key( $a, $b ) ) / $total;
 	}
 
 	/**
