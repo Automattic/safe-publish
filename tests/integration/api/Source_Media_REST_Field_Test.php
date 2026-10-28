@@ -224,6 +224,31 @@ class Source_Media_REST_Field_Test extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Verifies that a media URL with a fragment maps to its library metadata
+	 * under the plain URL, which the destination looks it up by.
+	 */
+	public function test_field_maps_fragment_url_to_library_metadata(): void {
+		// ARRANGE: A post linking to an attachment at a fragment.
+		$image   = $this->seed_attachment( '2025/01/fragment-image.jpg' );
+		$post_id = self::factory()->post->create(
+			array(
+				'post_content' => '<p><a href="' . $image['url'] . '#top">Image</a></p>',
+			)
+		);
+
+		$this->force_hmac_authenticated( true );
+
+		// ACT: Dispatch the single-post request.
+		$response = $this->server->dispatch(
+			new WP_REST_Request( 'GET', '/wp/v2/posts/' . $post_id )
+		);
+
+		// ASSERT: The plain URL maps to the library metadata.
+		$media = $response->get_data()['safe_publish_media'];
+		$this->assertSame( 'Library title', $media[ $image['url'] ]['title'] ?? null );
+	}
+
+	/**
 	 * Verifies that scheme-less media resolves to its source library metadata.
 	 */
 	public function test_field_maps_scheme_less_urls_to_library_metadata(): void {
