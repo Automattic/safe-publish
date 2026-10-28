@@ -121,8 +121,11 @@ The server re-checks this on every request, so a listing loaded before an earlie
 - An update's destination post is in the trash.
 - An update was recorded without a restore point, so its pre-existing post has nothing to put back.
 - The destination post no longer exists, which also closes the import record, since that import can never be reverted.
+- Another import or rollback of the post is in progress.
 
-Claiming is what makes those checks binding: two rollbacks of one item in flight cannot both apply, and the loser is refused before it touches the post. If the revert then fails, the claim is released so the item stays retryable; if that release fails too, the Audit Log records the item as stuck.
+A lock makes those checks binding. Imports and rollbacks of one source post share it: an import holds it from reading the post until its history is recorded, and a rollback holds it from these checks until its revert is final. A request that finds the post locked is refused, leaving the post untouched. If a request is interrupted while it holds the lock, the post stays locked for up to five minutes.
+
+A rollback also claims its item, so two rollbacks of one item cannot both apply even if the lock expires. If the revert then fails, the claim is released so the item stays retryable; if that release fails too, the Audit Log records the item as stuck.
 
 ## Post-import notice
 

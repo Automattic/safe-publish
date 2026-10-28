@@ -11,6 +11,7 @@ namespace Safe_Publish\Admin;
 
 use Safe_Publish\Content\Shortcode_ID_Rewriter;
 use Safe_Publish\Utils\Options;
+use Safe_Publish\Utils\Post_Lock;
 use Throwable;
 use WP_Error;
 use WP_Post;
@@ -65,12 +66,37 @@ final class Session_Rollback_Service {
 		$item = $this->repository->get_item( $item_id );
 
 		if ( ! is_array( $item ) ) {
+			return $this->refused( $this->item_not_found_error() );
+		}
+
+		$lock = Post_Lock::acquire( (int) ( $item['source_post_id'] ?? 0 ) );
+
+		if ( null === $lock ) {
 			return $this->refused(
-				new WP_Error(
-					'item_not_found',
-					__( 'Import item not found', 'safe-publish' )
-				)
+				new WP_Error( 'post_locked', Post_Lock::held_message() )
 			);
+		}
+
+		try {
+			return $this->rollback_locked_item( $item_id );
+		} finally {
+			$lock->release();
+		}
+	}
+
+	/**
+	 * Rolls back an item while holding its post's lock.
+	 *
+	 * @param int $item_id Item ID to roll back.
+	 * @return array{action: string, post_id: int, post_title: string, omissions: array}|WP_Error Rollback result or error.
+	 * @throws Throwable When a hook throws during the revert.
+	 */
+	private function rollback_locked_item( int $item_id ): array|WP_Error {
+		// A rival may have rolled the item back before the lock was taken.
+		$item = $this->repository->get_item( $item_id );
+
+		if ( ! is_array( $item ) ) {
+			return $this->refused( $this->item_not_found_error() );
 		}
 
 		$refusal = $this->refuse_rollback( $item );
@@ -232,6 +258,18 @@ final class Session_Rollback_Service {
 		}
 
 		return $this->post_missing_error();
+	}
+
+	/**
+	 * Returns the shared missing-item error.
+	 *
+	 * @return WP_Error Missing item error.
+	 */
+	private function item_not_found_error(): WP_Error {
+		return new WP_Error(
+			'item_not_found',
+			__( 'Import item not found', 'safe-publish' )
+		);
 	}
 
 	/**

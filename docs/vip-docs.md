@@ -354,6 +354,10 @@ Safe Publish compares the content and excerpt WordPress saved against what was r
 
 Ask a user who can save the content unfiltered to retry the import or rollback. On multisite, only super administrators can hold `unfiltered_html`, and no user can when `DISALLOW_UNFILTERED_HTML` is set. Alternatively, remove the unsupported markup from the content at the source, then re-import. If this happens during a rollback, the history item is reopened so it stays retryable.
 
+### An import or rollback was refused because another one is in progress
+
+The error "Another import or rollback of this post is in progress. Try again in a moment." means another request is importing or rolling back the same post, for example from another browser tab or by another user. Safe Publish refuses the second request so that the two cannot mix their changes. Wait for the other request to finish, reload the listing, and try again. If a request was interrupted, the post can stay locked for up to five minutes.
+
 ### A rollback was refused
 
 These rollback errors point at a listing that no longer matches the destination:
