@@ -5,8 +5,10 @@ import type { Admin } from '@wordpress/e2e-test-utils-playwright';
 import type { Page } from '@playwright/test';
 
 // The width at which WCAG 1.4.10 (Reflow) requires content to fit without
-// sideways scrolling.
+// sideways scrolling, and the height that goes with it: a 1280×1024 window
+// at 400% zoom.
 const REFLOW_WIDTH = 320;
+const REFLOW_HEIGHT = 256;
 
 // A source-site failure long enough to need more than one line at the
 // reflow width.
@@ -57,18 +59,20 @@ const LINKS = Array.from( { length: 12 }, ( _, i ) =>
 
 /**
  * Imports a new source post, changes it on the source, and opens Compare for
- * it on the destination at the given width.
+ * it on the destination at the given viewport size.
  *
  * @param {Admin}  admin   Admin page utilities.
  * @param {Page}   page    The page.
  * @param {string} content The source post's block markup.
  * @param {number} width   Viewport width for Compare.
+ * @param {number} height  Viewport height for Compare.
  */
 async function openCompare(
 	admin: Admin,
 	page: Page,
 	content: string,
-	width: number
+	width: number,
+	height = 800
 ): Promise< void > {
 	const title = `Compare-toolbar-${ Date.now() }`;
 	titles.push( title );
@@ -102,7 +106,7 @@ async function openCompare(
 
 	// Narrow screens move Compare into the row's Actions menu. Resizing an
 	// open modal would unmount it with the inline button.
-	await page.setViewportSize( { width, height: 800 } );
+	await page.setViewportSize( { width, height } );
 	await page.reload();
 	await row.getByRole( 'button', { name: 'Actions' } ).click();
 	await page.getByRole( 'menuitem', { name: 'Compare' } ).click();
@@ -164,12 +168,13 @@ test.describe( 'Compare toolbar', () => {
 	} );
 
 	test( 'should fit a narrow screen', async ( { admin, page } ) => {
-		// ARRANGE: An outdated import opened in Compare at the reflow width.
+		// ARRANGE: An outdated import opened in Compare at the reflow size.
 		await openCompare(
 			admin,
 			page,
 			paragraph( 'Original paragraph.' ),
-			REFLOW_WIDTH
+			REFLOW_WIDTH,
+			REFLOW_HEIGHT
 		);
 		const toolbar = page.locator( '.safe-publish-compare-modal__toggles' );
 		await expect(
@@ -218,48 +223,56 @@ test.describe( 'Compare toolbar', () => {
 		expect( layout.overflow ).toBeLessThanOrEqual( 1 );
 	} );
 
-	test( 'should keep backward focus out from behind the toolbar', async ( {
-		admin,
-		page,
-	} ) => {
-		// ARRANGE: Compare at the reflow width, where the sticky toolbar wraps
-		// onto several rows, over a column of links.
-		await openCompare( admin, page, LINKS, REFLOW_WIDTH );
-		await page.getByRole( 'checkbox', { name: 'Show unchanged' } ).check();
-		const scroller = page.locator( '.components-modal__content' );
-		const toolbar = page.locator( '.safe-publish-compare-modal__toggles' );
-		const link = ( i: number ) =>
-			page.getByRole( 'link', { name: `Link ${ i }`, exact: true } );
-
-		// ACT: Move focus backward from the last link, scrolling to the end
-		// of the diff first so that each earlier link scrolls in from above,
-		// and record the links that don't show in full between the toolbar
-		// and the bottom of the scroll area.
-		await link( 11 ).focus();
-		const obscured: string[] = [];
-		for ( let i = 10; i >= 0; i-- ) {
-			await scroller.evaluate( ( el ) =>
-				el.scrollTo( 0, el.scrollHeight )
+	// At the reflow size the toolbar scrolls away with the diff. On a taller
+	// screen it sticks.
+	for ( const height of [ REFLOW_HEIGHT, 800 ] ) {
+		test( `should keep backward focus visible ${ height }px tall`, async ( {
+			admin,
+			page,
+		} ) => {
+			// ARRANGE: Compare at the reflow width, where the toolbar wraps
+			// onto several rows, over a column of links.
+			await openCompare( admin, page, LINKS, REFLOW_WIDTH, height );
+			await page
+				.getByRole( 'checkbox', { name: 'Show unchanged' } )
+				.check();
+			const scroller = page.locator( '.components-modal__content' );
+			const toolbar = page.locator(
+				'.safe-publish-compare-modal__toggles'
 			);
-			await page.keyboard.press( 'Shift+Tab' );
-			await expect( link( i ) ).toBeFocused();
-			const area = ( await scroller.boundingBox() )!;
-			const bar = ( await toolbar.boundingBox() )!;
-			const box = ( await link( i ).boundingBox() )!;
-			const top = Math.max( area.y, bar.y + bar.height );
-			// Allow 1px of subpixel rounding at either edge.
-			if (
-				box.y < top - 1 ||
-				box.y + box.height > area.y + area.height + 1
-			) {
-				obscured.push( `Link ${ i }` );
-			}
-		}
+			const link = ( i: number ) =>
+				page.getByRole( 'link', { name: `Link ${ i }`, exact: true } );
 
-		// ASSERT: Every focused link shows in full (WCAG 2.2 SC 2.4.12, Focus
-		// Not Obscured (Enhanced)).
-		expect( obscured ).toEqual( [] );
-	} );
+			// ACT: Move focus backward from the last link, scrolling to the end
+			// of the diff first so that each earlier link scrolls in from
+			// above, and record the links that don't show in full between the
+			// toolbar and the bottom of the scroll area.
+			await link( 11 ).focus();
+			const obscured: string[] = [];
+			for ( let i = 10; i >= 0; i-- ) {
+				await scroller.evaluate( ( el ) =>
+					el.scrollTo( 0, el.scrollHeight )
+				);
+				await page.keyboard.press( 'Shift+Tab' );
+				await expect( link( i ) ).toBeFocused();
+				const area = ( await scroller.boundingBox() )!;
+				const bar = ( await toolbar.boundingBox() )!;
+				const box = ( await link( i ).boundingBox() )!;
+				const top = Math.max( area.y, bar.y + bar.height );
+				// Allow 1px of subpixel rounding at either edge.
+				if (
+					box.y < top - 1 ||
+					box.y + box.height > area.y + area.height + 1
+				) {
+					obscured.push( `Link ${ i }` );
+				}
+			}
+
+			// ASSERT: Every focused link shows in full (WCAG 2.2 SC 2.4.12,
+			// Focus Not Obscured (Enhanced)).
+			expect( obscured ).toEqual( [] );
+		} );
+	}
 
 	test( 'should keep the diff still on Tab in the toolbar', async ( {
 		admin,

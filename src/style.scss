@@ -741,6 +741,20 @@ html:has(body.toplevel_page_safe-publish) {
 		scroll-margin-top: var(--safe-publish-compare-toolbar-bottom, 0);
 	}
 
+	// A short screen, such as 400% zoom or a landscape phone, has no room for
+	// a sticky row that wraps, so the row scrolls away with the diff (WCAG
+	// technique C34).
+	@media (max-height: 600px) {
+
+		.safe-publish-compare-modal__toggles {
+			position: static;
+		}
+
+		.safe-publish-compare-modal__section * {
+			scroll-margin-top: 0;
+		}
+	}
+
 }
 
 // Title links blue by default — every other cell is color-coded, so gray
