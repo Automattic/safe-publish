@@ -1526,11 +1526,13 @@ class Content_Processor {
 	 *
 	 * @param string $html          HTML content.
 	 * @param int    $attachment_id Destination attachment ID.
+	 * @param int    $found         Incremented by the number of tokens found.
 	 * @return string Updated HTML content.
 	 */
 	private function repoint_wp_image_class(
 		string $html,
-		int $attachment_id
+		int $attachment_id,
+		int &$found = 0
 	): string {
 		$processor = new WP_HTML_Tag_Processor( $html );
 
@@ -1543,8 +1545,11 @@ class Content_Processor {
 			$new_class = preg_replace(
 				'/(?<![\w-])wp-image-\d+(?![\w-])/',
 				'wp-image-' . $attachment_id,
-				$class
+				$class,
+				-1,
+				$count
 			);
+			$found    += (int) $count;
 			if ( is_string( $new_class ) && $new_class !== $class ) {
 				$processor->set_attribute( 'class', $new_class );
 			}
@@ -1732,11 +1737,12 @@ class Content_Processor {
 			return $html;
 		}
 
-		// Pattern to match wp-image-{number} class.
-		$pattern     = '/wp-image-\d+/';
-		$replacement = 'wp-image-' . $new_attachment_id;
-
-		$updated_html = preg_replace( $pattern, $replacement, $html, -1, $count );
+		$count        = 0;
+		$updated_html = $this->repoint_wp_image_class(
+			$html,
+			$new_attachment_id,
+			$count
+		);
 
 		// A rewrite onto the same ID is a no-op, so test the match count.
 		if ( 0 === $count && strpos( $html, '<img' ) !== false ) {
