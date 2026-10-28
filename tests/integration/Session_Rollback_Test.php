@@ -26,6 +26,7 @@ use WP_Post;
 class Session_Rollback_Test extends Integration_Test_Case {
 
 	use Failing_Query_Trait;
+	use Held_Post_Lock_Trait;
 	use Unfiltered_Html_Trait;
 
 	/**
@@ -1839,6 +1840,148 @@ class Session_Rollback_Test extends Integration_Test_Case {
 		$this->assertSame(
 			'Imported content.',
 			get_post( $post_id )->post_content
+		);
+	}
+
+	/**
+	 * Verifies that a rollback is refused while another request holds the
+	 * post's lock, leaving the item and the post untouched.
+	 */
+	public function test_rollback_item_refuses_a_locked_post(): void {
+		// ARRANGE: An updated item whose post another request has locked.
+		$history = $this->create_updated_item( array() );
+		$this->hold_post_lock( 1 );
+
+		// ACT: Roll the item back.
+		$result = $this->rollback_service->rollback_item( $history['item_id'] );
+
+		// ASSERT: The rollback was refused as one to retry.
+		$this->assertInstanceOf( WP_Error::class, $result );
+		$this->assertSame( 'post_locked', $result->get_error_code() );
+		$this->assertSame(
+			'Another import or rollback of this post is in progress. Try again in a moment.',
+			$result->get_error_message()
+		);
+		$this->assertTrue( Session_Rollback_Service::is_refusal( $result ) );
+
+		// ASSERT: The item was not claimed, the post was not restored, and the
+		// holder's lock stays in place.
+		$item = $this->repository->get_item( $history['item_id'] );
+		$this->assertSame( 0, (int) $item['rolled_back'] );
+		$this->assertSame(
+			'Current content.',
+			get_post_field( 'post_content', $history['post_id'] )
+		);
+		$this->assertIsArray( $this->post_lock_row( 1 ) );
+	}
+
+	/**
+	 * Verifies that a rival rollback started during this request's checks is
+	 * refused, since the lock is taken before them.
+	 */
+	public function test_rollback_item_locks_before_its_checks(): void {
+		// ARRANGE: An updated item a rival request rolls back while this
+		// request looks up the post's newest import.
+		$history      = $this->create_updated_item( array() );
+		$rival_result = null;
+		$rival        = function ( $query ) use (
+			&$rival,
+			&$rival_result,
+			$history
+		) {
+			$query = (string) $query;
+
+			if (
+				0 !== stripos( ltrim( $query ), 'SELECT' )
+				|| ! str_contains( $query, Import_Items_Table::table_name() )
+				|| ! str_contains( $query, 'ORDER BY id DESC LIMIT 1' )
+			) {
+				return $query;
+			}
+
+			remove_filter( 'query', $rival );
+			$rival_result = $this->rollback_service->rollback_item(
+				$history['item_id']
+			);
+
+			return $query;
+		};
+		add_filter( 'query', $rival );
+
+		try {
+			// ACT: Roll the item back against the rival.
+			$result = $this->rollback_service->rollback_item(
+				$history['item_id']
+			);
+		} finally {
+			remove_filter( 'query', $rival );
+		}
+
+		// ASSERT: The rival was refused, and this request restored the post.
+		$this->assertInstanceOf( WP_Error::class, $rival_result );
+		$this->assertSame( 'post_locked', $rival_result->get_error_code() );
+		$this->assertIsArray( $result );
+		$this->assertSame( 'restored', $result['action'] );
+		$this->assertSame(
+			'Previous content.',
+			get_post_field( 'post_content', $history['post_id'] )
+		);
+	}
+
+	/**
+	 * Verifies that a rollback is refused as already rolled back when a rival
+	 * completes it right after this request first reads the item.
+	 */
+	public function test_rollback_item_reports_a_finished_rival(): void {
+		// ARRANGE: An updated item a rival request rolls back once this
+		// request has read it.
+		$history   = $this->create_updated_item( array() );
+		$read_item = false;
+		$rival     = function ( $query ) use (
+			&$rival,
+			&$read_item,
+			$history
+		) {
+			if ( ! $read_item ) {
+				$read_item = str_contains(
+					(string) $query,
+					Import_Items_Table::table_name()
+				);
+
+				return $query;
+			}
+
+			remove_filter( 'query', $rival );
+			$this->rollback_service->rollback_item( $history['item_id'] );
+
+			return $query;
+		};
+		add_filter( 'query', $rival );
+
+		try {
+			// ACT: Roll the item back against the rival.
+			$result = $this->rollback_service->rollback_item(
+				$history['item_id']
+			);
+		} finally {
+			remove_filter( 'query', $rival );
+		}
+
+		// ASSERT: The losing request names the rollback that beat it.
+		$this->assertInstanceOf( WP_Error::class, $result );
+		$this->assertSame(
+			'item_already_rolled_back',
+			$result->get_error_code()
+		);
+		$this->assertSame(
+			'This import was already rolled back. Reload the list.',
+			$result->get_error_message()
+		);
+
+		// ASSERT: The rival's restore stands.
+		$this->assertSame(
+			'Previous content.',
+			get_post_field( 'post_content', $history['post_id'] )
 		);
 	}
 

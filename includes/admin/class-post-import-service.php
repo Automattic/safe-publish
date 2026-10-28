@@ -17,6 +17,7 @@ use Safe_Publish\API\HTTP_Client;
 use Safe_Publish\Media\Media_Importer;
 use Safe_Publish\Utils\Auth_Credential_Provider;
 use Safe_Publish\Utils\Options;
+use Safe_Publish\Utils\Post_Lock;
 use Safe_Publish\Utils\Post_Type_Map;
 use Safe_Publish\Utils\Reconcile_Logger;
 use Safe_Publish\Utils\Reconcile_Outcome;
@@ -40,28 +41,6 @@ if ( ! defined( 'ABSPATH' ) ) {
  * import, and history logging for each imported post.
  */
 class Post_Import_Service {
-
-	/**
-	 * Object-cache group for per-source-post import locks.
-	 *
-	 * @var string
-	 */
-	public const IMPORT_LOCK_GROUP = 'safe_publish_import_locks';
-
-	/**
-	 * Object-cache key prefix for per-source-post import locks.
-	 *
-	 * @var string
-	 */
-	public const IMPORT_LOCK_KEY_PREFIX = 'importing_';
-
-	/**
-	 * TTL for a per-source-post import lock, in seconds. Generous enough for
-	 * media-heavy posts; a crashed import leaves the lock until expiry.
-	 *
-	 * @var int
-	 */
-	public const IMPORT_LOCK_TTL = 300;
 
 	/**
 	 * Source Posts API instance.
@@ -259,13 +238,10 @@ class Post_Import_Service {
 			return $this->build_error_result( $fields, $post_type );
 		}
 
-		$lock_acquired = $this->acquire_import_lock( $fields['source_post_id'] );
+		$lock = Post_Lock::acquire( $fields['source_post_id'] );
 
-		if ( ! $lock_acquired ) {
-			$error_message = __(
-				'This post is currently being imported by another request. Please try again in a moment.',
-				'safe-publish'
-			);
+		if ( null === $lock ) {
+			$error_message = Post_Lock::held_message();
 
 			$this->log_import_if_session(
 				$session_id,
@@ -313,42 +289,8 @@ class Post_Import_Service {
 				$options
 			);
 		} finally {
-			$this->release_import_lock( $fields['source_post_id'] );
+			$lock->release();
 		}
-	}
-
-	/**
-	 * Attempts to acquire the per-source-post import lock.
-	 *
-	 * Backed by wp_cache_add, which is atomic across requests only when a
-	 * persistent object cache is configured (memcached/Redis). Without one,
-	 * the lock degrades to a per-request no-op and the post-insert duplicate
-	 * check in persist_new_post() is the safety net.
-	 *
-	 * @param int $source_post_id Source post ID.
-	 * @return bool True when the lock was acquired, false when another
-	 *              concurrent import already holds it.
-	 */
-	private function acquire_import_lock( int $source_post_id ): bool {
-		return wp_cache_add(
-			self::IMPORT_LOCK_KEY_PREFIX . $source_post_id,
-			1,
-			self::IMPORT_LOCK_GROUP,
-			// phpcs:ignore WordPressVIPMinimum.Performance.LowExpiryCacheTime.CacheTimeUndetermined -- IMPORT_LOCK_TTL is 300 seconds.
-			self::IMPORT_LOCK_TTL
-		);
-	}
-
-	/**
-	 * Releases the per-source-post import lock.
-	 *
-	 * @param int $source_post_id Source post ID.
-	 */
-	private function release_import_lock( int $source_post_id ): void {
-		wp_cache_delete(
-			self::IMPORT_LOCK_KEY_PREFIX . $source_post_id,
-			self::IMPORT_LOCK_GROUP
-		);
 	}
 
 	/**
