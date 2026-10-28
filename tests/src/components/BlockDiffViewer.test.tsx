@@ -664,6 +664,28 @@ describe( 'BlockDiffViewer', () => {
 			'<p>Paragraph</p>',
 			'<h2 class="x">Heading</h2><p>Paragraph</p>',
 		],
+		[
+			'rendered list item inserted above an edit',
+			'<ul>\n\n<li>Alpha</li>\n\n\n<li>Beta</li>\n\n</ul>',
+			'<ul>\n\n<li>New</li>\n\n\n<li>Alpha edited</li>' +
+				'\n\n\n<li>Beta</li>\n\n</ul>',
+		],
+		[
+			'rendered list item removed above an edit',
+			'<ul>\n\n<li>Alpha</li>\n\n\n<li>Beta</li>\n\n</ul>',
+			'<ul>\n\n<li>Beta edited</li>\n\n</ul>',
+		],
+		[
+			'rendered table row inserted above an edit',
+			'<table>\n<tbody>\n<tr>\n<td>a</td>\n</tr>\n</tbody>\n</table>',
+			'<table>\n<tbody>\n<tr>\n<td>n</td>\n</tr>\n' +
+				'<tr>\n<td>a b</td>\n</tr>\n</tbody>\n</table>',
+		],
+		[
+			'space replaced by text',
+			'<p><b>a</b> <i>b</i></p>',
+			'<p><b>a</b> and <i>b</i></p>',
+		],
 	] )(
 		'rebuilds the incoming markup exactly for a %s',
 		( _label, current, incoming ) => {
@@ -722,6 +744,318 @@ describe( 'BlockDiffViewer', () => {
 		expect(
 			screen.getByText( /not visible in the preview/i )
 		).toBeInTheDocument();
+	} );
+} );
+
+describe( 'BlockDiffViewer pairing', () => {
+	// Rendered blocks put whitespace of uneven length between their children.
+	const spaced = (
+		open: string,
+		close: string,
+		children: string[]
+	): string => `${ open }\n\n${ children.join( '\n\n\n' ) }\n\n${ close }`;
+
+	const list = ( ...items: string[] ): string =>
+		spaced(
+			'<ul class="wp-block-list">',
+			'</ul>',
+			items.map( ( item ) => `<li>${ item }</li>` )
+		);
+
+	const group = ( ...children: string[] ): string =>
+		spaced( '<div class="wp-block-group">', '</div>', children );
+
+	const row = ( cells: string[] ): string =>
+		`<tr>\n<td>${ cells.join( '</td>\n<td>' ) }</td>\n</tr>`;
+
+	const table = ( ...rows: string[][] ): string =>
+		'<figure class="wp-block-table">\n<table>\n<tbody>\n' +
+		rows.map( row ).join( '\n' ) +
+		'\n</tbody>\n</table>\n</figure>';
+
+	const numbered = ( prefix: string, count: number ): string[] =>
+		Array.from( { length: count }, ( _, i ) => `${ prefix } ${ i + 1 }` );
+
+	// Writes a child as its text, with [-removed-], {+added+} and ~changed~
+	// markers, or as wholly added or removed.
+	const describeChild = ( child: Element ): string => {
+		const text = ( node: Node ): string =>
+			( node.textContent ?? '' ).replace( /\s+/g, ' ' ).trim();
+		if ( child.classList.contains( ADDED_CLASS ) ) {
+			return `added: ${ text( child ) }`;
+		}
+		if ( child.classList.contains( REMOVED_CLASS ) ) {
+			return `removed: ${ text( child ) }`;
+		}
+
+		const clone = child.cloneNode( true ) as Element;
+		clone
+			.querySelectorAll( `.${ REMOVED_CLASS }` )
+			.forEach( ( mark ) => mark.replaceWith( `[-${ text( mark ) }-]` ) );
+		clone
+			.querySelectorAll( `.${ ADDED_CLASS }` )
+			.forEach( ( mark ) => mark.replaceWith( `{+${ text( mark ) }+}` ) );
+		clone
+			.querySelectorAll( `.${ ATTRS_CLASS }` )
+			.forEach( ( mark ) => mark.replaceWith( `~${ text( mark ) }~` ) );
+		return text( clone );
+	};
+
+	// Diffs two versions and describes each child of the incoming element
+	// the selector finds.
+	const pairedChildren = (
+		current: string,
+		incoming: string,
+		selector: string
+	): string[] => {
+		const { container } = renderModified( current, incoming );
+		const parent = incomingColumn( container ).querySelector( selector );
+		return Array.from( parent?.children ?? [] ).map( describeChild );
+	};
+
+	it( 'marks an item inserted above an edited one as added', () => {
+		// ACT: Diff a list that gains an item above an edited one.
+		const children = pairedChildren(
+			'<ul><li>Alpha</li><li>Beta</li></ul>',
+			'<ul><li>New</li><li>Alpha edited</li><li>Beta</li></ul>',
+			'ul'
+		);
+
+		// ASSERT: The new item is added, and the edit stays in its own item.
+		expect( children ).toStrictEqual( [
+			'added: New',
+			'Alpha {+edited+}',
+			'Beta',
+		] );
+	} );
+
+	it( 'pairs across the whitespace between rendered items', () => {
+		// ACT: Diff the same change in rendered list markup.
+		const children = pairedChildren(
+			list( 'Alpha', 'Beta' ),
+			list( 'New', 'Alpha edited', 'Beta' ),
+			'ul'
+		);
+
+		// ASSERT: The whitespace does not split the run, so the pairs hold.
+		expect( children ).toStrictEqual( [
+			'added: New',
+			'Alpha {+edited+}',
+			'Beta',
+		] );
+	} );
+
+	it( 'marks an item removed above an edited one as removed', () => {
+		// ACT: Diff a list that loses an item above an edited one.
+		const children = pairedChildren(
+			list( 'Alpha', 'Beta', 'Gamma' ),
+			list( 'Beta edited', 'Gamma' ),
+			'ul'
+		);
+
+		// ASSERT: The removal and the edit each mark their own item.
+		expect( children ).toStrictEqual( [
+			'removed: Alpha',
+			'Beta {+edited+}',
+			'Gamma',
+		] );
+	} );
+
+	it( 'keeps an edit in place above an inserted item', () => {
+		// ACT: Diff a list that gains an item below an edited one.
+		const children = pairedChildren(
+			list( 'Alpha', 'Beta' ),
+			list( 'Alpha edited', 'New', 'Beta' ),
+			'ul'
+		);
+
+		// ASSERT: The edit stays on the first item, and the new one is added.
+		expect( children ).toStrictEqual( [
+			'Alpha {+edited+}',
+			'added: New',
+			'Beta',
+		] );
+	} );
+
+	it( 'pairs edits on both sides of an inserted item', () => {
+		// ACT: Diff a list that gains an item between a rewrite and an edit.
+		const children = pairedChildren(
+			list( 'Alpha beta', 'One two three' ),
+			list( 'Alpha gamma delta', 'New', 'One two three four' ),
+			'ul'
+		);
+
+		// ASSERT: Each edit stays in its own item, and the new one is added.
+		expect( children ).toStrictEqual( [
+			'Alpha [-beta-]{+gamma delta+}',
+			'added: New',
+			'One two three {+four+}',
+		] );
+	} );
+
+	it( 'keeps adjacent edits in place', () => {
+		// ACT: Diff a list whose first two items are edited.
+		const children = pairedChildren(
+			list( 'Alpha', 'Beta', 'Gamma' ),
+			list( 'Alpha edited', 'Beta edited', 'Gamma' ),
+			'ul'
+		);
+
+		// ASSERT: Each edit is marked inside its own item.
+		expect( children ).toStrictEqual( [
+			'Alpha {+edited+}',
+			'Beta {+edited+}',
+			'Gamma',
+		] );
+	} );
+
+	it( 'pairs paragraphs inside a group', () => {
+		// ACT: Diff a group that gains a paragraph above an edited one.
+		const children = pairedChildren(
+			group( '<p>Alpha</p>', '<p>Beta</p>' ),
+			group( '<p>New</p>', '<p>Alpha edited</p>', '<p>Beta</p>' ),
+			'.wp-block-group'
+		);
+
+		// ASSERT: The new paragraph is added, and the edit stays in its own.
+		expect( children ).toStrictEqual( [
+			'added: New',
+			'Alpha {+edited+}',
+			'Beta',
+		] );
+	} );
+
+	it( 'pairs table rows', () => {
+		// ACT: Diff a table that gains a row above an edited one.
+		const children = pairedChildren(
+			table( [ 'Alpha', 'Beta' ], [ 'Gamma', 'Delta' ] ),
+			table(
+				[ 'New', 'Row' ],
+				[ 'Alpha', 'Beta edited' ],
+				[ 'Gamma', 'Delta' ]
+			),
+			'tbody'
+		);
+
+		// ASSERT: The new row is added, and the edit stays in its own row.
+		expect( children ).toStrictEqual( [
+			'added: New Row',
+			'Alpha Beta {+edited+}',
+			'Gamma Delta',
+		] );
+	} );
+
+	it( 'pairs by position when no words tell the nodes apart', () => {
+		// ACT: Diff a list whose only item is replaced by two unrelated ones.
+		const children = pairedChildren(
+			list( 'One' ),
+			list( 'Alpha', 'Beta' ),
+			'ul'
+		);
+
+		// ASSERT: The first item takes the old item's place.
+		expect( children ).toStrictEqual( [
+			'[-One-]{+Alpha+}',
+			'added: Beta',
+		] );
+	} );
+
+	it( 'pairs a converted element by its text', () => {
+		// ARRANGE: Paragraphs sharing more markup with each other than with
+		// the heading.
+		const paragraph = ( text: string ): string =>
+			`<p class="wp-block-paragraph has-large-font-size">${ text }</p>`;
+
+		// ACT: Diff a group whose paragraph becomes a heading above a new
+		// paragraph.
+		const children = pairedChildren(
+			group( paragraph( 'Hello world' ) ),
+			group(
+				'<h2 class="wp-block-heading">Hello world</h2>',
+				paragraph( 'New words' )
+			),
+			'.wp-block-group'
+		);
+
+		// ASSERT: The paragraph is replaced by the heading, not by the new
+		// paragraph that shares its markup.
+		expect( children ).toStrictEqual( [
+			'removed: Hello world',
+			'added: Hello world',
+			'added: New words',
+		] );
+	} );
+
+	it( 'pairs nodes with the same text by their markup', () => {
+		// ACT: Diff a list that gains a link above an edited one with the
+		// same text.
+		const children = pairedChildren(
+			list( '<a href="https://example.com/news/first-story">Read</a>' ),
+			list(
+				'<a href="https://example.com/news/second-story">Read</a>',
+				'<a href="https://example.com/news/first-story" class="more">' +
+					'Read</a>'
+			),
+			'ul'
+		);
+
+		// ASSERT: The new link is added, and the attribute change marks the
+		// edited one.
+		expect( children ).toStrictEqual( [ 'added: Read', '~Read~' ] );
+	} );
+
+	it( 'pairs text written without spaces', () => {
+		// ACT: Diff a Japanese list that gains an item above an edited one.
+		const children = pairedChildren(
+			list( '日本語の文章です。' ),
+			list( '新しい段落を追加しました。', '日本語の文章を少し編集しました。' ),
+			'ul'
+		);
+
+		// ASSERT: The new item is added, and the edited one is paired.
+		expect( children ).toStrictEqual( [
+			'added: 新しい段落を追加しました。',
+			'日本語の文章[-です-]{+を少し編集しました+}。',
+		] );
+	} );
+
+	it( 'pairs long runs by position', () => {
+		// ARRANGE: 50 items, each edited below 201 inserted ones, which takes
+		// more comparisons than the limit allows.
+		const items = numbered( 'Item', 50 );
+		const inserted = numbered( 'New', 201 );
+
+		// ACT: Diff the two lists.
+		const children = pairedChildren(
+			list( ...items ),
+			list( ...inserted, ...items.map( ( item ) => `${ item } edited` ) ),
+			'ul'
+		);
+
+		// ASSERT: The first item pairs with the first insertion.
+		expect( children[ 0 ] ).toBe( '[-Item-]{+New+} 1' );
+	} );
+
+	it( 'pairs wordy runs by position', () => {
+		// ARRANGE: Ten items of 1,200 distinct words, each edited below 50
+		// inserted ones, which takes more word lookups than the limit allows.
+		const items = Array.from( { length: 10 }, ( _, item ) =>
+			Array.from(
+				{ length: 1200 },
+				( __, word ) => `w${ item }x${ word }`
+			).join( ' ' )
+		);
+		const inserted = numbered( 'New', 50 );
+
+		// ACT: Diff the two lists.
+		const children = pairedChildren(
+			list( ...items ),
+			list( ...inserted, ...items.map( ( item ) => `${ item } edited` ) ),
+			'ul'
+		);
+
+		// ASSERT: The first item pairs with the first insertion.
+		expect( children[ 0 ] ).toMatch( /^\[-w0x0 .*-\]\{\+New 1\+\}$/ );
 	} );
 } );
 
