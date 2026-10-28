@@ -1766,7 +1766,7 @@ class Content_Processor {
 	 *
 	 * Walks all string values in $attrs. For each value that is a valid URL
 	 * on the source domain, the URL is sideloaded and replaced with the local
-	 * attachment URL, keeping its query. Matching occurrences in
+	 * attachment URL, keeping its query and fragment. Matching occurrences in
 	 * $block['innerHTML'] and $block['innerContent'] are also updated so they
 	 * stay consistent.
 	 *

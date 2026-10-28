@@ -45,14 +45,11 @@ class Media_Importer_Url_Fragment_Test extends WP_UnitTestCase {
 	private const UNKNOWN_MEDIA_ID = 9810726;
 
 	/**
-	 * Runs each import as an administrator so the sideload has upload caps.
+	 * Serves image bytes for each download.
 	 */
 	#[\Override]
 	protected function setUp(): void {
 		parent::setUp();
-		wp_set_current_user(
-			self::factory()->user->create( array( 'role' => 'administrator' ) )
-		);
 		$this->add_image_byte_response_mock();
 	}
 

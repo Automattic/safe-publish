@@ -214,7 +214,10 @@ class MediaImporterTest extends TestCase {
 		$clean_url = 'https://destination.example.com/wp-content/uploads/guide.pdf';
 
 		// ACT: Reapply the source URL's query and fragment.
-		$result = Media_Importer::reapply_query_parameters( $original_url, $clean_url );
+		$result = Media_Importer::reapply_query_parameters(
+			$original_url,
+			$clean_url
+		);
 
 		// ASSERT: The fragment follows the query.
 		$this->assertSame( $clean_url . $suffix, $result );
@@ -227,9 +230,18 @@ class MediaImporterTest extends TestCase {
 	 */
 	public static function fragment_url_provider(): array {
 		return array(
-			'fragment'           => array( 'https://source.example.com/uploads/guide.pdf#page=2', '#page=2' ),
-			'query and fragment' => array( 'https://source.example.com/uploads/guide.pdf?v=2#page=4', '?v=2#page=4' ),
-			'empty fragment'     => array( 'https://source.example.com/uploads/guide.pdf#', '#' ),
+			'fragment'           => array(
+				'https://source.example.com/uploads/guide.pdf#page=2',
+				'#page=2',
+			),
+			'query and fragment' => array(
+				'https://source.example.com/uploads/guide.pdf?v=2#page=4',
+				'?v=2#page=4',
+			),
+			'empty fragment'     => array(
+				'https://source.example.com/uploads/guide.pdf#',
+				'#',
+			),
 		);
 	}
 
@@ -240,7 +252,9 @@ class MediaImporterTest extends TestCase {
 	 * @dataProvider download_url_provider
 	 * @param string $media_url Source media URL.
 	 */
-	public function test_get_download_url_drops_query_and_fragment( string $media_url ): void {
+	public function test_get_download_url_drops_query_and_fragment(
+		string $media_url
+	): void {
 		// ARRANGE: The plain URL every form names.
 		$expected = 'https://source.example.com/uploads/guide.pdf';
 
@@ -261,8 +275,12 @@ class MediaImporterTest extends TestCase {
 	 */
 	public static function download_url_provider(): array {
 		return array(
-			'fragment'           => array( 'https://source.example.com/uploads/guide.pdf#page=2' ),
-			'query and fragment' => array( 'https://source.example.com/uploads/guide.pdf?v=2#page=4' ),
+			'fragment'           => array(
+				'https://source.example.com/uploads/guide.pdf#page=2',
+			),
+			'query and fragment' => array(
+				'https://source.example.com/uploads/guide.pdf?v=2#page=4',
+			),
 		);
 	}
 }

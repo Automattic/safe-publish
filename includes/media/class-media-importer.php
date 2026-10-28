@@ -1040,17 +1040,16 @@ class Media_Importer {
 	 * Returns a URL with the query string parameters and fragment from another
 	 * URL reapplied onto it.
 	 *
-	 * @param string $original_url The source URL whose query parameters and
-	 *                             fragment should be reapplied.
-	 * @param string $clean_url    The target URL, which has no query parameters
-	 *                             or fragment.
-	 * @return string The target URL with the source query parameters and
-	 *                fragment appended.
+	 * @param string $original_url Source URL with the query and fragment.
+	 * @param string $clean_url    Target URL, without a query or fragment.
+	 * @return string The target URL with the query and fragment appended.
 	 */
 	public static function reapply_query_parameters( string $original_url, string $clean_url ): string {
-		$original_url = URL_Validator::normalize_url_whitespace( $original_url );
+		$original_url = URL_Validator::normalize_url_whitespace(
+			$original_url
+		);
 		$query        = (string) wp_parse_url( $original_url, PHP_URL_QUERY );
-		// Raw text, since wp_parse_url() reads a bare trailing "#" as no fragment.
+		// Raw text, so a bare trailing "#" is kept.
 		$fragment = (string) strstr( $original_url, '#' );
 
 		if ( ! $query ) {
