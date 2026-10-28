@@ -30,7 +30,7 @@ use WP_Error;
  * Concurrent Import Rollback Test Class.
  *
  * Simulates another request on the same post: A rival operation runs from a
- * hook inside the first one.
+ * hook inside the first one, or writes the database behind its cache.
  */
 class Concurrent_Import_Rollback_Test extends Integration_Test_Case {
 
@@ -323,6 +323,42 @@ class Concurrent_Import_Rollback_Test extends Integration_Test_Case {
 		$this->assertSame(
 			(int) $second['id'],
 			(int) $this->repository->get_item_for_post( $post_id )['id']
+		);
+	}
+
+	/**
+	 * Verifies that an update snapshots the post as stored, even when an
+	 * earlier lookup in the request cached it before another request changed
+	 * it.
+	 */
+	public function test_update_snapshots_the_post_as_stored(): void {
+		global $wpdb;
+
+		// ARRANGE: A created post, cached by a lookup like the one before the
+		// update prompt, then changed in the database behind the cache.
+		$created = $this->import_version( 'V1' );
+		$post_id = (int) $created['post_id'];
+		$this->import_service->resolve_identity_claims(
+			self::SOURCE_ID,
+			Options::get_connected_site_url_with_path()
+		);
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$wpdb->update(
+			$wpdb->posts,
+			array( 'post_content' => '<p>Changed elsewhere.</p>' ),
+			array( 'ID' => $post_id )
+		);
+
+		// ACT: Update the post.
+		$update = $this->import_version( 'V2' );
+
+		// ASSERT: The snapshot holds the stored content, not the cached copy.
+		$this->assertSame( 'updated', $update['status'] );
+		$this->assertSame(
+			'<p>Changed elsewhere.</p>',
+			History_Repository::decode_item_changes(
+				$update['content_changes']
+			)['previous_content']
 		);
 	}
 

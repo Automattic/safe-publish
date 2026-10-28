@@ -263,6 +263,18 @@ class Post_Import_Service {
 				$fields['source_post_id'],
 				$source_site_url
 			);
+			$cached = $claims['present'];
+
+			// An earlier read in this request may have cached the post before
+			// another request changed it.
+			if ( null !== $cached ) {
+				clean_post_cache( $cached );
+
+				$claims = $this->resolve_identity_claims(
+					$fields['source_post_id'],
+					$source_site_url
+				);
+			}
 
 			if ( null !== $claims['present'] ) {
 				return $this->handle_imported_post(
