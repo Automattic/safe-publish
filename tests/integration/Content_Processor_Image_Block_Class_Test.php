@@ -20,6 +20,8 @@ use WP_HTML_Tag_Processor;
  * Exercises the wp-image class process_image_block() writes into a core/image
  * block: It names the destination attachment exactly once, whether the source
  * markup already named that ID, named a different one, or carried no class.
+ * Only the class attribute changes, so a file name containing wp-image-N, or
+ * alt text naming a class, stays.
  */
 class Content_Processor_Image_Block_Class_Test extends Integration_Test_Case {
 
@@ -92,13 +94,14 @@ class Content_Processor_Image_Block_Class_Test extends Integration_Test_Case {
 	 * destination while the other class tokens and their order are preserved.
 	 */
 	public function test_repoints_class_naming_a_different_attachment(): void {
-		// ARRANGE: Seed the attachment, then name an unrelated source ID.
+		// ARRANGE: Seed the attachment, then name an unrelated source ID among
+		// look-alike tokens.
 		$url     = self::SOURCE . '/repointed.jpg';
 		$dest_id = $this->import( $url );
 		$content = $this->image_block(
 			$url,
 			900705,
-			'alignnone size-large wp-image-900705'
+			'alignnone is-wp-image-7 wp-image-7-crop wp-image-900705'
 		);
 
 		// ACT: Process the block.
@@ -107,7 +110,7 @@ class Content_Processor_Image_Block_Class_Test extends Integration_Test_Case {
 		// ASSERT: Only the wp-image token changed.
 		$this->assertNotSame( 900705, $dest_id );
 		$this->assertSame(
-			"alignnone size-large wp-image-{$dest_id}",
+			"alignnone is-wp-image-7 wp-image-7-crop wp-image-{$dest_id}",
 			$this->first_img_attr( $result, 'class' )
 		);
 	}
@@ -140,6 +143,118 @@ class Content_Processor_Image_Block_Class_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that a file name containing wp-image-N is kept in the src and
+	 * link, which point at the attachment the class names.
+	 */
+	public function test_keeps_wp_image_file_name_in_src_and_link(): void {
+		// ARRANGE: Seed a linked image named like a class token. Its classed
+		// caption follows the img, so the token count must span tags.
+		$url     = self::SOURCE . '/wp-image-424242.jpg';
+		$dest_id = $this->import( $url );
+		$content = '<!-- wp:image {"id":900705,"linkDestination":"media"} -->'
+			. "\n" . '<figure class="wp-block-image size-large">'
+			. '<a href="' . $url . '"><img src="' . $url . '" alt=""'
+			. ' class="wp-image-900705"/></a>'
+			. '<figcaption class="wp-element-caption">Lake</figcaption>'
+			. "</figure>\n<!-- /wp:image -->";
+
+		// ACT: Process the block.
+		$result = $this->process( $content );
+
+		// ASSERT: The src, link, and single class token name one attachment.
+		$local_url = wp_get_attachment_url( $dest_id );
+		$link      = new WP_HTML_Tag_Processor( $result );
+		$link->next_tag( array( 'tag_name' => 'A' ) );
+		$this->assertNotSame( 424242, $dest_id );
+		$this->assertSame(
+			$local_url,
+			$this->first_img_attr( $result, 'src' )
+		);
+		$this->assertSame( $local_url, $link->get_attribute( 'href' ) );
+		$this->assertSame(
+			"wp-image-{$dest_id}",
+			$this->first_img_attr( $result, 'class' )
+		);
+	}
+
+	/**
+	 * Verifies that markup carrying no class gains one when its file name
+	 * contains wp-image-N, and keeps that file name.
+	 */
+	public function test_adds_class_when_file_name_contains_wp_image(): void {
+		// ARRANGE: Seed a class-less image named like a class token.
+		$url     = self::SOURCE . '/wp-image-424243.jpg';
+		$dest_id = $this->import( $url );
+		$content = $this->image_block( $url, null, null );
+
+		// ACT: Process the block.
+		$result = $this->process( $content );
+
+		// ASSERT: The class is added, and the src keeps the file name.
+		$this->assertSame(
+			"wp-image-{$dest_id}",
+			$this->first_img_attr( $result, 'class' )
+		);
+		$this->assertSame(
+			wp_get_attachment_url( $dest_id ),
+			$this->first_img_attr( $result, 'src' )
+		);
+	}
+
+	/**
+	 * Provides imgs without a wp-image token: Their class attribute, if any,
+	 * their alt text, and the class expected after processing.
+	 *
+	 * @return array<string, array{string|null, string, string}>
+	 */
+	public static function token_less_img_provider(): array {
+		return array(
+			'class without a token'   => array(
+				'has-border-color',
+				'',
+				'has-border-color wp-image-%d',
+			),
+			'alt text naming a class' => array(
+				null,
+				"Use class='hero' here",
+				'wp-image-%d',
+			),
+		);
+	}
+
+	/**
+	 * Verifies that an img without a wp-image token gains one in its class
+	 * attribute only.
+	 *
+	 * @dataProvider token_less_img_provider
+	 *
+	 * @param string|null $class_value    Img class attribute, or null to omit it.
+	 * @param string      $alt            Img alt text.
+	 * @param string      $expected_class Expected class, with %d for the
+	 *                                    destination attachment ID.
+	 */
+	public function test_adds_token_to_the_class_attribute_only(
+		?string $class_value,
+		string $alt,
+		string $expected_class
+	): void {
+		// ARRANGE: Seed the attachment for an image without a token.
+		$url     = self::SOURCE . '/token-less.jpg';
+		$dest_id = $this->import( $url );
+		$content = $this->image_block( $url, null, $class_value, $alt );
+
+		// ACT: Process the block.
+		$result = $this->process( $content );
+
+		// ASSERT: The class gains the token, and the alt text is kept.
+		$this->assertSame(
+			sprintf( $expected_class, $dest_id ),
+			$this->first_img_attr( $result, 'class' )
+		);
+		$this->assertSame( $alt, $this->first_img_attr( $result, 'alt' ) );
+	}
+
+	/**
 	 * Runs content through the processor.
 	 *
 	 * @param string $content Block markup to process.
@@ -160,12 +275,14 @@ class Content_Processor_Image_Block_Class_Test extends Integration_Test_Case {
 	 *                                 to serialize the block without attrs.
 	 * @param string|null $class_value Value for the img class attribute, or null
 	 *                                 to omit the attribute.
+	 * @param string      $alt         Optional. Img alt text. Default empty.
 	 * @return string Serialized block markup.
 	 */
 	private function image_block(
 		string $url,
 		?int $block_id,
-		?string $class_value
+		?string $class_value,
+		string $alt = ''
 	): string {
 		$attrs      = null === $block_id ? '' : ' {"id":' . $block_id . '}';
 		$class_attr = null === $class_value
@@ -174,7 +291,7 @@ class Content_Processor_Image_Block_Class_Test extends Integration_Test_Case {
 
 		return "<!-- wp:image{$attrs} -->\n"
 			. '<figure class="wp-block-image size-large">'
-			. '<img src="' . $url . '" alt=""' . $class_attr . '/>'
+			. '<img src="' . $url . '" alt="' . $alt . '"' . $class_attr . '/>'
 			. "</figure>\n<!-- /wp:image -->";
 	}
 
