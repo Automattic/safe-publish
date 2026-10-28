@@ -1906,6 +1906,32 @@ class Content_Processor_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that an image block's markup keeps a fragment that reads like a
+	 * regex backreference, such as "$1", as written.
+	 */
+	public function test_process_image_keeps_dollar_in_fragment(): void {
+		// ARRANGE: An image whose fragment holds "$1".
+		$html = '<!-- wp:image --><figure class="wp-block-image">'
+			. '<img src="https://source.example.com/hero.jpg#step$1" alt=""/>'
+			. '</figure><!-- /wp:image -->';
+
+		// ACT: Process the image block.
+		$processed = $this->processor->process_content(
+			$html,
+			'https://source.example.com'
+		);
+
+		// ASSERT: The src holds the local URL and the fragment as written.
+		$local_url = wp_get_attachment_url(
+			$this->media_importer->get_newly_created_attachment_ids()[0]
+		);
+		$this->assertStringContainsString(
+			'src="' . $local_url . '#step$1"',
+			$processed
+		);
+	}
+
+	/**
 	 * Verifies that a custom block's markup copies of a media URL are
 	 * rewritten, each keeping its form of the query's ampersands.
 	 */

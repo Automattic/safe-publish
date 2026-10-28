@@ -1706,11 +1706,15 @@ class Content_Processor {
 			return $html;
 		}
 
-		// Use a targeted regex to replace only the src attribute value.
-		$pattern     = '/(<img[^>]+src=["\'])' . preg_quote( $old_url, '/' ) . '(["\'][^>]*>)/i';
-		$replacement = '${1}' . $new_url . '${2}';
-
-		$updated_html = preg_replace( $pattern, $replacement, $html );
+		// Use a targeted regex to replace only the src attribute value. The
+		// callback keeps a "$" or "\" in the new URL's fragment as written.
+		$pattern      = '/(<img[^>]+src=["\'])' . preg_quote( $old_url, '/' ) . '(["\'][^>]*>)/i';
+		$updated_html = preg_replace_callback(
+			$pattern,
+			static fn ( array $matches ): string => $matches[1] . $new_url
+				. $matches[2],
+			$html
+		);
 
 		if ( null !== $updated_html && $updated_html !== $html ) {
 			return $updated_html;
