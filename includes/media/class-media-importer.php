@@ -1256,28 +1256,45 @@ class Media_Importer {
 	/**
 	 * Gets attachment ID by original URL.
 	 *
+	 * A copy that differs only in http or https names the same file, so it is
+	 * tried when the exact URL misses.
+	 *
 	 * @param string $original_url Original source URL.
 	 * @return int|false Attachment ID on success, false on failure.
 	 */
 	private static function get_attachment_by_url(
 		string $original_url
 	): int|false {
-		// Check by the exact URL stored in metadata.
-		$attachments = get_posts(
-			array(
-				'post_type'        => 'attachment',
-				'meta_key'         => Options::META_ORIGINAL_URL,
-				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
-				'meta_value'       => $original_url,
-				'posts_per_page'   => 1,
-				'orderby'          => 'ID',
-				'order'            => 'DESC',
-				// Don't suppress posts_* filters; required for cache plugins.
-				'suppress_filters' => false,
-			)
-		);
+		$urls = array( $original_url );
 
-		return ! empty( $attachments ) ? $attachments[0]->ID : false;
+		if (
+			1 === preg_match( '~^http(s?)(://.*)~i', $original_url, $parts )
+		) {
+			$urls[] = ( '' === $parts[1] ? 'https' : 'http' ) . $parts[2];
+		}
+
+		foreach ( $urls as $url ) {
+			$attachments = get_posts(
+				array(
+					'post_type'        => 'attachment',
+					'meta_key'         => Options::META_ORIGINAL_URL,
+					// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
+					'meta_value'       => $url,
+					'posts_per_page'   => 1,
+					'orderby'          => 'ID',
+					'order'            => 'DESC',
+					// Don't suppress posts_* filters; required for cache
+					// plugins.
+					'suppress_filters' => false,
+				)
+			);
+
+			if ( array() !== $attachments ) {
+				return $attachments[0]->ID;
+			}
+		}
+
+		return false;
 	}
 
 	/**
