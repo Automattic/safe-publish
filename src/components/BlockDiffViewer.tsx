@@ -37,6 +37,26 @@ const REMOVED_CLASS = 'safe-publish-inline-removed';
 const ATTRS_CLASS = 'safe-publish-inline-attr-changed';
 
 /**
+ * Most node comparisons that pairing two runs may take.
+ */
+const MAX_PAIRING_COMPARISONS = 10000;
+
+/**
+ * Most word lookups that pairing two runs may take.
+ */
+const MAX_PAIRING_WORDS = 1000000;
+
+/**
+ * Matches a word. Each Han or kana character counts as a word, since those
+ * scripts put no spaces between words.
+ */
+const WORD = new RegExp(
+	'[\\p{sc=Han}\\p{sc=Hiragana}\\p{sc=Katakana}]' +
+		'|(?:(?![\\p{sc=Han}\\p{sc=Hiragana}\\p{sc=Katakana}])[\\p{L}\\p{N}])+',
+	'gu'
+);
+
+/**
  * Elements whose children are raw text or an inert fragment, so a marker inside
  * one would read as content. Block HTML passes kses with the post allowlist,
  * which drops all but textarea and title; the rest cover unfiltered callers.
@@ -68,13 +88,25 @@ interface InlineDiff {
 }
 
 /**
+ * Distinct words of a node's text and of its whole markup.
+ *
+ * @property {Set<string>} text   Words of the text.
+ * @property {Set<string>} markup Words of the markup.
+ */
+interface NodeWords {
+	text: Set< string >;
+	markup: Set< string >;
+}
+
+/**
  * Running state of one inline diff pass.
  *
- * @property {boolean}              marked      True once a marker has been placed.
- * @property {boolean}              unmarked    True once a change was left unmarked.
- * @property {boolean}              attrChanged True once an attribute change was marked.
- * @property {Map<string, string>}  shapes      Subtree shape to its shared identity.
- * @property {WeakMap<Node,string>} keys        Node to its subtree identity.
+ * @property {boolean}                 marked      True once a marker has been placed.
+ * @property {boolean}                 unmarked    True once a change was left unmarked.
+ * @property {boolean}                 attrChanged True once an attribute change was marked.
+ * @property {Map<string, string>}     shapes      Subtree shape to its shared identity.
+ * @property {WeakMap<Node,string>}    keys        Node to its subtree identity.
+ * @property {WeakMap<Node,NodeWords>} words       Node to its words.
  */
 interface DiffState {
 	marked: boolean;
@@ -82,6 +114,7 @@ interface DiffState {
 	attrChanged: boolean;
 	shapes: Map< string, string >;
 	keys: WeakMap< Node, string >;
+	words: WeakMap< Node, NodeWords >;
 }
 
 /**
@@ -431,35 +464,188 @@ function appendPair(
 }
 
 /**
+ * Reads the words of a node's text and of its whole markup.
+ *
+ * @param {Node}      node  Node to read.
+ * @param {DiffState} state Running diff state, holding the word cache.
+ *
+ * @return {NodeWords} Words of the node.
+ */
+function wordsOf( node: Node, state: DiffState ): NodeWords {
+	let words = state.words.get( node );
+	if ( words === undefined ) {
+		const markup =
+			node.nodeType === ELEMENT_NODE
+				? ( node as Element ).outerHTML
+				: node.nodeValue ?? '';
+		words = {
+			text: new Set( ( node.textContent ?? '' ).match( WORD ) ),
+			markup: new Set( markup.match( WORD ) ),
+		};
+		state.words.set( node, words );
+	}
+	return words;
+}
+
+/**
+ * Rates how alike two word sets are, from 0 to 1, as the Dice coefficient:
+ * Twice the shared words over all words.
+ *
+ * @param {Set<string>} first  Words.
+ * @param {Set<string>} second Words.
+ *
+ * @return {number} Dice coefficient.
+ */
+function dice( first: Set< string >, second: Set< string > ): number {
+	const total = first.size + second.size;
+	if ( total === 0 ) {
+		return 0;
+	}
+
+	let shared = 0;
+	first.forEach( ( word ) => {
+		if ( second.has( word ) ) {
+			shared++;
+		}
+	} );
+	return ( 2 * shared ) / total;
+}
+
+/**
+ * Rates how alike two nodes are, from 0 to 1.
+ *
+ * Text counts twice as much as markup, so a node keeps its pair across a
+ * change of tag, while markup tells apart nodes with the same text.
+ *
+ * @param {NodeWords} first  Words of one node.
+ * @param {NodeWords} second Words of the other node.
+ *
+ * @return {number} Similarity.
+ */
+function similarity( first: NodeWords, second: NodeWords ): number {
+	const text = dice( first.text, second.text );
+	const markup = dice( first.markup, second.markup );
+	return ( 2 * text + markup ) / 3;
+}
+
+/**
+ * Places each node of a run with a node of a longer run, in order, so that
+ * the pairs are as alike as possible in total.
+ *
+ * Runs of equal length or too large to compare pair by position, and ties
+ * take the earliest place, so runs without a telling difference do too.
+ * Mirrors Diff_Renderer::best_places(), which places blocks.
+ *
+ * @param {Node[]}    short Nodes of the shorter run.
+ * @param {Node[]}    long  Nodes of the longer run.
+ * @param {DiffState} state Running diff state.
+ *
+ * @return {number[]} Index in the longer run of each node's pair.
+ */
+function bestPlaces( short: Node[], long: Node[], state: DiffState ): number[] {
+	const skips = long.length - short.length;
+	const places = short.map( ( _node, index ) => index );
+
+	// With nothing to choose, or too much to compare, skip the search.
+	if (
+		short.length === 0 ||
+		skips === 0 ||
+		short.length * ( skips + 1 ) > MAX_PAIRING_COMPARISONS
+	) {
+		return places;
+	}
+
+	const shortWords = short.map( ( node ) => wordsOf( node, state ) );
+	const lookups = shortWords.reduce(
+		( sum, words ) => sum + words.text.size + words.markup.size,
+		0
+	);
+	if ( lookups * ( skips + 1 ) > MAX_PAIRING_WORDS ) {
+		return places;
+	}
+	const longWords = long.map( ( node ) => wordsOf( node, state ) );
+
+	/* eslint-disable security/detect-object-injection -- numeric indexes. */
+	// best[ index ][ offset ] is the highest total for nodes index onward once
+	// offset nodes of the longer run are skipped, and
+	// skipNext[ index ][ offset ] whether one more skip does strictly better.
+	const best = Array.from( { length: short.length + 1 }, () =>
+		new Array< number >( skips + 1 ).fill( 0 )
+	);
+	const skipNext = short.map( () =>
+		new Array< boolean >( skips + 1 ).fill( false )
+	);
+	for ( let index = short.length - 1; index >= 0; index-- ) {
+		const words = shortWords[ index ];
+		for ( let offset = skips; offset >= 0; offset-- ) {
+			const place =
+				similarity( words, longWords[ index + offset ] ) +
+				best[ index + 1 ][ offset ];
+			const later = offset < skips ? best[ index ][ offset + 1 ] : -1;
+
+			skipNext[ index ][ offset ] = later > place;
+			best[ index ][ offset ] = Math.max( place, later );
+		}
+	}
+
+	let offset = 0;
+	return places.map( ( index ) => {
+		while ( skipNext[ index ][ offset ] ) {
+			offset++;
+		}
+		return index + offset;
+	} );
+	/* eslint-enable security/detect-object-injection */
+}
+
+/**
  * Appends one run of removals paired with the run of additions next to it.
  *
  * Pairing lets an edited node be diffed against its counterpart instead of
- * being reported as an unrelated removal and addition.
+ * being reported as an unrelated removal and addition. Each node of the
+ * shorter run pairs with the node bestPlaces() picks, and the other nodes of
+ * the longer run stand alone, in document order. Mirrors
+ * Diff_Renderer::pair_runs(), which pairs blocks.
  *
- * @param {Node[]}    removedNodes Nodes only the current side has.
- * @param {Node[]}    addedNodes   Nodes only the incoming side has.
- * @param {Document}  doc          Document that owns the output.
- * @param {Node}      parent       Parent to append to.
- * @param {DiffState} state        Running diff state.
+ * @param {Node[]}               removedNodes   Nodes only the current side has.
+ * @param {Node[]}               addedNodes     Nodes only the incoming side has.
+ * @param {Document}             doc            Document that owns the output.
+ * @param {Node}                 parent         Parent to append to.
+ * @param {DiffState}            state          Running diff state.
+ * @param {(node: Node) => void} beforeIncoming Runs before an incoming node is appended.
  */
 function appendRuns(
 	removedNodes: Node[],
 	addedNodes: Node[],
 	doc: Document,
 	parent: Node,
-	state: DiffState
+	state: DiffState,
+	beforeIncoming: ( node: Node ) => void
 ): void {
-	const removals = [ ...removedNodes ];
-	const additions = [ ...addedNodes ];
+	const removedShort = removedNodes.length <= addedNodes.length;
+	const short = removedShort ? removedNodes : addedNodes;
+	const long = removedShort ? addedNodes : removedNodes;
+	const appendAlone = ( node: Node ): void => {
+		if ( removedShort ) {
+			beforeIncoming( node );
+			appendAdded( node, doc, parent, state );
+		} else {
+			appendRemoved( node, doc, parent, state );
+		}
+	};
 
-	while ( removals.length > 0 && additions.length > 0 ) {
-		const [ removal ] = removals.splice( 0, 1 );
-		const [ addition ] = additions.splice( 0, 1 );
+	let next = 0;
+	/* eslint-disable security/detect-object-injection -- numeric indexes. */
+	bestPlaces( short, long, state ).forEach( ( place, index ) => {
+		long.slice( next, place ).forEach( appendAlone );
+		const pair = [ short[ index ], long[ place ] ];
+		const [ removal, addition ] = removedShort ? pair : pair.reverse();
+		beforeIncoming( addition );
 		appendPair( removal, addition, doc, parent, state );
-	}
-
-	removals.forEach( ( node ) => appendRemoved( node, doc, parent, state ) );
-	additions.forEach( ( node ) => appendAdded( node, doc, parent, state ) );
+		next = place + 1;
+	} );
+	/* eslint-enable security/detect-object-injection */
+	long.slice( next ).forEach( appendAlone );
 }
 
 /**
@@ -469,6 +655,8 @@ function appendRuns(
  * both sides is copied straight through and only the rest is diffed. Every
  * replacement jsdiff reports puts its removed run before the added run, so
  * a pending removal is always still in hand when its addition arrives.
+ * Rendered markup spaces children unevenly, so whitespace-only text takes no
+ * part in the alignment; the incoming copy stays in place.
  *
  * @param {Node[]}    originalNodes Children of the current node.
  * @param {Node[]}    changedNodes  Children of the incoming node.
@@ -483,19 +671,33 @@ function appendChildDiff(
 	parent: Node,
 	state: DiffState
 ): void {
+	const isContent = ( node: Node ): boolean =>
+		node.nodeType !== TEXT_NODE || ! isBlank( node.nodeValue ?? '' );
+	const original = originalNodes.filter( isContent );
+	const changed = changedNodes.filter( isContent );
 	const parts = diffArrays(
-		originalNodes.map( ( node ) => subtreeKey( node, state ) ),
-		changedNodes.map( ( node ) => subtreeKey( node, state ) )
+		original.map( ( node ) => subtreeKey( node, state ) ),
+		changed.map( ( node ) => subtreeKey( node, state ) )
 	);
-	const original = [ ...originalNodes ];
-	const changed = [ ...changedNodes ];
 	let removed: Node[] = [];
+
+	// Copies the incoming whitespace up to the given node, or to the end.
+	const incoming = changedNodes.values();
+	const copyWhitespace = ( node?: Node ): void => {
+		for (
+			let next = incoming.next();
+			next.done !== true && next.value !== node;
+			next = incoming.next()
+		) {
+			parent.appendChild( doc.importNode( next.value, true ) );
+		}
+	};
 
 	for ( const part of parts ) {
 		const size = part.value.length;
 
 		if ( part.removed === true ) {
-			appendRuns( removed, [], doc, parent, state );
+			appendRuns( removed, [], doc, parent, state, copyWhitespace );
 			removed = original.splice( 0, size );
 			continue;
 		}
@@ -503,20 +705,22 @@ function appendChildDiff(
 		const taken = changed.splice( 0, size );
 
 		if ( part.added === true ) {
-			appendRuns( removed, taken, doc, parent, state );
+			appendRuns( removed, taken, doc, parent, state, copyWhitespace );
 			removed = [];
 			continue;
 		}
 
-		appendRuns( removed, [], doc, parent, state );
+		appendRuns( removed, [], doc, parent, state, copyWhitespace );
 		removed = [];
 		original.splice( 0, size );
-		taken.forEach( ( node ) =>
-			parent.appendChild( doc.importNode( node, true ) )
-		);
+		taken.forEach( ( node ) => {
+			copyWhitespace( node );
+			parent.appendChild( doc.importNode( node, true ) );
+		} );
 	}
 
-	appendRuns( removed, [], doc, parent, state );
+	appendRuns( removed, [], doc, parent, state, copyWhitespace );
+	copyWhitespace();
 }
 
 /**
@@ -547,6 +751,7 @@ function highlightHtml( original: string, changed: string ): InlineDiff {
 		attrChanged: false,
 		shapes: new Map(),
 		keys: new WeakMap(),
+		words: new WeakMap(),
 	};
 
 	let html: string;
