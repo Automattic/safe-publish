@@ -128,9 +128,10 @@ function HeaderBar( {
 		: __( 'Update applied.', 'safe-publish' );
 	const ref = useRef< HTMLDivElement >( null );
 
-	// The bar sticks over the top of the modal's scroll area and grows as it
-	// wraps. Padding the area by the bar's height makes a backward focus move
-	// scroll its target below the bar, not behind it.
+	// The bar sticks below the top padding of the modal's scroll area and
+	// grows as it wraps. The stylesheet offsets the diff's scroll targets by
+	// the bar's bottom edge, so a backward focus move scrolls its target below
+	// the bar, not behind it.
 	useEffect( () => {
 		const bar = ref.current;
 		if ( bar === null ) {
@@ -145,7 +146,13 @@ function HeaderBar( {
 		}
 
 		const observer = new ResizeObserver( () => {
-			scroller.style.scrollPaddingTop = `${ bar.offsetHeight }px`;
+			const padding = parseFloat(
+				getComputedStyle( scroller ).paddingTop
+			);
+			scroller.style.setProperty(
+				'--safe-publish-compare-toolbar-bottom',
+				`${ padding + bar.offsetHeight }px`
+			);
 		} );
 		observer.observe( bar );
 		return () => observer.disconnect();

@@ -50,6 +50,11 @@ function paragraph( html: string ): string {
 	return `<!-- wp:paragraph -->\n<p>${ html }</p>\n<!-- /wp:paragraph -->`;
 }
 
+// A column of linked paragraphs, tall enough to scroll at the reflow width.
+const LINKS = Array.from( { length: 12 }, ( _, i ) =>
+	paragraph( `<a href="https://example.com/${ i }">Link ${ i }</a>` )
+).join( '\n\n' );
+
 /**
  * Imports a new source post, changes it on the source, and opens Compare for
  * it on the destination at the given width.
@@ -219,32 +224,71 @@ test.describe( 'Compare toolbar', () => {
 	} ) => {
 		// ARRANGE: Compare at the reflow width, where the sticky toolbar wraps
 		// onto several rows, over a column of links.
-		const links = Array.from( { length: 12 }, ( _, i ) =>
-			paragraph( `<a href="https://example.com/${ i }">Link ${ i }</a>` )
-		).join( '\n\n' );
-		await openCompare( admin, page, links, REFLOW_WIDTH );
+		await openCompare( admin, page, LINKS, REFLOW_WIDTH );
 		await page.getByRole( 'checkbox', { name: 'Show unchanged' } ).check();
+		const scroller = page.locator( '.components-modal__content' );
 		const toolbar = page.locator( '.safe-publish-compare-modal__toggles' );
 		const link = ( i: number ) =>
 			page.getByRole( 'link', { name: `Link ${ i }`, exact: true } );
 
-		// ACT: Move focus backward from the last link, which scrolls each
-		// earlier link in from above, and record the links the toolbar
-		// covers completely.
+		// ACT: Move focus backward from the last link, scrolling to the end
+		// of the diff first so that each earlier link scrolls in from above,
+		// and record the links that don't show in full between the toolbar
+		// and the bottom of the scroll area.
 		await link( 11 ).focus();
-		const hidden: string[] = [];
+		const obscured: string[] = [];
 		for ( let i = 10; i >= 0; i-- ) {
+			await scroller.evaluate( ( el ) =>
+				el.scrollTo( 0, el.scrollHeight )
+			);
 			await page.keyboard.press( 'Shift+Tab' );
 			await expect( link( i ) ).toBeFocused();
+			const area = ( await scroller.boundingBox() )!;
 			const bar = ( await toolbar.boundingBox() )!;
 			const box = ( await link( i ).boundingBox() )!;
-			if ( box.y >= bar.y && box.y + box.height <= bar.y + bar.height ) {
-				hidden.push( `Link ${ i }` );
+			const top = Math.max( area.y, bar.y + bar.height );
+			// Allow 1px of subpixel rounding at either edge.
+			if (
+				box.y < top - 1 ||
+				box.y + box.height > area.y + area.height + 1
+			) {
+				obscured.push( `Link ${ i }` );
 			}
 		}
 
-		// ASSERT: No focused link sits entirely behind the toolbar (WCAG 2.2
-		// SC 2.4.11, Focus Not Obscured).
-		expect( hidden ).toEqual( [] );
+		// ASSERT: Every focused link shows in full (WCAG 2.2 SC 2.4.12, Focus
+		// Not Obscured (Enhanced)).
+		expect( obscured ).toEqual( [] );
+	} );
+
+	test( 'should keep the diff still on Tab in the toolbar', async ( {
+		admin,
+		page,
+	} ) => {
+		// ARRANGE: Compare scrolled down the diff, with focus on the toolbar's
+		// first toggle.
+		await openCompare( admin, page, LINKS, REFLOW_WIDTH );
+		await page.getByRole( 'checkbox', { name: 'Show unchanged' } ).check();
+		const scroller = page.locator( '.components-modal__content' );
+		const scrollTop = () => scroller.evaluate( ( el ) => el.scrollTop );
+		await scroller.evaluate( ( el ) => el.scrollTo( 0, 600 ) );
+		await page
+			.getByRole( 'checkbox', { name: 'Show labels' } )
+			.evaluate( ( el: HTMLElement ) =>
+				el.focus( { preventScroll: true } )
+			);
+		const before = await scrollTop();
+
+		// ACT: Tab through the rest of the toolbar to Update.
+		await page.keyboard.press( 'Tab' );
+		await page.keyboard.press( 'Tab' );
+		await expect(
+			page.getByRole( 'button', { name: 'Update' } )
+		).toBeFocused();
+
+		// ASSERT: The diff was scrolled, and the toolbar's own controls
+		// didn't move it.
+		expect( before ).toBeGreaterThan( 0 );
+		expect( await scrollTop() ).toBe( before );
 	} );
 } );

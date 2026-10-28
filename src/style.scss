@@ -734,6 +734,13 @@ html:has(body.toplevel_page_safe-publish) {
 		}
 	}
 
+	// Offsets the diff's scroll targets by the sticky row's bottom edge, which
+	// PostDiffModal sets. A margin on the diff, unlike padding on the scroll
+	// area, leaves focus moves within the row itself alone.
+	.safe-publish-compare-modal__section * {
+		scroll-margin-top: var(--safe-publish-compare-toolbar-bottom, 0);
+	}
+
 }
 
 // Title links blue by default — every other cell is color-coded, so gray
