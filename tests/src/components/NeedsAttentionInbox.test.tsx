@@ -12,7 +12,11 @@ import type { InboxDegradation, NeedsAttentionRow } from '@/types';
 const dv = vi.hoisted( () => ( {
 	view: undefined as unknown,
 	onChangeView: undefined as ( ( next: unknown ) => void ) | undefined,
-	actions: [] as Array< { id: string; isPrimary?: boolean } >,
+	actions: [] as Array< {
+		id: string;
+		isPrimary?: boolean;
+		callback?: ( items: NeedsAttentionRow[] ) => void;
+	} >,
 } ) );
 
 const useViewportMatch = vi.hoisted( () => vi.fn( () => false ) );
@@ -140,6 +144,45 @@ function mockListResponse(
 		} )
 	);
 }
+
+/**
+ * Wraps a body in the response shape that fetch resolves to.
+ */
+const jsonResponse = ( body: unknown ) => ( {
+	json: () => Promise.resolve( body ),
+} );
+
+/**
+ * Builds an inbox endpoint response that lists FAILURE while count is nonzero.
+ */
+const listResponse = ( count: number ) =>
+	jsonResponse( {
+		success: true,
+		data: {
+			items: count > 0 ? [ FAILURE ] : [],
+			has_more: false,
+			needs_attention_count: count,
+		},
+	} );
+
+/**
+ * Reads the AJAX action from a fetch call's form data.
+ */
+const ajaxAction = ( init?: RequestInit ) =>
+	( init?.body as FormData ).get( 'action' );
+
+/**
+ * Runs the Ignore row action on FAILURE, failing fast if it is missing.
+ */
+const ignoreFailure = (): void => {
+	const callback = dv.actions.find(
+		( action ) => 'ignore-needs-attention' === action.id
+	)?.callback;
+	if ( undefined === callback ) {
+		throw new Error( 'The Ignore action is missing.' );
+	}
+	callback( [ FAILURE ] );
+};
 
 beforeEach( () => {
 	dv.actions = [];
@@ -531,6 +574,104 @@ describe( 'NeedsAttentionInbox', () => {
 			await screen.findByText( 'Broken import' )
 		).toBeInTheDocument();
 		expect( fetchMock ).toHaveBeenCalledTimes( 2 );
+	} );
+
+	it( 'Verifies that an action finishing after the tab hides updates the count', async () => {
+		// ARRANGE: Hold the Ignore request; the list counts the row until then.
+		let count = 1;
+		let finishIgnore = (): void => {};
+		vi.stubGlobal(
+			'fetch',
+			vi.fn( ( _url: string, init?: RequestInit ) =>
+				'safe_publish_set_needs_attention_ignored' === ajaxAction( init )
+					? new Promise( ( resolve ) => {
+							finishIgnore = () => {
+								count = 0;
+								resolve(
+									jsonResponse( {
+										success: true,
+										data: { updated: 1 },
+									} )
+								);
+							};
+					  } )
+					: Promise.resolve( listResponse( count ) )
+			)
+		);
+		const onCountChange = vi.fn();
+		const props = {
+			ajaxurl: 'https://example.com/wp-admin/admin-ajax.php',
+			nonce: 'test-nonce',
+			onCountChange,
+		};
+		const { rerender } = render(
+			<NeedsAttentionInbox { ...props } isActive />
+		);
+		await waitFor( () =>
+			expect( onCountChange ).toHaveBeenLastCalledWith( 1 )
+		);
+
+		// ACT: Ignore the row, leave the tab, then let the Ignore finish.
+		act( () => ignoreFailure() );
+		rerender( <NeedsAttentionInbox { ...props } isActive={ false } /> );
+		await act( async () => finishIgnore() );
+
+		// ASSERT: The hidden inbox ran the refresh and reported the new count.
+		await waitFor( () =>
+			expect( onCountChange ).toHaveBeenLastCalledWith( 0 )
+		);
+	} );
+
+	it( 'Verifies that hiding the tab lets a running refresh finish', async () => {
+		// ARRANGE: Ignore succeeds at once; hold the refresh it requests.
+		let ignored = false;
+		let finishRefresh = (): void => {};
+		const fetchMock = vi.fn( ( _url: string, init?: RequestInit ) => {
+			if (
+				'safe_publish_set_needs_attention_ignored' === ajaxAction( init )
+			) {
+				ignored = true;
+				return Promise.resolve(
+					jsonResponse( { success: true, data: { updated: 1 } } )
+				);
+			}
+			if ( ! ignored ) {
+				return Promise.resolve( listResponse( 1 ) );
+			}
+			return new Promise( ( resolve ) => {
+				finishRefresh = () => resolve( listResponse( 0 ) );
+			} );
+		} );
+		vi.stubGlobal( 'fetch', fetchMock );
+		const listRequests = (): number =>
+			fetchMock.mock.calls.filter(
+				( [ , init ] ) =>
+					'safe_publish_list_needs_attention' === ajaxAction( init )
+			).length;
+		const onCountChange = vi.fn();
+		const props = {
+			ajaxurl: 'https://example.com/wp-admin/admin-ajax.php',
+			nonce: 'test-nonce',
+			onCountChange,
+		};
+		const { rerender } = render(
+			<NeedsAttentionInbox { ...props } isActive />
+		);
+		await waitFor( () =>
+			expect( onCountChange ).toHaveBeenLastCalledWith( 1 )
+		);
+
+		// ACT: Ignore the row, leave the tab mid-refresh, then let it finish.
+		act( () => ignoreFailure() );
+		await waitFor( () => expect( listRequests() ).toBe( 2 ) );
+		rerender( <NeedsAttentionInbox { ...props } isActive={ false } /> );
+		await act( async () => finishRefresh() );
+
+		// ASSERT: The refresh reported the new count without being resent.
+		await waitFor( () =>
+			expect( onCountChange ).toHaveBeenLastCalledWith( 0 )
+		);
+		expect( listRequests() ).toBe( 2 );
 	} );
 
 	it( 'Verifies that toggling views clears the old rows before the refetch', async () => {
