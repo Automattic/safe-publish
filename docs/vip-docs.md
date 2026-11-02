@@ -100,7 +100,7 @@ The integration handles creating and setting the shared secret that secures the 
 
 ## Roles and permissions
 
-Safe Publish management screens, including browsing source content, importing, and rolling back, require `manage_safe_publish` by default. Existing users with `manage_options` retain access for backward compatibility. Safe Publish grants its capabilities to the Administrator role on each enabled site during activation or upgrade. On multisite, super administrators retain access through WordPress' normal capability handling.
+Safe Publish management screens, including browsing source content, importing, and rolling back, require `manage_safe_publish` by default. So does changing the `safe_publish_*` custom fields that track imported content. Existing users with `manage_options` retain access for backward compatibility. Safe Publish grants its capabilities to the Administrator role on each enabled site during activation or upgrade. On multisite, super administrators retain access through WordPress' normal capability handling.
 
 The narrower `view_safe_publish_audit_log` capability provides read-only Audit Log access. The resolved management capability implies Audit Log access, while an audit-only user cannot reach management screens or actions. If `safe_publish_manage_capability` returns another capability, that deliberately configured capability provides management and implied audit access instead; the default capabilities do not override it.
 
