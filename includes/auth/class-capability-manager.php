@@ -9,8 +9,11 @@ declare(strict_types=1);
 
 namespace Safe_Publish\Auth;
 
+use Safe_Publish\Utils\Options;
+
 /**
- * Installs Safe Publish capabilities and their implication rules.
+ * Installs Safe Publish capabilities, their implication rules, and the
+ * tracking meta guard.
  */
 final class Capability_Manager {
 
@@ -25,6 +28,19 @@ final class Capability_Manager {
 	private const VERSION_OPTION = 'safe_publish_capabilities_version';
 
 	/**
+	 * Post meta tracking imported content.
+	 */
+	private const TRACKING_META_KEYS = array(
+		Options::META_SOURCE_POST_ID,
+		Options::META_SOURCE_LINK,
+		Options::META_SOURCE_SITE_URL,
+		Options::META_IMPORTED_FROM,
+		Options::META_ORIGINAL_URL,
+		Options::META_FEATURED_MEDIA_ID,
+		Options::META_MEDIA_TYPE,
+	);
+
+	/**
 	 * Registers capability mapping and performs per-site upgrade migration.
 	 */
 	public static function init(): void {
@@ -34,7 +50,38 @@ final class Capability_Manager {
 			10,
 			2
 		);
+
+		foreach ( self::TRACKING_META_KEYS as $meta_key ) {
+			add_filter(
+				"auth_post_meta_{$meta_key}",
+				array( self::class, 'can_edit_tracking_meta' ),
+				10,
+				4
+			);
+		}
+
 		self::maybe_install();
+	}
+
+	/**
+	 * Restricts tracking meta edits to management-capability holders; imports
+	 * and the diff preview trust it.
+	 *
+	 * @param mixed      $allowed    Earlier filters' decision, of any type.
+	 * @param string     $_meta_key  Meta key.
+	 * @param int        $_object_id Post ID.
+	 * @param int|string $user_id    User ID; map_meta_cap does not enforce int.
+	 * @return mixed The given decision for managers, false otherwise.
+	 */
+	public static function can_edit_tracking_meta(
+		mixed $allowed,
+		string $_meta_key,
+		int $_object_id,
+		int|string $user_id
+	): mixed {
+		return user_can( (int) $user_id, Permissions::manage_capability() )
+			? $allowed
+			: false;
 	}
 
 	/**
