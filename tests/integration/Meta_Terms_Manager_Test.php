@@ -1306,4 +1306,130 @@ class Meta_Terms_Manager_Test extends Integration_Test_Case {
 			)
 		);
 	}
+
+	/**
+	 * Verifies that update_meta() skips the plugin's own tracking keys, so a
+	 * source value cannot repoint the identity an imported post is found by.
+	 */
+	public function test_update_meta_skips_the_plugin_namespace(): void {
+		// ARRANGE: The destination's own identity meta, and a payload sending
+		// a different value for it beside a migratable field.
+		update_post_meta( $this->post_id, Options::META_SOURCE_POST_ID, 4242 );
+		$meta = array(
+			Options::META_SOURCE_POST_ID => 1111,
+			'source_color'               => 'blue',
+		);
+
+		// ACT: Write the payload.
+		$result = $this->manager->update_meta( $this->post_id, $meta );
+
+		// ASSERT: The write succeeds, the migratable field lands, and the
+		// identity meta keeps the destination's value.
+		$this->assertTrue( $result );
+		$this->assertSame(
+			'blue',
+			get_post_meta( $this->post_id, 'source_color', true )
+		);
+		$this->assertSame(
+			4242,
+			(int) get_post_meta(
+				$this->post_id,
+				Options::META_SOURCE_POST_ID,
+				true
+			)
+		);
+	}
+
+	/**
+	 * Verifies that update_meta() skips a reserved core key instead of
+	 * failing, since a WP_Error from a meta write undoes the whole import.
+	 */
+	public function test_update_meta_skips_reserved_core_keys(): void {
+		// ARRANGE: A payload pairing a reserved core key with a custom one.
+		$meta = array(
+			'_edit_lock'   => '1700000000:1',
+			'source_color' => 'blue',
+		);
+
+		// ACT: Write the payload.
+		$result = $this->manager->update_meta( $this->post_id, $meta );
+
+		// ASSERT: The write succeeds, the custom key lands, and the reserved
+		// key was never stored.
+		$this->assertTrue( $result );
+		$this->assertSame(
+			'blue',
+			get_post_meta( $this->post_id, 'source_color', true )
+		);
+		$this->assertFalse(
+			metadata_exists( 'post', $this->post_id, '_edit_lock' )
+		);
+	}
+
+	/**
+	 * Verifies that safe_publish_import_allowed_meta_keys re-enables a
+	 * reserved core key, is handed the whole reserved list, and never opens
+	 * the plugin's own namespace.
+	 */
+	public function test_update_meta_honors_allowed_meta_keys_filter(): void {
+		// ARRANGE: A site that opts the featured image pointer back in, and a
+		// payload sending it together with a plugin tracking key.
+		$reserved = array();
+		$filter   = static function (
+			array $allowed,
+			array $reserved_keys
+		) use ( &$reserved ): array {
+			$reserved = $reserved_keys;
+
+			return array_merge( $allowed, array( '_thumbnail_id' ) );
+		};
+		add_filter( 'safe_publish_import_allowed_meta_keys', $filter, 10, 2 );
+
+		$meta = array(
+			'_thumbnail_id'              => 77,
+			Options::META_SOURCE_POST_ID => 1111,
+		);
+
+		// ACT: Write the payload with the filter in place.
+		$result = $this->manager->update_meta( $this->post_id, $meta );
+
+		remove_filter( 'safe_publish_import_allowed_meta_keys', $filter, 10 );
+
+		// ASSERT: The opted-in key is written, and the plugin's namespace
+		// stays refused.
+		$this->assertTrue( $result );
+		$this->assertSame(
+			77,
+			(int) get_post_meta( $this->post_id, '_thumbnail_id', true )
+		);
+		$this->assertFalse(
+			metadata_exists(
+				'post',
+				$this->post_id,
+				Options::META_SOURCE_POST_ID
+			)
+		);
+
+		// ASSERT: The filter is handed exactly the documented reserved list,
+		// so the class and the hooks documentation cannot drift apart.
+		$this->assertSame(
+			array(
+				'_edit_last',
+				'_edit_lock',
+				'_encloseme',
+				'_pingme',
+				'_thumbnail_id',
+				'_wp_attached_file',
+				'_wp_attachment_backup_sizes',
+				'_wp_attachment_metadata',
+				'_wp_desired_post_slug',
+				'_wp_old_date',
+				'_wp_old_slug',
+				'_wp_trash_meta_comments_status',
+				'_wp_trash_meta_status',
+				'_wp_trash_meta_time',
+			),
+			$reserved
+		);
+	}
 }
