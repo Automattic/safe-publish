@@ -72,7 +72,8 @@ final class Capability_Manager {
 			)
 			&& is_string( $meta_key )
 			&& ! user_can( (int) $user_id, Permissions::manage_capability() )
-			&& self::is_tracking_meta_key( $meta_key )
+			// Compare keys as stored: Callers may pass them slashed.
+			&& self::is_tracking_meta_key( (string) wp_unslash( $meta_key ) )
 		) {
 			$caps[] = 'do_not_allow';
 		}
