@@ -28,19 +28,6 @@ final class Capability_Manager {
 	private const VERSION_OPTION = 'safe_publish_capabilities_version';
 
 	/**
-	 * Post meta tracking imported content.
-	 */
-	private const TRACKING_META_KEYS = array(
-		Options::META_SOURCE_POST_ID,
-		Options::META_SOURCE_LINK,
-		Options::META_SOURCE_SITE_URL,
-		Options::META_IMPORTED_FROM,
-		Options::META_ORIGINAL_URL,
-		Options::META_FEATURED_MEDIA_ID,
-		Options::META_MEDIA_TYPE,
-	);
-
-	/**
 	 * Registers capability mapping and performs per-site upgrade migration.
 	 */
 	public static function init(): void {
@@ -51,7 +38,7 @@ final class Capability_Manager {
 			2
 		);
 
-		foreach ( self::TRACKING_META_KEYS as $meta_key ) {
+		foreach ( Options::TRACKING_META_KEYS as $meta_key ) {
 			add_filter(
 				"auth_post_meta_{$meta_key}",
 				array( self::class, 'can_edit_tracking_meta' ),
