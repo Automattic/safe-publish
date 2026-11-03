@@ -1320,6 +1320,138 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Returns source identity keys, as written and as lookups also match them.
+	 *
+	 * @return array<string, array{string, string}> Post ID and site URL keys.
+	 */
+	public static function source_identity_keys_provider(): array {
+		return array(
+			'exact'     => array(
+				Options::META_SOURCE_POST_ID,
+				Options::META_SOURCE_SITE_URL,
+			),
+			'uppercase' => array(
+				strtoupper( Options::META_SOURCE_POST_ID ),
+				strtoupper( Options::META_SOURCE_SITE_URL ),
+			),
+		);
+	}
+
+	/**
+	 * Verifies that diff-preview denies a contributor who tags their own post
+	 * with a source identity through Custom Fields.
+	 *
+	 * @dataProvider source_identity_keys_provider
+	 *
+	 * @param string $post_id_key  Source post ID key.
+	 * @param string $site_url_key Source site URL key.
+	 */
+	public function test_diff_preview_denies_source_identity_added_through_custom_fields(
+		string $post_id_key,
+		string $site_url_key
+	): void {
+		// ARRANGE: A contributor's own post; a stub records source fetches.
+		$contributor = $this->create_user_and_authenticate( 'contributor' );
+		$post_id     = $this->factory()->post->create(
+			array(
+				'post_author' => $contributor,
+				'post_status' => 'pending',
+			)
+		);
+		$identity    = array(
+			$post_id_key  => self::NON_EXISTENT_SOURCE_POST_ID,
+			$site_url_key => 'https://example.com',
+		);
+		$fetched     = array();
+
+		$stub = static function (
+			$_preempt,
+			$_args,
+			string $url
+		) use ( &$fetched ): array {
+			$fetched[] = $url;
+			return self::mock_diff_response( $url, array() );
+		};
+		add_filter( 'pre_http_request', $stub, 10, 3 );
+		/** @psalm-suppress MissingFile */
+		require_once ABSPATH . 'wp-admin/includes/post.php';
+
+		$request = new WP_REST_Request(
+			'POST',
+			'/safe-publish/v1/diff-preview'
+		);
+		$request->set_param( 'postId', self::NON_EXISTENT_SOURCE_POST_ID );
+		$request->set_param( 'postType', 'post' );
+
+		try {
+			// ACT: Add the identity via core's handler, then request a diff.
+			$added = array();
+			foreach ( $identity as $key => $value ) {
+				$_POST['metakeyinput'] = $key;
+				$_POST['metavalue']    = (string) $value;
+				$added[ $key ]         = add_meta( $post_id );
+			}
+			$response = $this->server->dispatch( $request );
+		} finally {
+			unset( $_POST['metakeyinput'], $_POST['metavalue'] );
+			remove_filter( 'pre_http_request', $stub );
+		}
+
+		// ASSERT: Both writes fail; the request is denied before any fetch.
+		$this->assertSame(
+			array_fill_keys( array_keys( $identity ), false ),
+			$added
+		);
+		$this->assert_403_response( $response );
+		$this->assertSame( array(), $fetched );
+	}
+
+	/**
+	 * Verifies that diff-preview lets a contributor compare their own imported
+	 * post.
+	 */
+	public function test_diff_preview_allows_contributor_to_compare_own_imported_post(): void {
+		// ARRANGE: The imported fixture belongs to a contributor.
+		$contributor = $this->factory()->user->create(
+			array( 'role' => 'contributor' )
+		);
+		wp_update_post(
+			array(
+				'ID'          => $this->post_id,
+				'post_author' => $contributor,
+			)
+		);
+		wp_set_current_user( $contributor );
+		$stub = static fn( $_preempt, $_args, string $url ) =>
+			self::mock_diff_response(
+				$url,
+				array(
+					'title'   => array( 'raw' => 'Source Title' ),
+					'content' => array( 'raw' => '<p>Source content.</p>' ),
+					'excerpt' => array( 'raw' => 'Source excerpt.' ),
+				)
+			);
+		add_filter( 'pre_http_request', $stub, 10, 3 );
+
+		$request = new WP_REST_Request(
+			'POST',
+			'/safe-publish/v1/diff-preview'
+		);
+		$request->set_param( 'postId', self::SOURCE_POST_ID );
+		$request->set_param( 'postType', 'post' );
+
+		try {
+			// ACT: Dispatch through the REST server.
+			$response = $this->server->dispatch( $request );
+		} finally {
+			remove_filter( 'pre_http_request', $stub );
+		}
+
+		// ASSERT: Import-written meta still grants access.
+		$this->assertSame( 200, $response->get_status() );
+	}
+
+	/**
 	 * Verifies that diff-preview resolves a private local post. Regression:
 	 * the source-ID lookup hard-coded draft/publish/pending and 404'd on any
 	 * other status. Asserting private alone is sufficient now that the

@@ -4,7 +4,7 @@ Safe Publish provides REST API endpoints for programmatic access. This guide exp
 
 ## Capability contract
 
-Admin screens, AJAX handlers, management operations, and future abilities must use `Safe_Publish\Auth\Permissions::manage_capability()` instead of a capability literal. The resolver defaults to `manage_safe_publish`. The `safe_publish_manage_capability` filter can replace the resolved capability; see [Roles and permissions](../vip-docs.md#roles-and-permissions) for the compatibility contract.
+Admin screens, AJAX handlers, management operations, and future abilities must use `Safe_Publish\Auth\Permissions::manage_capability()` instead of a capability literal. The resolver defaults to `manage_safe_publish`. The resolved capability also gates edits to the `safe_publish_*` custom fields that track imported content. The `safe_publish_manage_capability` filter can replace the resolved capability; see [Roles and permissions](../vip-docs.md#roles-and-permissions) for the compatibility contract.
 
 The separate `view_safe_publish_audit_log` capability grants read-only access to the Audit Log. Management access implies Audit Log access, but the audit capability does not grant management access.
 

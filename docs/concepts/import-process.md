@@ -126,6 +126,7 @@ Post content and excerpts pass through WordPress' normal save filters for the ac
   - **Terms**: tags and categories are transferred. If they don't exist, they are created. Custom taxonomies that appear in a REST request are transferred if they exist. See below for more details.
 - Additional Post meta stored:
   - `safe_publish_source_post_id` — post ID on the source site
+  - `safe_publish_source_site_url` — source site the post was imported from
   - `safe_publish_source_link` — URL of the source post
   - `safe_publish_imported_from` — plugin identifier (`safe-publish`)
 
