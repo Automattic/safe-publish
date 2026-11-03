@@ -398,6 +398,11 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 		// ASSERT: Verify current data extracted from local post.
 		$this->assertSame( 'Original Title', $result['current']['title'] );
 		$this->assertSame( 'Original excerpt.', $result['current']['excerpt'] );
+		$this->assertArrayNotHasKey(
+			'meta',
+			$result['current'],
+			'The local post meta should not be carried.'
+		);
 
 		// ASSERT: Verify non-content diff keys exist.
 		$this->assertIsArray( $result['nonContentDiffs'] );
@@ -430,6 +435,84 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 			$result['nonContentDiffs']['taxonomies'],
 			'Embedded source terms should appear in the taxonomies diff.'
 		);
+	}
+
+	/**
+	 * Returns non-manager roles that can compare the fixture.
+	 *
+	 * @return array<string, array{string, bool}> Role, and whether it authors the fixture.
+	 */
+	public static function non_manager_compare_provider(): array {
+		return array(
+			'editor'             => array( 'editor', false ),
+			'contributor author' => array( 'contributor', true ),
+		);
+	}
+
+	/**
+	 * Verifies that diff-preview hides the local post's protected meta from a
+	 * non-manager who can edit the post.
+	 *
+	 * @dataProvider non_manager_compare_provider
+	 *
+	 * @param string $role    Role of the requesting user.
+	 * @param bool   $authors Whether the user authors the fixture.
+	 */
+	public function test_diff_preview_hides_protected_meta_from_non_managers(
+		string $role,
+		bool $authors
+	): void {
+		// ARRANGE: The fixture's protected meta; a non-manager who can edit it.
+		$protected = array(
+			Options::META_SOURCE_AUTHOR_EMAIL => 'source-author@example.com',
+			'_third_party_key'                => 'third-party-value',
+		);
+		foreach ( $protected as $key => $value ) {
+			update_post_meta( $this->post_id, $key, $value );
+		}
+
+		$user_id = $this->factory()->user->create( array( 'role' => $role ) );
+		if ( $authors ) {
+			wp_update_post(
+				array(
+					'ID'          => $this->post_id,
+					'post_author' => $user_id,
+				)
+			);
+		}
+		wp_set_current_user( $user_id );
+
+		$stub = static fn( $_preempt, $_args, string $url ) =>
+			self::mock_diff_response(
+				$url,
+				array(
+					'title'   => array( 'raw' => 'Source Title' ),
+					'content' => array( 'raw' => '<p>Source content.</p>' ),
+					'excerpt' => array( 'raw' => 'Source excerpt.' ),
+				)
+			);
+		add_filter( 'pre_http_request', $stub, 10, 3 );
+
+		$request = new WP_REST_Request(
+			'POST',
+			'/safe-publish/v1/diff-preview'
+		);
+		$request->set_param( 'postId', self::SOURCE_POST_ID );
+		$request->set_param( 'postType', 'post' );
+
+		try {
+			// ACT: Dispatch through the REST server.
+			$response = $this->server->dispatch( $request );
+		} finally {
+			remove_filter( 'pre_http_request', $stub );
+		}
+
+		// ASSERT: The diff renders, and no protected value reaches it.
+		$this->assertSame( 200, $response->get_status() );
+		$body = (string) wp_json_encode( $response->get_data() );
+		foreach ( $protected as $value ) {
+			$this->assertStringNotContainsString( $value, $body );
+		}
 	}
 
 	/**

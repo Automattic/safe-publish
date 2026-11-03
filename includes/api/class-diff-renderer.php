@@ -179,7 +179,6 @@ final class Diff_Renderer {
 			'current'         => array(
 				'title'   => $current['title'] ?? null,
 				'excerpt' => $current['excerpt'] ?? null,
-				'meta'    => $current['meta'] ?? null,
 				'terms'   => $current['terms'] ?? null,
 			),
 		);
