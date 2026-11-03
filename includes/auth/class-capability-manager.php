@@ -37,38 +37,44 @@ final class Capability_Manager {
 			10,
 			2
 		);
-
-		foreach ( Options::TRACKING_META_KEYS as $meta_key ) {
-			add_filter(
-				"auth_post_meta_{$meta_key}",
-				array( self::class, 'can_edit_tracking_meta' ),
-				10,
-				4
-			);
-		}
-
+		add_filter(
+			'map_meta_cap',
+			array( self::class, 'map_tracking_meta_capabilities' ),
+			10,
+			4
+		);
 		self::maybe_install();
 	}
 
 	/**
-	 * Restricts tracking meta edits to management-capability holders; imports
-	 * and the diff preview trust it.
+	 * Restricts tracking meta edits to management-capability holders, whatever
+	 * the auth_post_meta filters allow; imports and the diff preview trust it.
 	 *
-	 * @param mixed      $allowed    Earlier filters' decision, of any type.
-	 * @param string     $_meta_key  Meta key.
-	 * @param int        $_object_id Post ID.
-	 * @param int|string $user_id    User ID; map_meta_cap does not enforce int.
-	 * @return mixed The given decision for managers, false otherwise.
+	 * @param string[]   $caps    Primitive capabilities the check requires.
+	 * @param string     $cap     Capability being checked.
+	 * @param int|string $user_id User ID; map_meta_cap does not enforce int.
+	 * @param array      $args    Post ID and meta key.
+	 * @return string[] The given capabilities, plus do_not_allow when denied.
 	 */
-	public static function can_edit_tracking_meta(
-		mixed $allowed,
-		string $_meta_key,
-		int $_object_id,
-		int|string $user_id
-	): mixed {
-		return user_can( (int) $user_id, Permissions::manage_capability() )
-			? $allowed
-			: false;
+	public static function map_tracking_meta_capabilities(
+		array $caps,
+		string $cap,
+		int|string $user_id,
+		array $args
+	): array {
+		if (
+			in_array(
+				$cap,
+				array( 'add_post_meta', 'edit_post_meta', 'delete_post_meta' ),
+				true
+			)
+			&& in_array( $args[1] ?? null, Options::TRACKING_META_KEYS, true )
+			&& ! user_can( (int) $user_id, Permissions::manage_capability() )
+		) {
+			$caps[] = 'do_not_allow';
+		}
+
+		return $caps;
 	}
 
 	/**
