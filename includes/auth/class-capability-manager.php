@@ -81,8 +81,8 @@ final class Capability_Manager {
 	}
 
 	/**
-	 * Checks whether a meta key equals a tracking key under the database
-	 * collation, which lookups compare keys with.
+	 * Checks whether a meta key equals a tracking key under the meta_key
+	 * column's collation, which lookups compare keys with.
 	 *
 	 * @param string $meta_key Meta key.
 	 * @return bool Whether lookups read the key as a tracking key.
@@ -90,30 +90,60 @@ final class Capability_Manager {
 	private static function is_tracking_meta_key( string $meta_key ): bool {
 		global $wpdb;
 
-		// The collation compares printable ASCII case-insensitively, ignoring
-		// trailing spaces.
-		if ( 1 !== preg_match( '/[^\x20-\x7E]/', $meta_key ) ) {
-			return in_array(
-				strtolower( rtrim( $meta_key, ' ' ) ),
-				Options::TRACKING_META_KEYS,
-				true
-			);
+		if ( in_array( $meta_key, Options::TRACKING_META_KEYS, true ) ) {
+			return true;
 		}
 
 		$keys         = Options::TRACKING_META_KEYS;
 		$placeholders = implode( ', ', array_fill( 0, count( $keys ), '%s' ) );
+		$key          = self::meta_key_placeholder( $wpdb->postmeta );
 
-		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 		$match = $wpdb->get_var(
 			$wpdb->prepare(
-				"SELECT %s IN ($placeholders)",
+				"SELECT {$key} IN ($placeholders)",
 				$meta_key,
 				...$keys
 			)
 		);
-		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 
-		return '1' === $match;
+		// A failed query counts as a match, denying the edit.
+		return '0' !== $match;
+	}
+
+	/**
+	 * Returns a key placeholder compared under a postmeta table's meta_key
+	 * collation, or under the connection's when that can't be read.
+	 *
+	 * @param string $table Postmeta table name.
+	 * @return string SQL holding one %s placeholder.
+	 */
+	private static function meta_key_placeholder( string $table ): string {
+		global $wpdb;
+		static $placeholders = array();
+
+		if ( isset( $placeholders[ $table ] ) ) {
+			return $placeholders[ $table ];
+		}
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$column    = $wpdb->get_row(
+			$wpdb->prepare(
+				'SHOW FULL COLUMNS FROM %i WHERE Field = %s',
+				$table,
+				'meta_key'
+			),
+			ARRAY_A
+		);
+		$collation = (string) ( $column['Collation'] ?? '' );
+		$valid     = preg_match( '/^([a-z0-9]+)_\w+$/', $collation, $match );
+
+		$placeholders[ $table ] = 1 === $valid
+			? "CONVERT( %s USING {$match[1]} ) COLLATE {$collation}"
+			: '%s';
+
+		return $placeholders[ $table ];
 	}
 
 	/**

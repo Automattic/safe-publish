@@ -127,9 +127,10 @@ class Capability_Manager_Test extends WP_UnitTestCase {
 		$tail = substr( $key, 1 );
 
 		return array(
-			'uppercase'        => array( strtoupper( $key ), true, 0 ),
-			'trailing space'   => array( "{$key} ", true, 0 ),
-			'leading space'    => array( " {$key}", false, 0 ),
+			'exact'            => array( $key, true, 0 ),
+			'uppercase'        => array( strtoupper( $key ), true, 1 ),
+			'trailing space'   => array( "{$key} ", true, 1 ),
+			'leading space'    => array( " {$key}", false, 1 ),
 			'accented'         => array( "\u{15B}{$tail}", true, 1 ),
 			'fullwidth'        => array( "\u{FF53}{$tail}", true, 1 ),
 			'zero-width space' => array( "\u{200B}{$key}", true, 1 ),
@@ -139,7 +140,7 @@ class Capability_Manager_Test extends WP_UnitTestCase {
 
 	/**
 	 * Verifies that the guard denies exactly the key variants lookups match,
-	 * querying the database only for non-ASCII keys.
+	 * querying the database once for each inexact key.
 	 *
 	 * @dataProvider tracking_meta_key_variant_provider
 	 *
@@ -196,6 +197,176 @@ class Capability_Manager_Test extends WP_UnitTestCase {
 				'queries' => $wpdb->num_queries - $before,
 			)
 		);
+	}
+
+	/**
+	 * Returns meta_key column collations, a source post ID key variant, and
+	 * whether lookups on that column match it.
+	 *
+	 * @return array<string, array{string, string, bool}> Collation, key, and match.
+	 */
+	public static function meta_key_collation_provider(): array {
+		$key  = Options::META_SOURCE_POST_ID;
+		$tail = substr( $key, 1 );
+
+		return array(
+			'unicode_ci ignoring U+180E'   => array(
+				'utf8mb4_unicode_ci',
+				str_replace( '_source', "\u{180E}_source", $key ),
+				true,
+			),
+			'general_ci folding sharp s'   => array(
+				'utf8mb4_general_ci',
+				"\u{DF}{$tail}",
+				true,
+			),
+			'general_ci keeping fullwidth' => array(
+				'utf8mb4_general_ci',
+				"\u{FF53}{$tail}",
+				false,
+			),
+			'latin1 folding accents'       => array(
+				'latin1_swedish_ci',
+				str_replace( 'source', "sourc\u{E9}", $key ),
+				true,
+			),
+			'latin1 keeping u-umlaut'      => array(
+				'latin1_swedish_ci',
+				str_replace( 'source', "so\u{FC}rce", $key ),
+				false,
+			),
+		);
+	}
+
+	/**
+	 * Verifies that the guard matches keys under the meta_key column's
+	 * collation when it differs from the connection's.
+	 *
+	 * @dataProvider meta_key_collation_provider
+	 *
+	 * @param string $collation Collation of the meta_key column.
+	 * @param string $meta_key  Variant of the source post ID key.
+	 * @param bool   $matched   Whether lookups match it.
+	 */
+	public function test_tracking_meta_guard_follows_meta_key_collation(
+		string $collation,
+		string $meta_key,
+		bool $matched
+	): void {
+		global $wpdb;
+
+		// ARRANGE: A contributor's own post claiming a source post under the
+		// key, in a postmeta table using the collation.
+		$contributor = self::factory()->user->create(
+			array( 'role' => 'contributor' )
+		);
+		$post_id     = self::factory()->post->create(
+			array(
+				'post_author' => $contributor,
+				'post_status' => 'pending',
+			)
+		);
+		$postmeta    = $wpdb->postmeta;
+		$table       = "{$postmeta}_{$collation}";
+		$charset     = strstr( $collation, '_', true );
+
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.DirectDatabaseQuery.SchemaChange
+		$wpdb->query(
+			"CREATE TEMPORARY TABLE `{$table}` (
+				meta_id bigint(20) unsigned NOT NULL auto_increment,
+				post_id bigint(20) unsigned NOT NULL default '0',
+				meta_key varchar(255) default NULL,
+				meta_value longtext,
+				PRIMARY KEY (meta_id),
+				KEY post_id (post_id),
+				KEY meta_key (meta_key(191))
+			) DEFAULT CHARSET={$charset} COLLATE={$collation}"
+		);
+		$wpdb->postmeta = $table;
+
+		try {
+			add_post_meta( $post_id, $meta_key, '555' );
+			add_post_meta(
+				$post_id,
+				Options::META_SOURCE_SITE_URL,
+				'https://example.com'
+			);
+
+			// ACT: Look the claim up and check the key.
+			$found   = Source_Identity_Lookup::find(
+				555,
+				'https://example.com'
+			);
+			$allowed = user_can(
+				$contributor,
+				'edit_post_meta',
+				$post_id,
+				$meta_key
+			);
+		} finally {
+			$wpdb->postmeta = $postmeta;
+			$wpdb->query( "DROP TEMPORARY TABLE `{$table}`" );
+		}
+		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.DirectDatabaseQuery.SchemaChange
+
+		// ASSERT: The guard denies the keys lookups match.
+		$this->assertSame(
+			array(
+				'matched' => $matched,
+				'denied'  => $matched,
+			),
+			array(
+				'matched' => array() !== $found,
+				'denied'  => ! $allowed,
+			)
+		);
+	}
+
+	/**
+	 * Verifies that the guard denies an inexact key when its query fails.
+	 */
+	public function test_tracking_meta_guard_denies_when_key_query_fails(): void {
+		global $wpdb;
+
+		// ARRANGE: A contributor's own post, allowed an unrelated key.
+		$contributor = self::factory()->user->create(
+			array( 'role' => 'contributor' )
+		);
+		$post_id     = self::factory()->post->create(
+			array(
+				'post_author' => $contributor,
+				'post_status' => 'pending',
+			)
+		);
+		$before      = user_can(
+			$contributor,
+			'edit_post_meta',
+			$post_id,
+			'other_key'
+		);
+		$break       = static fn( string $query ): string =>
+			str_contains( $query, Options::META_MEDIA_TYPE )
+				? 'SELECT FROM'
+				: $query;
+		$suppressed  = $wpdb->suppress_errors();
+
+		try {
+			// ACT: Check the key while the guard's query fails.
+			add_filter( 'query', $break );
+			$after = user_can(
+				$contributor,
+				'edit_post_meta',
+				$post_id,
+				'other_key'
+			);
+		} finally {
+			remove_filter( 'query', $break );
+			$wpdb->suppress_errors( $suppressed );
+		}
+
+		// ASSERT: The failure denies the edit.
+		$this->assertTrue( $before );
+		$this->assertFalse( $after );
 	}
 
 	/**
