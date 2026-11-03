@@ -516,6 +516,125 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Returns roles and whether the meta diff should list each meta value.
+	 *
+	 * @return array<string, array{string, array<string, bool>}> Role, and whether each is listed.
+	 */
+	public static function meta_diff_visibility_provider(): array {
+		return array(
+			'editor'        => array(
+				'editor',
+				array(
+					'plainlocal'     => true,
+					'numericlocal'   => true,
+					'filteredlocal'  => false,
+					'protectedlocal' => false,
+					'internallocal'  => false,
+					'gatedlocal'     => false,
+					'plainincoming'  => true,
+					'gatedincoming'  => false,
+				),
+			),
+			'administrator' => array(
+				'administrator',
+				array(
+					'plainlocal'     => true,
+					'numericlocal'   => true,
+					'filteredlocal'  => true,
+					'protectedlocal' => false,
+					'internallocal'  => false,
+					'gatedlocal'     => true,
+					'plainincoming'  => true,
+					'gatedincoming'  => true,
+				),
+			),
+		);
+	}
+
+	/**
+	 * Verifies that the meta diff limits non-managers to the keys the Custom
+	 * Fields panel shows them, while managers also see keys it hides.
+	 *
+	 * @dataProvider meta_diff_visibility_provider
+	 *
+	 * @param string              $role     Role of the requesting user.
+	 * @param array<string, bool> $expected Whether each meta value is listed.
+	 */
+	public function test_meta_diff_limits_non_managers_to_custom_fields_keys(
+		string $role,
+		array $expected
+	): void {
+		// ARRANGE: Plain, numeric, protected, plugin, and auth-gated keys.
+		$local = array(
+			'plain_key'                 => 'plainlocal',
+			'2024'                      => 'numericlocal',
+			'filtered_key'              => 'filteredlocal',
+			'_protected_key'            => 'protectedlocal',
+			'safe_publish_internal_key' => 'internallocal',
+			'gated_key'                 => 'gatedlocal',
+		);
+		foreach ( $local as $key => $value ) {
+			update_post_meta( $this->post_id, (string) $key, $value );
+		}
+		add_filter(
+			'is_protected_meta',
+			static fn( bool $is_protected, string $key ): bool =>
+				'filtered_key' === $key || $is_protected,
+			10,
+			2
+		);
+		// Allowed by capability, so only its protection can hide it.
+		add_filter( 'auth_post_meta_filtered_key_for_post', '__return_true' );
+		add_filter(
+			'auth_post_meta_gated_key_for_post',
+			static fn(): bool => current_user_can( 'manage_options' ),
+			10,
+			0
+		);
+		wp_set_current_user(
+			$this->factory()->user->create( array( 'role' => $role ) )
+		);
+
+		$stub = static fn( $_preempt, $_args, string $url ) =>
+			self::mock_diff_response(
+				$url,
+				array(
+					'title'   => array( 'raw' => 'Source Title' ),
+					'content' => array( 'raw' => '<p>Source content.</p>' ),
+					'excerpt' => array( 'raw' => 'Source excerpt.' ),
+					'meta'    => array(
+						'incoming_key' => 'plainincoming',
+						'gated_key'    => 'gatedincoming',
+					),
+				)
+			);
+		add_filter( 'pre_http_request', $stub, 10, 3 );
+
+		$request = new WP_REST_Request(
+			'POST',
+			'/safe-publish/v1/diff-preview'
+		);
+		$request->set_param( 'postId', self::SOURCE_POST_ID );
+		$request->set_param( 'postType', 'post' );
+
+		try {
+			// ACT: Dispatch through the REST server.
+			$response = $this->server->dispatch( $request );
+		} finally {
+			remove_filter( 'pre_http_request', $stub );
+		}
+
+		// ASSERT: The diff renders and lists exactly the expected values.
+		$this->assertSame( 200, $response->get_status() );
+		$meta_diff = $response->get_data()['nonContentDiffs']['meta'];
+		$listed    = array();
+		foreach ( array_keys( $expected ) as $value ) {
+			$listed[ $value ] = str_contains( $meta_diff, $value );
+		}
+		$this->assertSame( $expected, $listed );
+	}
+
+	/**
 	 * Verifies that title, excerpt, and meta use contextual column headers.
 	 */
 	public function test_non_content_diffs_use_contextual_column_headers(): void {
