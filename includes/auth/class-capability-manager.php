@@ -28,6 +28,23 @@ final class Capability_Manager {
 	private const VERSION_OPTION = 'safe_publish_capabilities_version';
 
 	/**
+	 * Collations under which equal printable ASCII keys differ at most in case
+	 * and trailing spaces.
+	 */
+	private const CASE_INSENSITIVE_ASCII_COLLATIONS = array(
+		'utf8mb4_unicode_520_ci',
+		'utf8mb4_unicode_ci',
+		'utf8mb4_general_ci',
+		'utf8mb4_0900_ai_ci',
+		'utf8mb4_uca1400_ai_ci',
+		'utf8mb3_unicode_ci',
+		'utf8mb3_general_ci',
+		'utf8_unicode_ci',
+		'utf8_general_ci',
+		'latin1_swedish_ci',
+	);
+
+	/**
 	 * Registers capability mapping and performs per-site upgrade migration.
 	 */
 	public static function init(): void {
@@ -83,21 +100,41 @@ final class Capability_Manager {
 
 	/**
 	 * Checks whether a meta key equals a tracking key under the meta_key
-	 * column's collation, which lookups compare keys with.
+	 * column's collation, which lookups compare keys with. The database checks
+	 * keys PHP can't compare, once per request and table.
 	 *
 	 * @param string $meta_key Meta key.
 	 * @return bool Whether lookups read the key as a tracking key.
 	 */
 	private static function is_tracking_meta_key( string $meta_key ): bool {
 		global $wpdb;
+		static $matches = array();
 
-		if ( in_array( $meta_key, Options::TRACKING_META_KEYS, true ) ) {
-			return true;
+		$table     = $wpdb->postmeta;
+		$collation = self::meta_key_collation( $table );
+
+		if (
+			in_array(
+				$collation,
+				self::CASE_INSENSITIVE_ASCII_COLLATIONS,
+				true
+			)
+			&& 0 === preg_match( '/[^\x20-\x7E]/', $meta_key )
+		) {
+			return in_array(
+				strtolower( rtrim( $meta_key, ' ' ) ),
+				Options::TRACKING_META_KEYS,
+				true
+			);
+		}
+
+		if ( isset( $matches[ $table ][ $meta_key ] ) ) {
+			return $matches[ $table ][ $meta_key ];
 		}
 
 		$keys         = Options::TRACKING_META_KEYS;
 		$placeholders = implode( ', ', array_fill( 0, count( $keys ), '%s' ) );
-		$key          = self::meta_key_placeholder( $wpdb->postmeta );
+		$key          = self::meta_key_placeholder( $collation );
 
 		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 		$match = $wpdb->get_var(
@@ -110,41 +147,50 @@ final class Capability_Manager {
 		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 
 		// A failed query counts as a match, denying the edit.
-		return '0' !== $match;
+		$matches[ $table ][ $meta_key ] = '0' !== $match;
+
+		return $matches[ $table ][ $meta_key ];
 	}
 
 	/**
-	 * Returns a key placeholder compared under a postmeta table's meta_key
-	 * collation, or under the connection's when that can't be read.
+	 * Returns a postmeta table's meta_key collation, or an empty string when
+	 * it can't be read.
 	 *
 	 * @param string $table Postmeta table name.
-	 * @return string SQL holding one %s placeholder.
+	 * @return string Collation name.
 	 */
-	private static function meta_key_placeholder( string $table ): string {
+	private static function meta_key_collation( string $table ): string {
 		global $wpdb;
-		static $placeholders = array();
+		static $collations = array();
 
-		if ( isset( $placeholders[ $table ] ) ) {
-			return $placeholders[ $table ];
+		if ( ! isset( $collations[ $table ] ) ) {
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+			$column = $wpdb->get_row(
+				$wpdb->prepare(
+					'SHOW FULL COLUMNS FROM %i WHERE Field = %s',
+					$table,
+					'meta_key'
+				),
+				ARRAY_A
+			);
+
+			$collations[ $table ] = (string) ( $column['Collation'] ?? '' );
 		}
 
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
-		$column    = $wpdb->get_row(
-			$wpdb->prepare(
-				'SHOW FULL COLUMNS FROM %i WHERE Field = %s',
-				$table,
-				'meta_key'
-			),
-			ARRAY_A
-		);
-		$collation = (string) ( $column['Collation'] ?? '' );
-		$valid     = preg_match( '/^([a-z0-9]+)_\w+$/', $collation, $match );
+		return $collations[ $table ];
+	}
 
-		$placeholders[ $table ] = 1 === $valid
+	/**
+	 * Returns a key placeholder compared under a meta_key collation, or under
+	 * the connection's when the collation name is invalid.
+	 *
+	 * @param string $collation Collation name.
+	 * @return string SQL holding one %s placeholder.
+	 */
+	private static function meta_key_placeholder( string $collation ): string {
+		return 1 === preg_match( '/^([a-z0-9]+)_\w+$/', $collation, $match )
 			? "CONVERT( %s USING {$match[1]} ) COLLATE {$collation}"
 			: '%s';
-
-		return $placeholders[ $table ];
 	}
 
 	/**

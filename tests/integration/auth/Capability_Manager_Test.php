@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace Safe_Publish\Tests\Integration\Auth;
 
+use ReflectionClass;
 use Safe_Publish\Utils\Options;
 use Safe_Publish\Utils\Source_Identity_Lookup;
 use WP_UnitTestCase;
@@ -118,7 +119,7 @@ class Capability_Manager_Test extends WP_UnitTestCase {
 
 	/**
 	 * Returns source post ID key variants, whether lookups match them, and the
-	 * queries the guard runs.
+	 * queries two guard checks run.
 	 *
 	 * @return array<string, array{string, bool, int}> Key, match, and queries.
 	 */
@@ -127,26 +128,31 @@ class Capability_Manager_Test extends WP_UnitTestCase {
 		$tail = substr( $key, 1 );
 
 		return array(
-			'exact'            => array( $key, true, 0 ),
-			'uppercase'        => array( strtoupper( $key ), true, 1 ),
-			'trailing space'   => array( "{$key} ", true, 1 ),
-			'leading space'    => array( " {$key}", false, 1 ),
-			'accented'         => array( "\u{15B}{$tail}", true, 1 ),
-			'fullwidth'        => array( "\u{FF53}{$tail}", true, 1 ),
-			'zero-width space' => array( "\u{200B}{$key}", true, 1 ),
-			'homoglyph'        => array( "\u{455}{$tail}", false, 1 ),
+			'exact'             => array( $key, true, 0 ),
+			'uppercase'         => array( strtoupper( $key ), true, 0 ),
+			'trailing space'    => array( "{$key} ", true, 0 ),
+			'leading space'     => array( " {$key}", false, 0 ),
+			'control character' => array(
+				str_replace( '_source', "\x01_source", $key ),
+				true,
+				1,
+			),
+			'accented'          => array( "\u{15B}{$tail}", true, 1 ),
+			'fullwidth'         => array( "\u{FF53}{$tail}", true, 1 ),
+			'zero-width space'  => array( "\u{200B}{$key}", true, 1 ),
+			'homoglyph'         => array( "\u{455}{$tail}", false, 1 ),
 		);
 	}
 
 	/**
 	 * Verifies that the guard denies exactly the key variants lookups match,
-	 * querying the database once for each inexact key.
+	 * querying the database once for each key PHP can't compare.
 	 *
 	 * @dataProvider tracking_meta_key_variant_provider
 	 *
 	 * @param string $meta_key Variant of the source post ID key.
 	 * @param bool   $matched  Whether lookups match it.
-	 * @param int    $queries  Queries the guard runs for it.
+	 * @param int    $queries  Queries two guard checks run for it.
 	 */
 	public function test_tracking_meta_guard_matches_keys_like_lookups(
 		string $meta_key,
@@ -156,7 +162,7 @@ class Capability_Manager_Test extends WP_UnitTestCase {
 		global $wpdb;
 
 		// ARRANGE: A contributor's own post claiming a source post under the
-		// variant key; one check warms the caches.
+		// variant key; checking another key warms the caches.
 		$contributor = self::factory()->user->create(
 			array( 'role' => 'contributor' )
 		);
@@ -172,31 +178,78 @@ class Capability_Manager_Test extends WP_UnitTestCase {
 			Options::META_SOURCE_SITE_URL,
 			'https://example.com'
 		);
-		user_can( $contributor, 'edit_post_meta', $post_id, $meta_key );
+		user_can( $contributor, 'edit_post_meta', $post_id, 'other_key' );
 
-		// ACT: Look the claim up, then check the key again.
+		// ACT: Look the claim up, then check the key twice.
 		$found   = Source_Identity_Lookup::find( 555, 'https://example.com' );
 		$before  = $wpdb->num_queries;
-		$allowed = user_can(
-			$contributor,
-			'edit_post_meta',
-			$post_id,
-			$meta_key
+		$allowed = array(
+			user_can( $contributor, 'edit_post_meta', $post_id, $meta_key ),
+			user_can( $contributor, 'edit_post_meta', $post_id, $meta_key ),
 		);
 
-		// ASSERT: The guard denies the keys lookups match.
+		// ASSERT: The guard denies the keys lookups match, both times.
 		$this->assertSame(
 			array(
 				'matched' => $matched,
-				'denied'  => $matched,
+				'denied'  => array( $matched, $matched ),
 				'queries' => $queries,
 			),
 			array(
 				'matched' => array() !== $found,
-				'denied'  => ! $allowed,
+				'denied'  => array( ! $allowed[0], ! $allowed[1] ),
 				'queries' => $wpdb->num_queries - $before,
 			)
 		);
+	}
+
+	/**
+	 * Verifies that tracking keys are lowercase printable ASCII, which the
+	 * guard's case-insensitive comparison in PHP requires.
+	 */
+	public function test_tracking_meta_keys_are_lowercase_printable_ascii(): void {
+		// ACT & ASSERT: Lowercasing changes no key, and none holds other bytes.
+		$this->assertSame(
+			array_map( 'strtolower', Options::TRACKING_META_KEYS ),
+			Options::TRACKING_META_KEYS
+		);
+		$this->assertSame(
+			array(),
+			preg_grep( '/[^\x20-\x7E]/', Options::TRACKING_META_KEYS )
+		);
+	}
+
+	/**
+	 * Verifies that the tracking keys are exactly the unprotected post meta
+	 * keys Options defines, so a new key can't skip the guard.
+	 */
+	public function test_tracking_keys_cover_unprotected_meta_keys(): void {
+		// ARRANGE: Options' unprotected meta keys, minus term meta keys and
+		// the imported-from value.
+		$excluded  = array(
+			'META_SOURCE_TERM_ID',
+			'META_SOURCE_TERM_URL',
+			'META_TERM_ORIGIN_URL',
+			'META_IMPORTED_FROM_VALUE',
+		);
+		$keys      = array();
+		$constants = ( new ReflectionClass( Options::class ) )->getConstants();
+		foreach ( $constants as $name => $value ) {
+			if (
+				str_starts_with( $name, 'META_' )
+				&& ! in_array( $name, $excluded, true )
+				&& is_string( $value )
+				&& ! is_protected_meta( $value, 'post' )
+			) {
+				$keys[] = $value;
+			}
+		}
+		$tracking = Options::TRACKING_META_KEYS;
+		sort( $keys );
+		sort( $tracking );
+
+		// ACT & ASSERT: The tracking keys match them.
+		$this->assertSame( $keys, $tracking );
 	}
 
 	/**
@@ -222,7 +275,7 @@ class Capability_Manager_Test extends WP_UnitTestCase {
 			),
 			'general_ci keeping fullwidth' => array(
 				'utf8mb4_general_ci',
-				"\u{FF53}{$tail}",
+				str_replace( 'source', "\u{FF53}ource", $key ),
 				false,
 			),
 			'latin1 folding accents'       => array(
@@ -234,6 +287,16 @@ class Capability_Manager_Test extends WP_UnitTestCase {
 				'latin1_swedish_ci',
 				str_replace( 'source', "so\u{FC}rce", $key ),
 				false,
+			),
+			'lithuanian_ci reading y as i' => array(
+				'utf8mb4_lithuanian_ci',
+				str_replace( 'publish', 'publysh', $key ),
+				true,
+			),
+			'roman_ci reading v as u'      => array(
+				'utf8mb4_roman_ci',
+				str_replace( 'publish', 'pvblish', $key ),
+				true,
 			),
 		);
 	}
@@ -256,7 +319,8 @@ class Capability_Manager_Test extends WP_UnitTestCase {
 		global $wpdb;
 
 		// ARRANGE: A contributor's own post claiming a source post under the
-		// key, in a postmeta table using the collation.
+		// key, in a postmeta table using the collation; the default table's
+		// verdict is cached first.
 		$contributor = self::factory()->user->create(
 			array( 'role' => 'contributor' )
 		);
@@ -269,6 +333,7 @@ class Capability_Manager_Test extends WP_UnitTestCase {
 		$postmeta    = $wpdb->postmeta;
 		$table       = "{$postmeta}_{$collation}";
 		$charset     = strstr( $collation, '_', true );
+		user_can( $contributor, 'edit_post_meta', $post_id, $meta_key );
 
 		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.DirectDatabaseQuery.SchemaChange
 		$wpdb->query(
@@ -323,12 +388,13 @@ class Capability_Manager_Test extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Verifies that the guard denies an inexact key when its query fails.
+	 * Verifies that the guard denies a key PHP can't compare when its query
+	 * fails.
 	 */
 	public function test_tracking_meta_guard_denies_when_key_query_fails(): void {
 		global $wpdb;
 
-		// ARRANGE: A contributor's own post, allowed an unrelated key.
+		// ARRANGE: A contributor's own post; an unrelated non-ASCII key passes.
 		$contributor = self::factory()->user->create(
 			array( 'role' => 'contributor' )
 		);
@@ -342,7 +408,7 @@ class Capability_Manager_Test extends WP_UnitTestCase {
 			$contributor,
 			'edit_post_meta',
 			$post_id,
-			'other_key'
+			"other_k\u{E9}y"
 		);
 		$break       = static fn( string $query ): string =>
 			str_contains( $query, Options::META_MEDIA_TYPE )
@@ -351,13 +417,13 @@ class Capability_Manager_Test extends WP_UnitTestCase {
 		$suppressed  = $wpdb->suppress_errors();
 
 		try {
-			// ACT: Check the key while the guard's query fails.
+			// ACT: Check another such key while the guard's query fails.
 			add_filter( 'query', $break );
 			$after = user_can(
 				$contributor,
 				'edit_post_meta',
 				$post_id,
-				'other_key'
+				"another_k\u{E9}y"
 			);
 		} finally {
 			remove_filter( 'query', $break );
