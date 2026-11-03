@@ -62,19 +62,58 @@ final class Capability_Manager {
 		int|string $user_id,
 		array $args
 	): array {
+		$meta_key = $args[1] ?? null;
+
 		if (
 			in_array(
 				$cap,
 				array( 'add_post_meta', 'edit_post_meta', 'delete_post_meta' ),
 				true
 			)
-			&& in_array( $args[1] ?? null, Options::TRACKING_META_KEYS, true )
+			&& is_string( $meta_key )
 			&& ! user_can( (int) $user_id, Permissions::manage_capability() )
+			&& self::is_tracking_meta_key( $meta_key )
 		) {
 			$caps[] = 'do_not_allow';
 		}
 
 		return $caps;
+	}
+
+	/**
+	 * Checks whether a meta key equals a tracking key under the database
+	 * collation, which lookups compare keys with.
+	 *
+	 * @param string $meta_key Meta key.
+	 * @return bool Whether lookups read the key as a tracking key.
+	 */
+	private static function is_tracking_meta_key( string $meta_key ): bool {
+		global $wpdb;
+
+		// The collation compares printable ASCII case-insensitively, ignoring
+		// trailing spaces.
+		if ( 1 !== preg_match( '/[^\x20-\x7E]/', $meta_key ) ) {
+			return in_array(
+				strtolower( rtrim( $meta_key, ' ' ) ),
+				Options::TRACKING_META_KEYS,
+				true
+			);
+		}
+
+		$keys         = Options::TRACKING_META_KEYS;
+		$placeholders = implode( ', ', array_fill( 0, count( $keys ), '%s' ) );
+
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$match = $wpdb->get_var(
+			$wpdb->prepare(
+				"SELECT %s IN ($placeholders)",
+				$meta_key,
+				...$keys
+			)
+		);
+		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+
+		return '1' === $match;
 	}
 
 	/**

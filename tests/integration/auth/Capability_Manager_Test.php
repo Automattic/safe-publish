@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace Safe_Publish\Tests\Integration\Auth;
 
 use Safe_Publish\Utils\Options;
+use Safe_Publish\Utils\Source_Identity_Lookup;
 use WP_UnitTestCase;
 
 /**
@@ -91,7 +92,7 @@ class Capability_Manager_Test extends WP_UnitTestCase {
 				user_can( $administrator, $cap, $post_id, $meta_key );
 		}
 
-		// ASSERT: Only the admin passes; other meta stays editable.
+		// ASSERT: Only the admin passes; other and key-less checks still pass.
 		$this->assertSame(
 			array(
 				'contributor'   => array(
@@ -109,6 +110,91 @@ class Capability_Manager_Test extends WP_UnitTestCase {
 		);
 		$this->assertTrue(
 			user_can( $contributor, 'edit_post_meta', $post_id, 'other_key' )
+		);
+		$this->assertTrue(
+			user_can( $contributor, 'edit_post_meta', $post_id )
+		);
+	}
+
+	/**
+	 * Returns source post ID key variants, whether lookups match them, and the
+	 * queries the guard runs.
+	 *
+	 * @return array<string, array{string, bool, int}> Key, match, and queries.
+	 */
+	public static function tracking_meta_key_variant_provider(): array {
+		$key  = Options::META_SOURCE_POST_ID;
+		$tail = substr( $key, 1 );
+
+		return array(
+			'uppercase'        => array( strtoupper( $key ), true, 0 ),
+			'trailing space'   => array( "{$key} ", true, 0 ),
+			'leading space'    => array( " {$key}", false, 0 ),
+			'accented'         => array( "\u{15B}{$tail}", true, 1 ),
+			'fullwidth'        => array( "\u{FF53}{$tail}", true, 1 ),
+			'zero-width space' => array( "\u{200B}{$key}", true, 1 ),
+			'homoglyph'        => array( "\u{455}{$tail}", false, 1 ),
+		);
+	}
+
+	/**
+	 * Verifies that the guard denies exactly the key variants lookups match,
+	 * querying the database only for non-ASCII keys.
+	 *
+	 * @dataProvider tracking_meta_key_variant_provider
+	 *
+	 * @param string $meta_key Variant of the source post ID key.
+	 * @param bool   $matched  Whether lookups match it.
+	 * @param int    $queries  Queries the guard runs for it.
+	 */
+	public function test_tracking_meta_guard_matches_keys_like_lookups(
+		string $meta_key,
+		bool $matched,
+		int $queries
+	): void {
+		global $wpdb;
+
+		// ARRANGE: A contributor's own post claiming a source post under the
+		// variant key; one check warms the caches.
+		$contributor = self::factory()->user->create(
+			array( 'role' => 'contributor' )
+		);
+		$post_id     = self::factory()->post->create(
+			array(
+				'post_author' => $contributor,
+				'post_status' => 'pending',
+			)
+		);
+		add_post_meta( $post_id, $meta_key, '555' );
+		add_post_meta(
+			$post_id,
+			Options::META_SOURCE_SITE_URL,
+			'https://example.com'
+		);
+		user_can( $contributor, 'edit_post_meta', $post_id, $meta_key );
+
+		// ACT: Look the claim up, then check the key again.
+		$found   = Source_Identity_Lookup::find( 555, 'https://example.com' );
+		$before  = $wpdb->num_queries;
+		$allowed = user_can(
+			$contributor,
+			'edit_post_meta',
+			$post_id,
+			$meta_key
+		);
+
+		// ASSERT: The guard denies the keys lookups match.
+		$this->assertSame(
+			array(
+				'matched' => $matched,
+				'denied'  => $matched,
+				'queries' => $queries,
+			),
+			array(
+				'matched' => array() !== $found,
+				'denied'  => ! $allowed,
+				'queries' => $wpdb->num_queries - $before,
+			)
 		);
 	}
 

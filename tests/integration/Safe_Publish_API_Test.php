@@ -1320,10 +1320,36 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Returns source identity keys, as written and as lookups also match them.
+	 *
+	 * @return array<string, array{string, string}> Post ID and site URL keys.
+	 */
+	public static function source_identity_keys_provider(): array {
+		return array(
+			'exact'     => array(
+				Options::META_SOURCE_POST_ID,
+				Options::META_SOURCE_SITE_URL,
+			),
+			'uppercase' => array(
+				strtoupper( Options::META_SOURCE_POST_ID ),
+				strtoupper( Options::META_SOURCE_SITE_URL ),
+			),
+		);
+	}
+
+	/**
 	 * Verifies that diff-preview denies a contributor who tags their own post
 	 * with a source identity through Custom Fields.
+	 *
+	 * @dataProvider source_identity_keys_provider
+	 *
+	 * @param string $post_id_key  Source post ID key.
+	 * @param string $site_url_key Source site URL key.
 	 */
-	public function test_diff_preview_denies_source_identity_added_through_custom_fields(): void {
+	public function test_diff_preview_denies_source_identity_added_through_custom_fields(
+		string $post_id_key,
+		string $site_url_key
+	): void {
 		// ARRANGE: A contributor's own post; a stub records source fetches.
 		$contributor = $this->create_user_and_authenticate( 'contributor' );
 		$post_id     = $this->factory()->post->create(
@@ -1333,8 +1359,8 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 			)
 		);
 		$identity    = array(
-			Options::META_SOURCE_POST_ID  => self::NON_EXISTENT_SOURCE_POST_ID,
-			Options::META_SOURCE_SITE_URL => 'https://example.com',
+			$post_id_key  => self::NON_EXISTENT_SOURCE_POST_ID,
+			$site_url_key => 'https://example.com',
 		);
 		$fetched     = array();
 
