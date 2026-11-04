@@ -12,6 +12,7 @@ namespace Safe_Publish\Tests\Integration;
 use Safe_Publish\API\Diff_Renderer;
 use Safe_Publish\API\HTTP_Client;
 use Safe_Publish\API\Source_Post_Type_Resolver;
+use Safe_Publish\Auth\Permissions;
 use Safe_Publish\Utils\Audit_Log_Table;
 use Safe_Publish\Utils\Log_Events;
 use Safe_Publish\Utils\Options;
@@ -398,6 +399,11 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 		// ASSERT: Verify current data extracted from local post.
 		$this->assertSame( 'Original Title', $result['current']['title'] );
 		$this->assertSame( 'Original excerpt.', $result['current']['excerpt'] );
+		$this->assertArrayNotHasKey(
+			'meta',
+			$result['current'],
+			'The local post meta should not be carried.'
+		);
 
 		// ASSERT: Verify non-content diff keys exist.
 		$this->assertIsArray( $result['nonContentDiffs'] );
@@ -430,6 +436,204 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 			$result['nonContentDiffs']['taxonomies'],
 			'Embedded source terms should appear in the taxonomies diff.'
 		);
+	}
+
+	/**
+	 * Returns non-manager roles that can compare the fixture.
+	 *
+	 * @return array<string, array{string, bool}> Role, and whether it authors the fixture.
+	 */
+	public static function non_manager_compare_provider(): array {
+		return array(
+			'editor'             => array( 'editor', false ),
+			'contributor author' => array( 'contributor', true ),
+		);
+	}
+
+	/**
+	 * Verifies that diff-preview hides the local post's protected meta from a
+	 * non-manager who can edit the post.
+	 *
+	 * @dataProvider non_manager_compare_provider
+	 *
+	 * @param string $role    Role of the requesting user.
+	 * @param bool   $authors Whether the user authors the fixture.
+	 */
+	public function test_diff_preview_hides_protected_meta_from_non_managers(
+		string $role,
+		bool $authors
+	): void {
+		// ARRANGE: The fixture's protected meta; a non-manager who can edit it.
+		$protected = array(
+			Options::META_SOURCE_AUTHOR_EMAIL => 'source-author@example.com',
+			'_third_party_key'                => 'third-party-value',
+		);
+		foreach ( $protected as $key => $value ) {
+			update_post_meta( $this->post_id, $key, $value );
+		}
+
+		$user_id = $this->create_user_and_authenticate( $role );
+		if ( $authors ) {
+			wp_update_post(
+				array(
+					'ID'          => $this->post_id,
+					'post_author' => $user_id,
+				)
+			);
+		}
+		$this->assertFalse(
+			current_user_can( Permissions::manage_capability() ),
+			'Fixture must not be a manager, or it proves nothing.'
+		);
+
+		$stub = static fn( $_preempt, $_args, string $url ) =>
+			self::mock_diff_response(
+				$url,
+				array(
+					'title'   => array( 'raw' => 'Source Title' ),
+					'content' => array( 'raw' => '<p>Source content.</p>' ),
+					'excerpt' => array( 'raw' => 'Source excerpt.' ),
+				)
+			);
+		add_filter( 'pre_http_request', $stub, 10, 3 );
+
+		$request = new WP_REST_Request(
+			'POST',
+			'/safe-publish/v1/diff-preview'
+		);
+		$request->set_param( 'postId', self::SOURCE_POST_ID );
+		$request->set_param( 'postType', 'post' );
+
+		try {
+			// ACT: Dispatch through the REST server.
+			$response = $this->server->dispatch( $request );
+		} finally {
+			remove_filter( 'pre_http_request', $stub );
+		}
+
+		// ASSERT: The diff renders, and no protected value reaches it.
+		$this->assertSame( 200, $response->get_status() );
+		$body = (string) wp_json_encode( $response->get_data() );
+		foreach ( $protected as $value ) {
+			$this->assertStringNotContainsString( $value, $body );
+		}
+	}
+
+	/**
+	 * Returns roles and whether the meta diff should list each meta value.
+	 *
+	 * @return array<string, array{string, array<string, bool>}> Role, and whether each is listed.
+	 */
+	public static function meta_diff_visibility_provider(): array {
+		return array(
+			'editor'        => array(
+				'editor',
+				array(
+					'plainlocal'     => true,
+					'numericlocal'   => true,
+					'filteredlocal'  => false,
+					'protectedlocal' => false,
+					'internallocal'  => false,
+					'gatedlocal'     => false,
+					'plainincoming'  => true,
+					'gatedincoming'  => false,
+				),
+			),
+			'administrator' => array(
+				'administrator',
+				array(
+					'plainlocal'     => true,
+					'numericlocal'   => true,
+					'filteredlocal'  => true,
+					'protectedlocal' => false,
+					'internallocal'  => false,
+					'gatedlocal'     => true,
+					'plainincoming'  => true,
+					'gatedincoming'  => true,
+				),
+			),
+		);
+	}
+
+	/**
+	 * Verifies that the meta diff limits non-managers to the keys the Custom
+	 * Fields panel shows them, while managers also see keys it hides.
+	 *
+	 * @dataProvider meta_diff_visibility_provider
+	 *
+	 * @param string              $role     Role of the requesting user.
+	 * @param array<string, bool> $expected Whether each meta value is listed.
+	 */
+	public function test_meta_diff_limits_non_managers_to_custom_fields_keys(
+		string $role,
+		array $expected
+	): void {
+		// ARRANGE: Plain, numeric, protected, plugin, and auth-gated keys.
+		$local = array(
+			'plain_key'                 => 'plainlocal',
+			'2024'                      => 'numericlocal',
+			'filtered_key'              => 'filteredlocal',
+			'_protected_key'            => 'protectedlocal',
+			'safe_publish_internal_key' => 'internallocal',
+			'gated_key'                 => 'gatedlocal',
+		);
+		foreach ( $local as $key => $value ) {
+			update_post_meta( $this->post_id, (string) $key, $value );
+		}
+		add_filter(
+			'is_protected_meta',
+			static fn( bool $is_protected, string $key ): bool =>
+				'filtered_key' === $key || $is_protected,
+			10,
+			2
+		);
+		// Allowed by capability, so only its protection can hide it.
+		add_filter( 'auth_post_meta_filtered_key_for_post', '__return_true' );
+		add_filter(
+			'auth_post_meta_gated_key_for_post',
+			static fn(): bool => current_user_can( 'manage_options' ),
+			10,
+			0
+		);
+		$this->create_user_and_authenticate( $role );
+
+		$stub = static fn( $_preempt, $_args, string $url ) =>
+			self::mock_diff_response(
+				$url,
+				array(
+					'title'   => array( 'raw' => 'Source Title' ),
+					'content' => array( 'raw' => '<p>Source content.</p>' ),
+					'excerpt' => array( 'raw' => 'Source excerpt.' ),
+					'meta'    => array(
+						'incoming_key' => 'plainincoming',
+						'gated_key'    => 'gatedincoming',
+					),
+				)
+			);
+		add_filter( 'pre_http_request', $stub, 10, 3 );
+
+		$request = new WP_REST_Request(
+			'POST',
+			'/safe-publish/v1/diff-preview'
+		);
+		$request->set_param( 'postId', self::SOURCE_POST_ID );
+		$request->set_param( 'postType', 'post' );
+
+		try {
+			// ACT: Dispatch through the REST server.
+			$response = $this->server->dispatch( $request );
+		} finally {
+			remove_filter( 'pre_http_request', $stub );
+		}
+
+		// ASSERT: The diff renders and lists exactly the expected values.
+		$this->assertSame( 200, $response->get_status() );
+		$meta_diff = $response->get_data()['nonContentDiffs']['meta'];
+		$listed    = array();
+		foreach ( array_keys( $expected ) as $value ) {
+			$listed[ $value ] = str_contains( $meta_diff, $value );
+		}
+		$this->assertSame( $expected, $listed );
 	}
 
 	/**
