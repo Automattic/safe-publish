@@ -8,7 +8,7 @@ Admin screens, AJAX handlers, management operations, and future abilities must u
 
 The separate `view_safe_publish_audit_log` capability grants read-only access to the Audit Log. Management access implies Audit Log access, but the audit capability does not grant management access.
 
-Per-post reads have a separate authorization contract. A direct caller of the diff-preview endpoint who lacks the resolved management capability must have the post type's `edit_posts` capability, and the mapped local post is always checked with `edit_post`.
+Per-post reads have a separate authorization contract. A direct caller of the diff-preview endpoint who lacks the resolved management capability must have the post type's `edit_posts` capability, and the mapped local post is always checked with `edit_post`. That caller's meta diff lists only the custom fields the editor's Custom Fields panel would show them.
 
 ## Abilities API
 

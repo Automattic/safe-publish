@@ -1779,8 +1779,8 @@ final class Diff_Renderer {
 
 	/**
 	 * Builds text representation of meta for diff comparison. Users without
-	 * the management capability see only the keys the Custom Fields panel
-	 * shows them.
+	 * the management capability see only the keys the Custom Fields panel would
+	 * show them.
 	 *
 	 * @param array $meta_array Post meta array.
 	 * @param int   $post_id    Local post the keys are checked against.

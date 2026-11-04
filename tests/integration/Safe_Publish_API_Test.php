@@ -12,6 +12,7 @@ namespace Safe_Publish\Tests\Integration;
 use Safe_Publish\API\Diff_Renderer;
 use Safe_Publish\API\HTTP_Client;
 use Safe_Publish\API\Source_Post_Type_Resolver;
+use Safe_Publish\Auth\Permissions;
 use Safe_Publish\Utils\Audit_Log_Table;
 use Safe_Publish\Utils\Log_Events;
 use Safe_Publish\Utils\Options;
@@ -471,7 +472,7 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 			update_post_meta( $this->post_id, $key, $value );
 		}
 
-		$user_id = $this->factory()->user->create( array( 'role' => $role ) );
+		$user_id = $this->create_user_and_authenticate( $role );
 		if ( $authors ) {
 			wp_update_post(
 				array(
@@ -480,7 +481,10 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 				)
 			);
 		}
-		wp_set_current_user( $user_id );
+		$this->assertFalse(
+			current_user_can( Permissions::manage_capability() ),
+			'Fixture must not be a manager, or it proves nothing.'
+		);
 
 		$stub = static fn( $_preempt, $_args, string $url ) =>
 			self::mock_diff_response(
@@ -591,9 +595,7 @@ class Safe_Publish_API_Test extends Integration_Test_Case {
 			10,
 			0
 		);
-		wp_set_current_user(
-			$this->factory()->user->create( array( 'role' => $role ) )
-		);
+		$this->create_user_and_authenticate( $role );
 
 		$stub = static fn( $_preempt, $_args, string $url ) =>
 			self::mock_diff_response(
