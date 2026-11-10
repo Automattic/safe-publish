@@ -166,10 +166,19 @@ const NeedsAttentionInbox = ( {
 		[]
 	);
 
+	// The panel stays mounted while hidden, so refresh on each activation:
+	// Imports on the Posts tab change this list without refetching it.
 	useEffect( () => {
-		// The panel stays mounted while hidden, so fetch on each activation:
-		// Imports on the Posts tab change this list without refetching it.
-		if ( ! isActive ) {
+		if ( isActive ) {
+			refresh();
+		}
+	}, [ isActive, refresh ] );
+
+	// Visibility stays out of this effect, so hiding the tab never skips or
+	// aborts a refresh: Actions that finish later still update the tab count.
+	useEffect( () => {
+		// Wait for the first refresh, so a hidden panel loads when it opens.
+		if ( 0 === refreshNonce ) {
 			return;
 		}
 
@@ -247,7 +256,6 @@ const NeedsAttentionInbox = ( {
 
 		return () => controller.abort();
 	}, [
-		isActive,
 		ajaxurl,
 		nonce,
 		view.page,
