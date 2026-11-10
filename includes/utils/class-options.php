@@ -159,6 +159,22 @@ class Options {
 	const META_MEDIA_TYPE = 'safe_publish_media_type';
 
 	/**
+	 * Unprotected post meta keys tracking imported content, editable only by
+	 * management-capability holders. Add new unprotected keys here.
+	 *
+	 * @var string[]
+	 */
+	const TRACKING_META_KEYS = array(
+		self::META_SOURCE_POST_ID,
+		self::META_SOURCE_LINK,
+		self::META_SOURCE_SITE_URL,
+		self::META_IMPORTED_FROM,
+		self::META_ORIGINAL_URL,
+		self::META_FEATURED_MEDIA_ID,
+		self::META_MEDIA_TYPE,
+	);
+
+	/**
 	 * Private meta key storing the source author's email at import time.
 	 *
 	 * @var string

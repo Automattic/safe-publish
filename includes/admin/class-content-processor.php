@@ -1706,11 +1706,15 @@ class Content_Processor {
 			return $html;
 		}
 
-		// Use a targeted regex to replace only the src attribute value.
-		$pattern     = '/(<img[^>]+src=["\'])' . preg_quote( $old_url, '/' ) . '(["\'][^>]*>)/i';
-		$replacement = '${1}' . $new_url . '${2}';
-
-		$updated_html = preg_replace( $pattern, $replacement, $html );
+		// Use a targeted regex to replace only the src attribute value. The
+		// callback keeps a "$" or "\" in the new URL's fragment as written.
+		$pattern      = '/(<img[^>]+src=["\'])' . preg_quote( $old_url, '/' ) . '(["\'][^>]*>)/i';
+		$updated_html = preg_replace_callback(
+			$pattern,
+			static fn ( array $matches ): string => $matches[1] . $new_url
+				. $matches[2],
+			$html
+		);
 
 		if ( null !== $updated_html && $updated_html !== $html ) {
 			return $updated_html;
@@ -1762,7 +1766,7 @@ class Content_Processor {
 	 *
 	 * Walks all string values in $attrs. For each value that is a valid URL
 	 * on the source domain, the URL is sideloaded and replaced with the local
-	 * attachment URL, keeping its query. Matching occurrences in
+	 * attachment URL, keeping its query and fragment. Matching occurrences in
 	 * $block['innerHTML'] and $block['innerContent'] are also updated so they
 	 * stay consistent.
 	 *
@@ -1882,8 +1886,10 @@ class Content_Processor {
 		string $new_url,
 		string $source_site_url
 	): string {
-		// Each copy keeps its own fragment, so the forms leave the attr's out.
+		// Each copy keeps its own fragment, so the forms and the new URL leave
+		// the attr's out.
 		$media_url             = (string) strtok( $media_url, '#' );
+		$new_url               = (string) strtok( $new_url, '#' );
 		$protocol_relative_url = (string) preg_replace(
 			'~^https?:(?=//)~i',
 			'',

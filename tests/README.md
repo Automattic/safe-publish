@@ -34,6 +34,7 @@ tests/
 │       ├── test-1x1.gif          # GIF test image
 │       └── test-1x1.webp         # WebP test image
 ├── e2e/                          # End-to-end tests (Playwright)
+│   ├── compare/                  # Compare modal tests
 │   └── settings/                 # Settings page tests
 └── src/                          # JavaScript/TypeScript tests (Vitest)
     ├── vitest.setup.ts           # Test setup and configuration
