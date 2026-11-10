@@ -172,7 +172,11 @@ final class Diff_Renderer {
 			__( 'Current Content', 'safe-publish' ),
 			__( 'Incoming Content', 'safe-publish' )
 		);
-		$non_content_diffs = $this->generate_non_content_diffs( $current, $incoming );
+		$non_content_diffs = $this->generate_non_content_diffs(
+			$current,
+			$incoming,
+			$local_post->ID
+		);
 
 		// Generate featured media side-by-side preview.
 		$featured_media_html = $this->generate_featured_media_diff(
@@ -195,7 +199,6 @@ final class Diff_Renderer {
 			'current'         => array(
 				'title'   => $current['title'] ?? null,
 				'excerpt' => $current['excerpt'] ?? null,
-				'meta'    => $current['meta'] ?? null,
 				'terms'   => $current['terms'] ?? null,
 			),
 		);
@@ -519,10 +522,15 @@ final class Diff_Renderer {
 	 *
 	 * @param array $current  Current data.
 	 * @param array $incoming Incoming data.
+	 * @param int   $post_id  Local post the meta keys are checked against.
 	 *
 	 * @return array Non-content diff HTML keyed by field.
 	 */
-	private function generate_non_content_diffs( array $current, array $incoming ): array {
+	private function generate_non_content_diffs(
+		array $current,
+		array $incoming,
+		int $post_id
+	): array {
 		$diffs = array();
 
 		// Title diff.
@@ -547,8 +555,14 @@ final class Diff_Renderer {
 		$diffs['taxonomies'] = $this->generate_terms_diff( $current, $incoming );
 
 		// Meta diff.
-		$current_meta_text  = $this->build_meta_text( $current['meta'] ?? array() );
-		$incoming_meta_text = $this->build_meta_text( $incoming['meta'] ?? array() );
+		$current_meta_text  = $this->build_meta_text(
+			$current['meta'] ?? array(),
+			$post_id
+		);
+		$incoming_meta_text = $this->build_meta_text(
+			$incoming['meta'] ?? array(),
+			$post_id
+		);
 		$diffs['meta']      = $this->generate_simple_diff(
 			$current_meta_text,
 			$incoming_meta_text,
@@ -2004,21 +2018,41 @@ final class Diff_Renderer {
 	}
 
 	/**
-	 * Builds text representation of meta for diff comparison.
+	 * Builds text representation of meta for diff comparison. Users without
+	 * the management capability see only the keys the Custom Fields panel would
+	 * show them.
 	 *
 	 * @param array $meta_array Post meta array.
+	 * @param int   $post_id    Local post the keys are checked against.
 	 *
 	 * @return string Text representation.
 	 */
-	private function build_meta_text( array $meta_array ): string {
+	private function build_meta_text(
+		array $meta_array,
+		int $post_id
+	): string {
 		if ( empty( $meta_array ) ) {
 			return '';
 		}
 
-		$lines = array();
+		$restricted = ! current_user_can( Permissions::manage_capability() );
+		$lines      = array();
 		foreach ( $meta_array as $key => $value ) {
+			// PHP turns numeric string keys into ints.
+			$key = (string) $key;
+
 			// Skip protected meta (leading underscore) and plugin internal meta.
 			if ( 0 === strpos( $key, '_' ) || 0 === strpos( $key, 'safe_publish_' ) ) {
+				continue;
+			}
+
+			if (
+				$restricted
+				&& (
+					is_protected_meta( $key, 'post' )
+					|| ! current_user_can( 'edit_post_meta', $post_id, $key )
+				)
+			) {
 				continue;
 			}
 

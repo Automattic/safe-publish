@@ -15,7 +15,7 @@ import {
 	__experimentalVStack as VStack,
 	Spinner,
 } from '@wordpress/components';
-import { useState } from '@wordpress/element';
+import { useEffect, useRef, useState } from '@wordpress/element';
 import { __ } from '@wordpress/i18n';
 
 import BlockDiffViewer from './BlockDiffViewer';
@@ -126,14 +126,47 @@ function HeaderBar( {
 	const successMessage = showViewOptions
 		? __( 'Update applied. Some differences remain.', 'safe-publish' )
 		: __( 'Update applied.', 'safe-publish' );
+	const ref = useRef< HTMLDivElement >( null );
+
+	// The bar sticks below the top padding of the modal's scroll area and
+	// grows as it wraps. The stylesheet offsets the diff's scroll targets by
+	// the bar's bottom edge, so a backward focus move scrolls its target below
+	// the bar, not behind it.
+	useEffect( () => {
+		const bar = ref.current;
+		if ( bar === null ) {
+			return;
+		}
+
+		const scroller = bar.closest< HTMLElement >(
+			'.components-modal__content'
+		);
+		if ( scroller === null ) {
+			return;
+		}
+
+		const observer = new ResizeObserver( () => {
+			const padding = parseFloat(
+				getComputedStyle( scroller ).paddingTop
+			);
+			scroller.style.setProperty(
+				'--safe-publish-compare-toolbar-bottom',
+				`${ padding + bar.offsetHeight }px`
+			);
+		} );
+		observer.observe( bar );
+		return () => observer.disconnect();
+	}, [] );
 
 	return (
 		<HStack
+			ref={ ref }
 			className="safe-publish-compare-modal__toggles"
 			justify="flex-start"
 			alignment="center"
 			spacing={ 6 }
 			expanded={ false }
+			wrap
 		>
 			{ showViewOptions && (
 				<>
@@ -179,7 +212,7 @@ function HeaderBar( {
 				</>
 			) }
 			{ updateError && (
-				<Text role="alert" style={ { color: 'var(--safe-publish-status-error)', whiteSpace: 'nowrap' } }>
+				<Text role="alert" style={ { color: 'var(--safe-publish-status-error)' } }>
 					<IsolatedErrorMessage error={ updateError } />
 				</Text>
 			) }

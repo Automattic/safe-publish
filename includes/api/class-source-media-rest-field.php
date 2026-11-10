@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace Safe_Publish\API;
 
 use Safe_Publish\Auth\HMAC_Authenticator;
+use Safe_Publish\Media\Media_Importer;
 use Safe_Publish\Validators\URL_Validator;
 use WP_HTML_Tag_Processor;
 use WP_Post;
@@ -454,7 +455,7 @@ class Source_Media_REST_Field {
 	/**
 	 * Scans content for this site's media URLs and maps each that resolves to an
 	 * attachment to its raw library values and source parent post. Keyed by the
-	 * query-stripped URL to match the destination's lookup at sideload time.
+	 * download URL to match the destination's lookup at sideload time.
 	 *
 	 * @param string $content Raw post content.
 	 * @return array<string, array<string, string>> Source URL => metadata.
@@ -491,13 +492,7 @@ class Source_Media_REST_Field {
 		$map            = array();
 
 		foreach ( array_unique( $urls ) as $raw_url ) {
-			$url = strtok( $raw_url, '?' );
-
-			if ( false === $url ) {
-				continue;
-			}
-
-			$url = URL_Validator::resolve_relative_url( $url, $site_url );
+			$url = Media_Importer::get_download_url( $raw_url, $site_url );
 
 			if ( isset( $map[ $url ] ) ) {
 				continue;

@@ -73,7 +73,6 @@ export interface DiffPreviewResult {
 	current?: {
 		title?: string;
 		excerpt?: string;
-		meta?: JsonObject;
 		terms?: Record< string, string[] >;
 	};
 	html?: string;
