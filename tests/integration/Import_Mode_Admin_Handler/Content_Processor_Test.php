@@ -1824,6 +1824,89 @@ class Content_Processor_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that a block's media URL attr keeps the source URL's fragment,
+	 * and its markup copy holds the fragment once, so the two still match.
+	 *
+	 * @dataProvider media_attr_fragment_provider
+	 * @param string $block Block markup, with %s for the media URL.
+	 * @param string $attr  Attr that holds the media URL after import.
+	 */
+	public function test_process_media_attr_keeps_fragment(
+		string $block,
+		string $attr
+	): void {
+		// ARRANGE: A block whose source media URL carries a fragment, with a
+		// "$1" that reads like a regex backreference.
+		$media_url = 'https://source.example.com/hero.jpg#top$1';
+
+		// ACT: Process the block through the Gutenberg path.
+		$processed = $this->processor->process_content(
+			str_replace( '%s', $media_url, $block ),
+			'https://source.example.com'
+		);
+
+		// ASSERT: The attr and its markup copy hold the local URL and fragment.
+		$local_url = wp_get_attachment_url(
+			$this->media_importer->get_newly_created_attachment_ids()[0]
+		) . '#top$1';
+		$this->assertSame(
+			$local_url,
+			parse_blocks( $processed )[0]['attrs'][ $attr ]
+		);
+		$this->assertStringContainsString( '="' . $local_url . '"', $processed );
+	}
+
+	/**
+	 * Provides one block per media URL attr writer.
+	 *
+	 * @return array<string, array{string, string}>
+	 */
+	public static function media_attr_fragment_provider(): array {
+		return array(
+			'image with URL only in markup' => array(
+				'<!-- wp:image --><figure class="wp-block-image">'
+					. '<img src="%s" alt=""/></figure><!-- /wp:image -->',
+				'url',
+			),
+			'file'                          => array(
+				'<!-- wp:file {"href":"%s"} --><div class="wp-block-file">'
+					. '<a href="%s">hero</a></div><!-- /wp:file -->',
+				'href',
+			),
+			'custom'                        => array(
+				'<!-- wp:my-plugin/hero {"backgroundUrl":"%s"} -->'
+					. '<div class="wp-block-my-plugin-hero"><img src="%s"/></div>'
+					. '<!-- /wp:my-plugin/hero -->',
+				'backgroundUrl',
+			),
+		);
+	}
+
+	/**
+	 * Verifies that an inline media link keeps the source URL's fragment.
+	 */
+	public function test_process_inline_media_link_keeps_fragment(): void {
+		// ARRANGE: A paragraph that links to a media file at a fragment.
+		$html = '<!-- wp:paragraph --><p><a href="https://source.example.com/hero.jpg#top">'
+			. 'Hero</a></p><!-- /wp:paragraph -->';
+
+		// ACT: Process the paragraph.
+		$processed = $this->processor->process_content(
+			$html,
+			'https://source.example.com'
+		);
+
+		// ASSERT: The link holds the local URL and the fragment.
+		$local_url = wp_get_attachment_url(
+			$this->media_importer->get_newly_created_attachment_ids()[0]
+		);
+		$this->assertStringContainsString(
+			'href="' . $local_url . '#top"',
+			$processed
+		);
+	}
+
+	/**
 	 * Verifies that a custom block's markup copies of a media URL are
 	 * rewritten, each keeping its form of the query's ampersands.
 	 */
