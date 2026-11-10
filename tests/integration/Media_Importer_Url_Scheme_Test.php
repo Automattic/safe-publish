@@ -229,6 +229,49 @@ class Media_Importer_Url_Scheme_Test extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Verifies that an exact key recorded before fragments were ignored wins
+	 * over a plain copy imported under the other scheme.
+	 */
+	public function test_exact_legacy_key_wins_over_other_scheme(): void {
+		// ARRANGE: A plain https import and a legacy http fragment key.
+		$this->seed_imported_attachment( self::HTTPS_URL );
+		$legacy_id = $this->seed_imported_attachment(
+			self::HTTP_URL . '#page=2'
+		);
+
+		// ACT: Resolve the http copy with that fragment.
+		$match = Media_Importer::find_imported_attachment_id(
+			self::MEDIA_ID,
+			self::SOURCE,
+			self::HTTP_URL . '#page=2'
+		);
+
+		// ASSERT: The exact legacy key won over the https copy.
+		$this->assertSame( $legacy_id, $match );
+	}
+
+	/**
+	 * Verifies that a copy under the other scheme finds the key an import
+	 * recorded before fragments were ignored.
+	 */
+	public function test_legacy_key_is_found_under_other_scheme(): void {
+		// ARRANGE: A legacy http fragment key.
+		$legacy_id = $this->seed_imported_attachment(
+			self::HTTP_URL . '#page=2'
+		);
+
+		// ACT: Resolve the https copy with that fragment.
+		$match = Media_Importer::find_imported_attachment_id(
+			self::MEDIA_ID,
+			self::SOURCE,
+			self::HTTPS_URL . '#page=2'
+		);
+
+		// ASSERT: The legacy import was found.
+		$this->assertSame( $legacy_id, $match );
+	}
+
+	/**
 	 * Runs content through the full import pipeline.
 	 *
 	 * @param string $content Source content.

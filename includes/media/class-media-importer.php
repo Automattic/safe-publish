@@ -1263,7 +1263,9 @@ class Media_Importer {
 	/**
 	 * Gets the attachment imported from a source media URL. Falls back to the
 	 * key that imports recorded before fragments were ignored: The URL cut only
-	 * at its query, which kept a fragment when there was no query.
+	 * at its query, which kept a fragment when there was no query. A copy that
+	 * differs only in http or https names the same file, so it is tried once
+	 * the exact keys miss.
 	 *
 	 * @param string $media_url       Source media URL.
 	 * @param string $source_site_url Source site URL for relative URLs.
@@ -1273,28 +1275,33 @@ class Media_Importer {
 		string $media_url,
 		string $source_site_url
 	): int|false {
-		$download_url  = self::get_download_url( $media_url, $source_site_url );
-		$attachment_id = self::get_attachment_by_url( $download_url );
-
-		if ( false !== $attachment_id ) {
-			return $attachment_id;
-		}
-
-		$legacy_url = (string) strtok(
+		$download_url = self::get_download_url( $media_url, $source_site_url );
+		$legacy_url   = (string) strtok(
 			URL_Validator::resolve_relative_url( $media_url, $source_site_url ),
 			'?'
 		);
 
-		return $legacy_url === $download_url
-			? false
-			: self::get_attachment_by_url( $legacy_url );
+		// The keys differ only for a fragment without a query.
+		$keys = array_unique( array( $download_url, $legacy_url ) );
+		$urls = $keys;
+		foreach ( $keys as $key ) {
+			if ( 1 === preg_match( '~^http(s?)(://.*)~i', $key, $parts ) ) {
+				$urls[] = ( '' === $parts[1] ? 'https' : 'http' ) . $parts[2];
+			}
+		}
+
+		foreach ( $urls as $url ) {
+			$attachment_id = self::get_attachment_by_url( $url );
+			if ( false !== $attachment_id ) {
+				return $attachment_id;
+			}
+		}
+
+		return false;
 	}
 
 	/**
 	 * Gets attachment ID by original URL.
-	 *
-	 * A copy that differs only in http or https names the same file, so it is
-	 * tried when the exact URL misses.
 	 *
 	 * @param string $original_url Original source URL.
 	 * @return int|false Attachment ID on success, false on failure.
@@ -1302,36 +1309,22 @@ class Media_Importer {
 	private static function get_attachment_by_url(
 		string $original_url
 	): int|false {
-		$urls = array( $original_url );
+		// Check by the exact URL stored in metadata.
+		$attachments = get_posts(
+			array(
+				'post_type'        => 'attachment',
+				'meta_key'         => Options::META_ORIGINAL_URL,
+				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
+				'meta_value'       => $original_url,
+				'posts_per_page'   => 1,
+				'orderby'          => 'ID',
+				'order'            => 'DESC',
+				// Don't suppress posts_* filters; required for cache plugins.
+				'suppress_filters' => false,
+			)
+		);
 
-		if (
-			1 === preg_match( '~^http(s?)(://.*)~i', $original_url, $parts )
-		) {
-			$urls[] = ( '' === $parts[1] ? 'https' : 'http' ) . $parts[2];
-		}
-
-		foreach ( $urls as $url ) {
-			$attachments = get_posts(
-				array(
-					'post_type'        => 'attachment',
-					'meta_key'         => Options::META_ORIGINAL_URL,
-					// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
-					'meta_value'       => $url,
-					'posts_per_page'   => 1,
-					'orderby'          => 'ID',
-					'order'            => 'DESC',
-					// Don't suppress posts_* filters; required for cache
-					// plugins.
-					'suppress_filters' => false,
-				)
-			);
-
-			if ( array() !== $attachments ) {
-				return $attachments[0]->ID;
-			}
-		}
-
-		return false;
+		return ! empty( $attachments ) ? $attachments[0]->ID : false;
 	}
 
 	/**
