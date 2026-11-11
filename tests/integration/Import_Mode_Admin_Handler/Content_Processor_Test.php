@@ -783,19 +783,22 @@ class Content_Processor_Test extends Integration_Test_Case {
 		// ASSERT: The source URL no longer appears anywhere in the output.
 		$this->assertStringNotContainsString( $external_url, $processed, 'External URL should be replaced' );
 
-		// ASSERT: The local upload URL appears in the output.
+		// ASSERT: The img src points at the imported attachment.
+		$local_url = wp_get_attachment_url(
+			$this->media_importer->get_newly_created_attachment_ids()[0]
+		);
 		$this->assertStringContainsString(
-			$this->uploads_url(),
+			'src="' . $local_url . '"',
 			$processed,
-			'Local upload URL should be present'
+			'Image src should be the local upload URL'
 		);
 
 		// ASSERT: No failure was recorded — the import succeeded.
 		$this->assertSame( array(), $this->processor->get_failed_media(), 'No media failures should be recorded' );
 
 		// ASSERT: The block attrs contain a local upload URL (not the source one).
-		$this->assertMatchesRegularExpression(
-			'/"url":"' . preg_quote( $this->uploads_url(), '/' ) . '[^"]+"/',
+		$this->assertStringContainsString(
+			'"url":"' . $local_url . '"',
 			$processed,
 			'Block attrs url should point to local uploads'
 		);

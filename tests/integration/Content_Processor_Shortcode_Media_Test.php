@@ -107,7 +107,9 @@ class Content_Processor_Shortcode_Media_Test extends Integration_Test_Case {
 
 		// ASSERT: Two attachments; both URLs localized; no failures.
 		$this->assertSame( $before + 2, $this->get_attachment_count() );
-		$this->assertStringContainsString( $this->uploads_url(), $result );
+		$atts = shortcode_parse_atts( trim( $result, '[]' ) );
+		$this->assertStringStartsWith( $this->uploads_url(), $atts['src'] );
+		$this->assertStringStartsWith( $this->uploads_url(), $atts['poster'] );
 		$this->assertStringNotContainsString( $src, $result );
 		$this->assertStringNotContainsString( $poster, $result );
 		$this->assertSame( array(), $this->processor->get_failed_media() );
