@@ -197,4 +197,90 @@ class MediaImporterTest extends TestCase {
 		$this->assertStringContainsString( 'w=1200', $url_large );
 		$this->assertNotSame( $url_small, $url_large );
 	}
+
+	/**
+	 * Verifies that reapply_query_parameters reapplies the fragment after any
+	 * query.
+	 *
+	 * @dataProvider fragment_url_provider
+	 * @param string $original_url Source URL with a fragment.
+	 * @param string $suffix       Expected text after the clean URL.
+	 */
+	public function test_reapply_query_parameters_reapplies_fragment(
+		string $original_url,
+		string $suffix
+	): void {
+		// ARRANGE: A clean destination URL.
+		$clean_url = 'https://destination.example.com/wp-content/uploads/guide.pdf';
+
+		// ACT: Reapply the source URL's query and fragment.
+		$result = Media_Importer::reapply_query_parameters(
+			$original_url,
+			$clean_url
+		);
+
+		// ASSERT: The fragment follows the query.
+		$this->assertSame( $clean_url . $suffix, $result );
+	}
+
+	/**
+	 * Provides source URLs with a fragment, with and without a query.
+	 *
+	 * @return array<string, array{string, string}>
+	 */
+	public static function fragment_url_provider(): array {
+		return array(
+			'fragment'           => array(
+				'https://source.example.com/uploads/guide.pdf#page=2',
+				'#page=2',
+			),
+			'query and fragment' => array(
+				'https://source.example.com/uploads/guide.pdf?v=2#page=4',
+				'?v=2#page=4',
+			),
+			'empty fragment'     => array(
+				'https://source.example.com/uploads/guide.pdf#',
+				'#',
+			),
+		);
+	}
+
+	/**
+	 * Verifies that get_download_url drops the query and the fragment, so both
+	 * name the file their plain URL names.
+	 *
+	 * @dataProvider download_url_provider
+	 * @param string $media_url Source media URL.
+	 */
+	public function test_get_download_url_drops_query_and_fragment(
+		string $media_url
+	): void {
+		// ARRANGE: The plain URL every form names.
+		$expected = 'https://source.example.com/uploads/guide.pdf';
+
+		// ACT: Derive the download URL.
+		$result = Media_Importer::get_download_url(
+			$media_url,
+			'https://source.example.com'
+		);
+
+		// ASSERT: Only the plain URL remains.
+		$this->assertSame( $expected, $result );
+	}
+
+	/**
+	 * Provides media URLs that name the same file.
+	 *
+	 * @return array<string, array{string}>
+	 */
+	public static function download_url_provider(): array {
+		return array(
+			'fragment'           => array(
+				'https://source.example.com/uploads/guide.pdf#page=2',
+			),
+			'query and fragment' => array(
+				'https://source.example.com/uploads/guide.pdf?v=2#page=4',
+			),
+		);
+	}
 }

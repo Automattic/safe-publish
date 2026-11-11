@@ -76,13 +76,13 @@ If an `<a>` tag's `href` ends in a file extension allowed by WordPress, it is pr
 ### For Each Media URL Found
 
 1. **Resolve**: Relative URLs (URLs without a domain) are converted into absolute URLs by prepending the source site's base URL (scheme and host).
-2. **Normalize**: Query parameters are removed from the working URL; they are reapplied from the original URL in step 7.
+2. **Normalize**: The query and fragment are removed from the working URL, so `guide.pdf?v=2` and `guide.pdf#page=2` both name `guide.pdf`. They are reapplied from the original URL in step 8.
 3. **Filter**: Third-party domain URLs are left unchanged.
 4. **Deduplicate**: If the URL was already imported, the existing attachment URL is used, and download is skipped.
 5. **Download**: File fetched using WordPress core's `download_url()`; downloadability is verified at this point.
 6. **Import**: The file type is classified from the downloaded content, not the URL extension — image, video, audio, and PDF are added to the media library via `media_handle_sideload()`; a media-looking URL that resolves to a page is kept as a link.
 7. **Enrich**: The image's source library metadata — alt text, title, caption, and description — is applied to the new attachment. The source resolves each URL back to its attachment record (a capability core REST lacks) and returns the values alongside the post.
-8. **Replace**: Source URL replaced with the new attachment URL in content; previously stripped query parameters are reapplied.
+8. **Replace**: Source URL replaced with the new attachment URL in content. The stripped query and fragment are reapplied.
 
 ### Inline Image ID References
 
@@ -126,6 +126,7 @@ Post content and excerpts pass through WordPress' normal save filters for the ac
   - **Terms**: tags and categories are transferred. If they don't exist, they are created. Custom taxonomies that appear in a REST request are transferred if they exist. See below for more details.
 - Additional Post meta stored:
   - `safe_publish_source_post_id` — post ID on the source site
+  - `safe_publish_source_site_url` — source site the post was imported from
   - `safe_publish_source_link` — URL of the source post
   - `safe_publish_imported_from` — plugin identifier (`safe-publish`)
 
@@ -195,7 +196,7 @@ The source Custom Post Type (CPT) must be registered with `'show_in_rest' => tru
 
 Source post meta exposed through the core REST API `meta` object is imported automatically. Custom fields must be registered with `register_post_meta()` and `'show_in_rest' => true` on the source site to be included in that object. For custom post types, the post type must also support `custom-fields`.
 
-Not every key in that object is written. Safe Publish reserves its own `safe_publish_` and `_safe_publish_` tracking keys, which no filter re-enables, and a list of core-owned keys that hold destination state or point at source-side IDs and paths: `_edit_last`, `_edit_lock`, `_encloseme`, `_pingme`, `_thumbnail_id`, `_wp_attached_file`, `_wp_attachment_backup_sizes`, `_wp_attachment_metadata`, `_wp_desired_post_slug`, `_wp_old_date`, `_wp_old_slug`, `_wp_trash_meta_comments_status`, `_wp_trash_meta_status`, and `_wp_trash_meta_time`. Every other key imports unchanged, protected (underscore-prefixed) ones included. A reserved key does not fail the import: the post imports without it and the import results name the skipped keys. Use [`safe_publish_import_allowed_meta_keys`](../extending/hooks.md#safe_publish_import_allowed_meta_keys) to opt a core key back in. The diff preview's custom fields section lists exactly the keys of the source's `meta` object that the import will write; keys `safe_publish_source_post_meta` adds or removes are not reflected in it.
+Not every key in that object is written. Safe Publish reserves its own `safe_publish_` and `_safe_publish_` tracking keys, which no filter re-enables, and a list of core-owned keys that hold destination state or point at source-side IDs and paths: `_edit_last`, `_edit_lock`, `_encloseme`, `_pingme`, `_thumbnail_id`, `_wp_attached_file`, `_wp_attachment_backup_sizes`, `_wp_attachment_metadata`, `_wp_desired_post_slug`, `_wp_old_date`, `_wp_old_slug`, `_wp_trash_meta_comments_status`, `_wp_trash_meta_status`, and `_wp_trash_meta_time`. Every other key imports unchanged, protected (underscore-prefixed) ones included. A reserved key does not fail the import: the post imports without it and the import results name the skipped keys. Use [`safe_publish_import_allowed_meta_keys`](../extending/hooks.md#safe_publish_import_allowed_meta_keys) to opt a core key back in. The diff preview's custom fields section lists exactly the keys of the source's `meta` object that the import will write; keys `safe_publish_source_post_meta` adds or removes are not reflected in it. For a caller without management access, the section lists only the custom fields the editor's Custom Fields panel would show them; see the [capability contract](../extending/api.md#capability-contract).
 
 Safe Publish does not import arbitrary top-level REST fields by default. Fields exposed with `register_rest_field()`, or ACF's top-level `acf` object, are not imported unless the same values are present in the core `meta` object — or an integration merges them in through the `safe_publish_source_post_meta` filter.
 

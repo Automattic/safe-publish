@@ -615,7 +615,7 @@ class Content_Processor_Relative_Media_Url_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Verifies that a CSS copy keeps its own fragment.
+	 * Verifies that a CSS copy keeps its own fragment once, matching the attr.
 	 *
 	 * @dataProvider css_fragment_provider
 	 * @param string $css_url CSS copy of the attr URL, with %s for the path.
@@ -633,12 +633,10 @@ class Content_Processor_Relative_Media_Url_Test extends Integration_Test_Case {
 			self::SOURCE
 		);
 
-		// ASSERT: The CSS names the attr's file and keeps its fragment.
+		// ASSERT: The attr keeps the fragment, and the CSS matches it.
 		$attr_url = parse_blocks( $result )[0]['attrs']['url'];
-		$this->assertStringContainsString(
-			'url(' . $attr_url . '#top)',
-			$result
-		);
+		$this->assertStringEndsWith( '?v=1#top', $attr_url );
+		$this->assertStringContainsString( 'url(' . $attr_url . ')', $result );
 	}
 
 	/**

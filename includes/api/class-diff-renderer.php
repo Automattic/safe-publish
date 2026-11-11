@@ -156,7 +156,11 @@ final class Diff_Renderer {
 			__( 'Current Content', 'safe-publish' ),
 			__( 'Incoming Content', 'safe-publish' )
 		);
-		$non_content_diffs = $this->generate_non_content_diffs( $current, $incoming );
+		$non_content_diffs = $this->generate_non_content_diffs(
+			$current,
+			$incoming,
+			$local_post->ID
+		);
 
 		// Generate featured media side-by-side preview.
 		$featured_media_html = $this->generate_featured_media_diff(
@@ -179,7 +183,6 @@ final class Diff_Renderer {
 			'current'         => array(
 				'title'   => $current['title'] ?? null,
 				'excerpt' => $current['excerpt'] ?? null,
-				'meta'    => $current['meta'] ?? null,
 				'terms'   => $current['terms'] ?? null,
 			),
 		);
@@ -503,10 +506,15 @@ final class Diff_Renderer {
 	 *
 	 * @param array $current  Current data.
 	 * @param array $incoming Incoming data.
+	 * @param int   $post_id  Local post the meta keys are checked against.
 	 *
 	 * @return array Non-content diff HTML keyed by field.
 	 */
-	private function generate_non_content_diffs( array $current, array $incoming ): array {
+	private function generate_non_content_diffs(
+		array $current,
+		array $incoming,
+		int $post_id
+	): array {
 		$diffs = array();
 
 		// Title diff.
@@ -537,11 +545,13 @@ final class Diff_Renderer {
 		);
 		$current_meta_text  = $this->build_meta_text(
 			$current['meta'] ?? array(),
-			$meta_keys
+			$meta_keys,
+			$post_id
 		);
 		$incoming_meta_text = $this->build_meta_text(
 			$incoming['meta'] ?? array(),
-			$meta_keys
+			$meta_keys,
+			$post_id
 		);
 		$diffs['meta']      = $this->generate_simple_diff(
 			$current_meta_text,
@@ -1774,7 +1784,9 @@ final class Diff_Renderer {
 	}
 
 	/**
-	 * Builds text representation of meta for diff comparison.
+	 * Builds text representation of meta for diff comparison. Users without
+	 * the management capability see only the keys the Custom Fields panel would
+	 * show them.
 	 *
 	 * Walks both sides in the same key order, so a reordered key does not read
 	 * as a removal plus an addition.
@@ -1782,21 +1794,34 @@ final class Diff_Renderer {
 	 * @param array    $meta_array      Post meta array.
 	 * @param string[] $comparable_keys Keys to compare, sanitized the way the
 	 *                                  import sanitizes them.
+	 * @param int      $post_id         Local post the keys are checked against.
 	 *
 	 * @return string Text representation.
 	 */
 	private function build_meta_text(
 		array $meta_array,
-		array $comparable_keys
+		array $comparable_keys,
+		int $post_id
 	): string {
 		$by_key = array();
 		foreach ( $meta_array as $key => $value ) {
 			$by_key[ sanitize_text_field( (string) $key ) ] = $value;
 		}
 
-		$lines = array();
+		$restricted = ! current_user_can( Permissions::manage_capability() );
+		$lines      = array();
 		foreach ( $comparable_keys as $key ) {
 			if ( ! array_key_exists( $key, $by_key ) ) {
+				continue;
+			}
+
+			if (
+				$restricted
+				&& (
+					is_protected_meta( $key, 'post' )
+					|| ! current_user_can( 'edit_post_meta', $post_id, $key )
+				)
+			) {
 				continue;
 			}
 
