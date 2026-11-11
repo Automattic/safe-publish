@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Safe_Publish\API;
 
+use Safe_Publish\Utils\Meta_Key_Matcher;
 use Safe_Publish\Utils\Options;
 use Safe_Publish\Utils\Term_Conflict;
 use Safe_Publish\Utils\Term_Reconcile_Report;
@@ -46,6 +47,20 @@ final class Meta_Terms_Manager {
 	private const RESERVED_KEY_PREFIXES = array(
 		'safe_publish_',
 		'_safe_publish_',
+	);
+
+	/**
+	 * Post meta keys this plugin stores, which the import also refuses in any
+	 * form lookups read as one of them.
+	 *
+	 * @var string[]
+	 */
+	private const RESERVED_PLUGIN_KEYS = array(
+		...Options::TRACKING_META_KEYS,
+		Options::META_SOURCE_AUTHOR_EMAIL,
+		Options::META_SOURCE_AUTHOR_LOGIN,
+		Options::META_SOURCE_POST_PARENT_ID,
+		Options::META_SOURCE_ATTACHMENT_PARENT_ID,
 	);
 
 	/**
@@ -215,8 +230,9 @@ final class Meta_Terms_Manager {
 	/**
 	 * Returns whether the import may write a meta key.
 	 *
-	 * Takes the sanitized key, the one update_meta() writes, so a raw key
-	 * cannot slip past by sanitizing into a reserved one.
+	 * Reads the sanitized key the way update_meta() stores it, unslashed, and
+	 * the way lookups match it, under the meta_key column's collation, so no
+	 * form of a reserved key slips past.
 	 *
 	 * @param string   $key          Sanitized meta key.
 	 * @param string[] $allowed_keys Reserved core keys a site opted back in.
@@ -226,17 +242,21 @@ final class Meta_Terms_Manager {
 		string $key,
 		array $allowed_keys
 	): bool {
+		$stored = (string) wp_unslash( $key );
+
 		foreach ( self::RESERVED_KEY_PREFIXES as $prefix ) {
-			if ( str_starts_with( $key, $prefix ) ) {
+			if ( str_starts_with( strtolower( $stored ), $prefix ) ) {
 				return false;
 			}
 		}
 
-		if ( in_array( $key, self::RESERVED_CORE_KEYS, true ) ) {
-			return in_array( $key, $allowed_keys, true );
-		}
-
-		return true;
+		return ! Meta_Key_Matcher::matches(
+			$stored,
+			array_merge(
+				self::RESERVED_PLUGIN_KEYS,
+				array_diff( self::RESERVED_CORE_KEYS, $allowed_keys )
+			)
+		);
 	}
 
 	/**

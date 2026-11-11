@@ -12,11 +12,68 @@ namespace Safe_Publish\Tests;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 use Safe_Publish\API\Meta_Terms_Manager;
+use Safe_Publish\Utils\Options;
 
 /**
  * Tests the key policy Meta_Terms_Manager applies to imported post meta.
  */
 class MetaTermsManagerTest extends TestCase {
+
+	/**
+	 * Database global the test replaces.
+	 *
+	 * @var mixed
+	 */
+	private mixed $wpdb;
+
+	/**
+	 * Supplies the default meta_key collation the key policy compares under.
+	 */
+	#[\Override]
+	protected function setUp(): void {
+		parent::setUp();
+
+		$this->wpdb = $GLOBALS['wpdb'] ?? null;
+		// phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited
+		$GLOBALS['wpdb'] = new class() {
+			/**
+			 * Postmeta table name.
+			 *
+			 * @var string
+			 */
+			public string $postmeta = 'wp_postmeta';
+
+			/**
+			 * Returns the query as given.
+			 *
+			 * @param string $query Query.
+			 * @return string Query.
+			 */
+			public function prepare( string $query ): string {
+				return $query;
+			}
+
+			/**
+			 * Returns the meta_key column's collation.
+			 *
+			 * @return array{Collation: string} Column row.
+			 */
+			public function get_row(): array {
+				return array( 'Collation' => 'utf8mb4_unicode_520_ci' );
+			}
+		};
+	}
+
+	/**
+	 * Restores the database global.
+	 */
+	#[\Override]
+	protected function tearDown(): void {
+		// phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited
+		$GLOBALS['wpdb'] = $this->wpdb;
+
+		parent::tearDown();
+	}
 
 	/**
 	 * Every core key the policy reserves, as the docs list it.
@@ -193,6 +250,93 @@ class MetaTermsManagerTest extends TestCase {
 		$this->assertSame(
 			array(),
 			Meta_Terms_Manager::importable_meta_keys( $meta )
+		);
+	}
+
+	/**
+	 * Verifies that a key the write stores, or lookups read, as a reserved key
+	 * is refused under the form the source sent.
+	 *
+	 * @dataProvider reserved_key_variant_provider
+	 *
+	 * @param string $key Variant of a reserved key.
+	 */
+	public function test_refused_meta_keys_covers_reserved_key_variants(
+		string $key
+	): void {
+		// ARRANGE: The variant alongside a migratable key.
+		$meta = array(
+			$key           => 'source-value',
+			'custom_field' => 'value',
+		);
+
+		// ACT: Split the payload by the import key policy.
+		$refused = Meta_Terms_Manager::refused_meta_keys( $meta );
+
+		// ASSERT: The variant is refused as sent, and the other key written.
+		$this->assertSame( array( $key ), $refused );
+		$this->assertSame(
+			array( 'custom_field' ),
+			Meta_Terms_Manager::importable_meta_keys( $meta )
+		);
+	}
+
+	/**
+	 * Data provider naming reserved key variants PHP can compare.
+	 *
+	 * @return array<string, array{string}> One case per variant.
+	 */
+	public static function reserved_key_variant_provider(): array {
+		return array(
+			'uppercase plugin key' => array( 'SAFE_PUBLISH_SOURCE_POST_ID' ),
+			'uppercase future key' => array( 'SAFE_PUBLISH_FUTURE_KEY' ),
+			'uppercase core key'   => array( '_THUMBNAIL_ID' ),
+			'slashed plugin key'   => array( '\\safe_publish_source_post_id' ),
+			'slashed core key'     => array( '_thumbnail\\_id' ),
+		);
+	}
+
+	/**
+	 * Verifies that the reserved plugin keys are every post meta key Options
+	 * defines, so a new key can't skip the collation check, and that every
+	 * reserved key is lowercase printable ASCII, which the check requires.
+	 */
+	public function test_reserved_plugin_keys_cover_options_meta_keys(): void {
+		// ARRANGE: Options' post meta keys, minus term meta keys and the
+		// imported-from value; the policy's reserved lists.
+		$excluded  = array(
+			'META_SOURCE_TERM_ID',
+			'META_SOURCE_TERM_URL',
+			'META_TERM_ORIGIN_URL',
+			'META_IMPORTED_FROM_VALUE',
+		);
+		$keys      = array();
+		$constants = ( new ReflectionClass( Options::class ) )->getConstants();
+		foreach ( $constants as $name => $value ) {
+			if (
+				str_starts_with( $name, 'META_' )
+				&& ! in_array( $name, $excluded, true )
+				&& is_string( $value )
+			) {
+				$keys[] = $value;
+			}
+		}
+		$policy = new ReflectionClass( Meta_Terms_Manager::class );
+		/** @var string[] $plugin */
+		$plugin = $policy->getConstant( 'RESERVED_PLUGIN_KEYS' );
+		/** @var string[] $core */
+		$core     = $policy->getConstant( 'RESERVED_CORE_KEYS' );
+		$reserved = array_merge( $plugin, $core );
+		sort( $keys );
+		sort( $plugin );
+
+		// ACT & ASSERT: The plugin keys are exactly those, and lowercasing
+		// changes no reserved key, none of which holds other bytes.
+		$this->assertSame( $keys, $plugin );
+		$this->assertSame( array_map( 'strtolower', $reserved ), $reserved );
+		$this->assertSame(
+			array(),
+			preg_grep( '/[^\x20-\x7E]/', $reserved )
 		);
 	}
 

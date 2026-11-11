@@ -4394,4 +4394,62 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 			$result['warnings']
 		);
 	}
+
+	/**
+	 * Verifies that a re-import refuses the forms of the identity key the
+	 * write stores, or lookups read, as that key, and reports each one.
+	 */
+	public function test_import_refuses_reserved_meta_key_variants(): void {
+		// ARRANGE: Import a post once, so the update has a destination post
+		// holding its own identity meta.
+		$session_id = $this->repository->create_session(
+			'https://source.example.com',
+			'single'
+		);
+		$post_data  = array(
+			'id'        => 9502,
+			'title'     => 'Queued title',
+			'link'      => 'https://source.example.com/reserved-meta-variants',
+			'post_type' => 'posts',
+		);
+
+		$first = $this->import_service->import_post( $post_data, $session_id );
+		$this->assertTrue( $first['success'] );
+
+		// ARRANGE: The source now sends the identity key uppercased, slashed,
+		// and accented.
+		$variants                  = array(
+			strtoupper( Options::META_SOURCE_POST_ID ),
+			'\\' . Options::META_SOURCE_POST_ID,
+			"\u{15B}" . substr( Options::META_SOURCE_POST_ID, 1 ),
+		);
+		$this->mock_post_overrides = array(
+			'meta' => array_fill_keys( $variants, 4321 ),
+		);
+
+		// ACT: Re-import the post.
+		$result = $this->import_service->import_post( $post_data, $session_id );
+
+		// ASSERT: The update lands on the same post, which keeps its identity
+		// meta, and the skip names every variant.
+		$this->assertTrue( $result['success'] );
+		$this->assertTrue( $result['existing'] );
+		$this->assertSame(
+			9502,
+			(int) get_post_meta(
+				(int) $first['post_id'],
+				Options::META_SOURCE_POST_ID,
+				true
+			)
+		);
+		$this->assertSame(
+			array(
+				array(
+					'type' => 'reserved_meta_skipped',
+					'keys' => $variants,
+				),
+			),
+			$result['warnings']
+		);
+	}
 }

@@ -1432,4 +1432,62 @@ class Meta_Terms_Manager_Test extends Integration_Test_Case {
 			$reserved
 		);
 	}
+
+	/**
+	 * Returns variants of the source post ID key PHP can't compare, and
+	 * whether lookups read each as that key.
+	 *
+	 * @return array<string, array{string, bool}> Key, and whether it matches.
+	 */
+	public static function plugin_key_collation_variant_provider(): array {
+		$key  = Options::META_SOURCE_POST_ID;
+		$tail = substr( $key, 1 );
+
+		return array(
+			'accented'         => array( "\u{15B}{$tail}", true ),
+			'long s'           => array( "\u{17F}{$tail}", true ),
+			'fullwidth'        => array( "\u{FF53}{$tail}", true ),
+			'zero-width space' => array( "\u{200B}{$key}", true ),
+			'homoglyph'        => array( "\u{455}{$tail}", false ),
+		);
+	}
+
+	/**
+	 * Verifies that update_meta() skips exactly the variants lookups read as
+	 * a plugin key, so none can repoint the identity meta.
+	 *
+	 * @dataProvider plugin_key_collation_variant_provider
+	 *
+	 * @param string $key     Variant of the source post ID key.
+	 * @param bool   $matched Whether lookups read it as that key.
+	 */
+	public function test_update_meta_skips_plugin_key_collation_variants(
+		string $key,
+		bool $matched
+	): void {
+		// ARRANGE: The destination's own identity meta, and a payload sending
+		// a different value under the variant.
+		update_post_meta( $this->post_id, Options::META_SOURCE_POST_ID, 4242 );
+		$meta = array( $key => 1111 );
+
+		// ACT: Write the payload.
+		$result = $this->manager->update_meta( $this->post_id, $meta );
+
+		// ASSERT: The write succeeds, the identity meta keeps the
+		// destination's value, and the policy refuses the variant exactly
+		// when lookups match it.
+		$this->assertTrue( $result );
+		$this->assertSame(
+			4242,
+			(int) get_post_meta(
+				$this->post_id,
+				Options::META_SOURCE_POST_ID,
+				true
+			)
+		);
+		$this->assertSame(
+			$matched ? array( $key ) : array(),
+			Meta_Terms_Manager::refused_meta_keys( $meta )
+		);
+	}
 }
