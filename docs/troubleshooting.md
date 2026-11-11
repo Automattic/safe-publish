@@ -194,6 +194,10 @@ add_filter(
    - `wp-content/uploads/` must be writable.
    - Check file permissions (755 for directories, 644 for files).
 
+6. **Check for a redirect on the media URL**:
+   - Media downloads follow a redirect only while it stays on the host and port the media URL names, and at most three times. An `http` URL upgraded to `https` still imports.
+   - A redirect to another host, to another port, or back down to `http` fails the download with `download_redirected`. Point the source's media records at the host that serves the file, or import that media as an attachment on the source first.
+
 #### "Raw content fields missing" error
 
 **Symptoms**: Import reports that the source response is missing required raw values
