@@ -534,6 +534,7 @@ function bulkCounts(
 		target_absent: 0,
 		write_failed: 0,
 		unresolved: 0,
+		deferred_url: 0,
 		skipped: 0,
 		...over,
 	};
@@ -713,6 +714,39 @@ describe( 'createNeedsAttentionActions', () => {
 		);
 	} );
 
+	it( 'reports a mapped reference waiting on its final URL', async () => {
+		// ARRANGE: The original issue cleared but URL repair remains open.
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockResolvedValue( {
+				json: () =>
+					Promise.resolve( {
+						success: true,
+						data: {
+							resolved: false,
+							outcome: 'deferred_url',
+							detail: 'Navigation URL awaits a final target path.',
+						},
+					} ),
+			} )
+		);
+		const onRefresh = vi.fn();
+		const onNotice = vi.fn();
+
+		// ACT: Retry the unmapped reference.
+		runCallback( retryAction( onRefresh, { ...RETRY_CONTEXT, onNotice } ), [
+			buildDegradation( { issue_type: 'unmapped_block_reference' } ),
+		] );
+
+		// ASSERT: The notice describes a mapped ID and pending URL.
+		await vi.waitFor( () => expect( onRefresh ).toHaveBeenCalled() );
+		expect( onNotice ).toHaveBeenLastCalledWith( {
+			status: 'warning',
+			message:
+				'The target ID is mapped but awaits its final URL. Publish the target and its ancestors, register its post type, or finalize its path, then Retry.',
+		} );
+	} );
+
 	it( 'maps a target_absent outcome to actionable import guidance', async () => {
 		// ARRANGE: A reconciliation whose target still isn't on this site.
 		vi.stubGlobal(
@@ -748,6 +782,78 @@ describe( 'createNeedsAttentionActions', () => {
 		expect( notice.status ).toBe( 'warning' );
 		expect( notice.message ).toContain( 'Import it, then Retry' );
 		expect( notice.message ).not.toContain( 'Still needs attention' );
+	} );
+
+	it( 'points a deferred URL with a missing target to restore or re-import', async () => {
+		// ARRANGE: The mapped target was trashed or deleted.
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockResolvedValue( {
+				json: () =>
+					Promise.resolve( {
+						success: true,
+						data: {
+							resolved: false,
+							outcome: 'target_absent',
+							detail: 'Internal diagnostic.',
+						},
+					} ),
+			} )
+		);
+		const onRefresh = vi.fn();
+		const onNotice = vi.fn();
+
+		// ACT: Retry the deferred URL.
+		runCallback( retryAction( onRefresh, { ...RETRY_CONTEXT, onNotice } ), [
+			buildDegradation( {
+				issue_type: 'deferred_navigation_url',
+				target_ref: 703,
+			} ),
+		] );
+
+		// ASSERT: The notice offers restore or re-import.
+		await vi.waitFor( () => expect( onRefresh ).toHaveBeenCalled() );
+		expect( onNotice ).toHaveBeenLastCalledWith( {
+			status: 'warning',
+			message:
+				"Source post 703 isn't on this site. Restore it from the trash, or re-import this post.",
+		} );
+	} );
+
+	it( 'points a deferred URL whose link changed to re-importing the post', async () => {
+		// ARRANGE: No link points at the mapped target anymore.
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockResolvedValue( {
+				json: () =>
+					Promise.resolve( {
+						success: true,
+						data: {
+							resolved: false,
+							outcome: 'unresolved',
+							detail: 'Internal diagnostic.',
+						},
+					} ),
+			} )
+		);
+		const onRefresh = vi.fn();
+		const onNotice = vi.fn();
+
+		// ACT: Retry the deferred URL.
+		runCallback( retryAction( onRefresh, { ...RETRY_CONTEXT, onNotice } ), [
+			buildDegradation( {
+				issue_type: 'deferred_navigation_url',
+				target_ref: 703,
+			} ),
+		] );
+
+		// ASSERT: The notice points to a re-import.
+		await vi.waitFor( () => expect( onRefresh ).toHaveBeenCalled() );
+		expect( onNotice ).toHaveBeenLastCalledWith( {
+			status: 'warning',
+			message:
+				'The link no longer points at source post 703 on this site. Re-import this post to relink it.',
+		} );
 	} );
 
 	it( 'maps a write_failed outcome to an error notice', async () => {
@@ -875,6 +981,7 @@ describe( 'createNeedsAttentionActions', () => {
 						target_absent: 1,
 						write_failed: 0,
 						unresolved: 0,
+						deferred_url: 0,
 						skipped: 0,
 					},
 				} ),
@@ -901,7 +1008,37 @@ describe( 'createNeedsAttentionActions', () => {
 		).toHaveLength( 2 );
 		expect( onNotice ).toHaveBeenLastCalledWith( {
 			status: 'warning',
-			message: '1 resolved, 1 waiting on import, 0 failed.',
+			message: '1 resolved, 1 waiting on import, 0 awaiting a final URL, 0 failed.',
+		} );
+	} );
+
+	it( 'counts deferred URLs separately from failed bulk retries', async () => {
+		// ARRANGE: The endpoint reports two links waiting on final URLs.
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockResolvedValue( {
+				json: () =>
+					Promise.resolve( {
+						success: true,
+						data: bulkCounts( { deferred_url: 2 } ),
+					} ),
+			} )
+		);
+		const onRefresh = vi.fn();
+		const onNotice = vi.fn();
+
+		// ACT: Retry two selected deferred links.
+		runCallback( retryAction( onRefresh, { ...RETRY_CONTEXT, onNotice } ), [
+			buildDegradation( { affected_post_id: 1 } ),
+			buildDegradation( { affected_post_id: 2 } ),
+		] );
+
+		// ASSERT: Waiting URLs are counted without claiming failure.
+		await vi.waitFor( () => expect( onRefresh ).toHaveBeenCalled() );
+		expect( onNotice ).toHaveBeenLastCalledWith( {
+			status: 'warning',
+			message:
+				'0 resolved, 0 waiting on import, 2 awaiting a final URL, 0 failed.',
 		} );
 	} );
 
@@ -1001,7 +1138,7 @@ describe( 'createNeedsAttentionActions', () => {
 		expect( batch( 1 ) ).toHaveLength( 1 );
 		expect( onNotice ).toHaveBeenLastCalledWith( {
 			status: 'success',
-			message: `${ RETRY_ATTENTION_BATCH_MAX + 1 } resolved, 0 waiting on import, 0 failed.`,
+			message: `${ RETRY_ATTENTION_BATCH_MAX + 1 } resolved, 0 waiting on import, 0 awaiting a final URL, 0 failed.`,
 		} );
 	} );
 

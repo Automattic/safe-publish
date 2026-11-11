@@ -96,6 +96,7 @@ export function ManageTabs( {
 						<NeedsAttentionInbox
 							ajaxurl={ window.safePublishAdminData.ajaxurl }
 							nonce={ window.safePublishAdminData.nonce }
+							isActive={ NEEDS_ATTENTION_TAB === tab.name }
 							onCountChange={ onCountChange }
 						/>
 					</div>

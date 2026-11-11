@@ -550,6 +550,94 @@ class Media_Processor_Matching_Test extends Source_Posts_API_Test_Base {
 	}
 
 	/**
+	 * Verifies that a missed media URL on a source served on a port is recorded
+	 * too, so a ported source still reports what it could not process.
+	 */
+	public function test_ported_source_records_missed_url_as_failure(): void {
+		// ARRANGE: img with an unclosed quote on a source served on a port.
+		$source_site_url = 'https://example.com:8889';
+		$url             = 'https://example.com:8889/photo.jpg';
+		$content         = '<img src="' . $url;
+
+		// ACT: Process content.
+		$this->content_media_processor->process_content(
+			$content,
+			$source_site_url
+		);
+
+		// ASSERT: Only the ported URL is recorded as unprocessable.
+		$this->assertSame(
+			array( $url => '' ),
+			$this->content_media_processor->get_unprocessable_media(),
+			'Missed ported URL should be in unprocessable_media'
+		);
+	}
+
+	/**
+	 * Verifies that destination media on a ported source's host is not
+	 * reported as unprocessable.
+	 */
+	public function test_ported_source_ignores_destination_media(): void {
+		// ARRANGE: Imported media already points at the destination, which
+		// shares the source's host without its port.
+		$host      = (string) wp_parse_url( get_site_url(), PHP_URL_HOST );
+		$local_url = wp_get_upload_dir()['baseurl'] . '/2026/10/photo.jpg';
+		$content   = '<img src="' . $local_url . '">';
+
+		// ACT: Process content from a source on that host's port 8889.
+		$this->content_media_processor->process_content(
+			$content,
+			'http://' . $host . ':8889'
+		);
+
+		// ASSERT: Nothing is reported as unprocessable.
+		$this->assertSame(
+			array(),
+			$this->content_media_processor->get_unprocessable_media(),
+			'Destination media on the source host must not be flagged'
+		);
+	}
+
+	/**
+	 * Verifies that a source URL naming a default port still records a missed
+	 * media URL that omits it.
+	 *
+	 * @dataProvider default_port_source_provider
+	 * @param string $source_site_url Source site URL with a default port.
+	 */
+	public function test_default_port_source_records_missed_url(
+		string $source_site_url
+	): void {
+		// ARRANGE: img with an unclosed quote and a URL without the port.
+		$url     = 'https://source.example.com/photo.jpg';
+		$content = '<img src="' . $url;
+
+		// ACT: Process content.
+		$this->content_media_processor->process_content(
+			$content,
+			$source_site_url
+		);
+
+		// ASSERT: Only that URL is recorded as unprocessable.
+		$this->assertSame(
+			array( $url => '' ),
+			$this->content_media_processor->get_unprocessable_media()
+		);
+	}
+
+	/**
+	 * Provides source URLs that name their scheme's default port.
+	 *
+	 * @return array<string, array{string}>
+	 */
+	public static function default_port_source_provider(): array {
+		return array(
+			'https on 443' => array( 'https://source.example.com:443' ),
+			'http on 80'   => array( 'http://source.example.com:80' ),
+		);
+	}
+
+	/**
 	 * Verifies that a media URL inside a script tag is not imported and the
 	 * script content is preserved exactly.
 	 */
@@ -611,6 +699,76 @@ class Media_Processor_Matching_Test extends Source_Posts_API_Test_Base {
 		$this->assert_no_new_attachments(
 			$attachments_before,
 			'URLs inside style tags must not be imported'
+		);
+	}
+
+	/**
+	 * Verifies that a media URL after an unclosed script tag is still reported.
+	 */
+	public function test_url_after_unclosed_script_is_unprocessable(): void {
+		// ARRANGE: An unclosed script followed by a source-domain image.
+		$source_site_url = 'https://example.com';
+		$url             = 'https://example.com/photo.jpg';
+		$content         = '<script>var a = 1;<img src="' . $url . '">';
+
+		// ACT: Process content.
+		$this->content_media_processor->process_content(
+			$content,
+			$source_site_url
+		);
+
+		// ASSERT: The URL is reported as unprocessable, and nothing downloaded.
+		$this->assertSame(
+			array( $url ),
+			array_keys(
+				$this->content_media_processor->get_unprocessable_media()
+			)
+		);
+		$this->assertSame(
+			array(),
+			$this->content_media_processor->get_failed_media()
+		);
+	}
+
+	/**
+	 * Verifies that many unclosed script and style tags process quickly.
+	 */
+	public function test_unclosed_script_and_style_tags_scan_quickly(): void {
+		// ARRANGE: 300 KB of unclosed tags; rescanning per tag takes seconds.
+		$content = str_repeat( '<script><style>', 20000 );
+
+		// ACT: Time the processing pass.
+		$start   = microtime( true );
+		$result  = $this->content_media_processor->process_content(
+			$content,
+			'https://example.com'
+		);
+		$elapsed = microtime( true ) - $start;
+
+		// ASSERT: Content is unchanged, and the scan stays under a second.
+		$this->assertSame( $content, $result );
+		$this->assertLessThan( 1.0, $elapsed );
+	}
+
+	/**
+	 * Verifies that closed blocks before a long unclosed script are stripped.
+	 */
+	public function test_strips_closed_blocks_before_long_unclosed_tag(): void {
+		// ARRANGE: A media tag in a closed script, then a 2 MB unclosed one.
+		$url     = 'https://example.com/photo.jpg';
+		$content = '<script>var tpl = \'<img src="' . $url . '">\';</script>'
+			. '<script>' . str_repeat( 'a', 2 * MB_IN_BYTES );
+
+		// ACT: Process content.
+		$this->content_media_processor->process_content(
+			$content,
+			'https://example.com'
+		);
+
+		// ASSERT: The closed script is stripped, so nothing is reported.
+		$this->assertSame(
+			array(),
+			$this->content_media_processor->get_unprocessable_media()
 		);
 	}
 
@@ -687,6 +845,22 @@ class Media_Processor_Matching_Test extends Source_Posts_API_Test_Base {
 			'url_in_comment'   => array(
 				'<!-- ' . $url . ' -->',
 				'media URL in comment (stripped)',
+			),
+			'img_in_script'    => array(
+				'<script>var tpl = \'<img src="' . $url . '">\';</script>',
+				'media tag in script (stripped)',
+			),
+			'img_spaced_end'   => array(
+				'<script>var tpl = \'<img src="' . $url . '">\';</script >',
+				'media tag in script with a spaced end tag (stripped)',
+			),
+			'img_in_style'     => array(
+				'<style>/* <img src="' . $url . '"> */</style>',
+				'media tag in style (stripped)',
+			),
+			'img_in_comment'   => array(
+				'<!-- <img src="' . $url . '"> -->',
+				'media tag in comment (stripped)',
 			),
 		);
 	}

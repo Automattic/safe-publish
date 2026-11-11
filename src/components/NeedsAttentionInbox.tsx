@@ -29,6 +29,7 @@ import { useRowActions } from './hooks/useRowActions';
 import { useStepBackWhenPageEmpties } from './hooks/useStepBackWhenPageEmpties';
 
 import type {
+	AttentionIssue,
 	ApiResponse,
 	DataViewsField,
 	NeedsAttentionResponse,
@@ -42,6 +43,7 @@ import type {
 interface NeedsAttentionInboxProps {
 	ajaxurl: string;
 	nonce: string;
+	isActive: boolean;
 	onCountChange?: ( count: number ) => void;
 }
 
@@ -60,12 +62,65 @@ const contentCell = ( item: NeedsAttentionRow ): JSX.Element => {
 		'failure' === item.kind ? item.edit_url : item.affected_edit_url;
 
 	return '' !== editUrl ? (
-		<a href={ editUrl } target="_blank" rel="noreferrer">
+		<a href={ editUrl } target="_blank" rel="noreferrer" title={ title }>
 			{ title }
 		</a>
 	) : (
-		<span>{ title }</span>
+		<span title={ title }>{ title }</span>
 	);
+};
+
+/**
+ * Renders the Detail column. The resolvable hint sits beside the message, not
+ * inside it, so truncating the message cannot hide it.
+ *
+ * @param {NeedsAttentionRow}  item     Inbox row.
+ * @param {NeedsAttentionView} viewMode Active list mode.
+ * @return {JSX.Element} Rendered detail cell.
+ */
+const detailCell = (
+	item: NeedsAttentionRow,
+	viewMode: NeedsAttentionView
+): JSX.Element => {
+	const message =
+		'failure' === item.kind
+			? item.error_message
+			: renderIssueMessage( item );
+
+	return (
+		<>
+			<span className="safe-publish-inbox-detail" title={ message }>
+				{ message }
+			</span>
+			{ 'degradation' === item.kind
+				&& 'open' === viewMode
+				&& item.retryable && (
+				<span
+					className={ `safe-publish-inbox-resolvable safe-publish-inbox-resolvable--${
+						item.resolvable ? 'ready' : 'waiting'
+					}` }
+				>
+					{ resolvabilityLabel( item ) }
+				</span>
+			) }
+		</>
+	);
+};
+
+/**
+ * Names why a retryable issue can or cannot be repaired yet.
+ *
+ * @param {AttentionIssue} item Degradation row.
+ * @return {string} Localized hint label.
+ */
+const resolvabilityLabel = ( item: AttentionIssue ): string => {
+	if ( item.resolvable ) {
+		return __( 'Resolvable now', 'safe-publish' );
+	}
+	if ( item.issue_type === 'deferred_navigation_url' ) {
+		return __( 'Waiting on final URL', 'safe-publish' );
+	}
+	return __( 'Waiting on import', 'safe-publish' );
 };
 
 /**
@@ -76,6 +131,7 @@ const contentCell = ( item: NeedsAttentionRow ): JSX.Element => {
 const NeedsAttentionInbox = ( {
 	ajaxurl,
 	nonce,
+	isActive,
 	onCountChange,
 }: NeedsAttentionInboxProps ): JSX.Element => {
 	const [ view, setView ] = useState< View >( {
@@ -110,7 +166,22 @@ const NeedsAttentionInbox = ( {
 		[]
 	);
 
+	// The panel stays mounted while hidden, so refresh on each activation:
+	// Imports on the Posts tab change this list without refetching it.
 	useEffect( () => {
+		if ( isActive ) {
+			refresh();
+		}
+	}, [ isActive, refresh ] );
+
+	// Visibility stays out of this effect, so hiding the tab never skips or
+	// aborts a refresh: Actions that finish later still update the tab count.
+	useEffect( () => {
+		// Wait for the first refresh, so a hidden panel loads when it opens.
+		if ( 0 === refreshNonce ) {
+			return;
+		}
+
 		const controller = new AbortController();
 
 		const formData = new FormData();
@@ -234,27 +305,7 @@ const NeedsAttentionInbox = ( {
 			id: 'detail',
 			label: __( 'Detail', 'safe-publish' ),
 			enableSorting: false,
-			render: ( { item } ) =>
-				'failure' === item.kind ? (
-					<span title={ item.error_message }>
-						{ item.error_message }
-					</span>
-				) : (
-					<span>
-						{ renderIssueMessage( item ) }
-						{ 'open' === viewMode && item.retryable && (
-							<span
-								className={ `safe-publish-inbox-resolvable safe-publish-inbox-resolvable--${
-									item.resolvable ? 'ready' : 'waiting'
-								}` }
-							>
-								{ item.resolvable
-									? __( 'Resolvable now', 'safe-publish' )
-									: __( 'Waiting on import', 'safe-publish' ) }
-							</span>
-						) }
-					</span>
-				),
+			render: ( { item } ) => detailCell( item, viewMode ),
 		},
 		{
 			id: 'severity',
@@ -384,19 +435,8 @@ const NeedsAttentionInbox = ( {
 					<p>{ __( 'Loading…', 'safe-publish' ) }</p>
 				</div>
 			) }
-			{ hasFetchedOnce && ! error && 0 === items.length && ! isLoading && (
-				<div className="safe-publish-no-data" role="status">
-					<p>
-						{ 'ignored' === viewMode
-							? __( 'No ignored items.', 'safe-publish' )
-							: __(
-									'Nothing needs attention.',
-									'safe-publish'
-							  ) }
-					</p>
-				</div>
-			) }
-			{ hasFetchedOnce && items.length > 0 && (
+			{ /* Keep DataViews when empty so Refresh stays reachable. */ }
+			{ hasFetchedOnce && ! error && (
 				<DataViews
 					getItemId={ ( item: NeedsAttentionRow ) => item.row_id }
 					data={ items }
@@ -421,6 +461,18 @@ const NeedsAttentionInbox = ( {
 							label={ __( 'Refresh', 'safe-publish' ) }
 							onClick={ refresh }
 						/>
+					}
+					empty={
+						! isLoading && (
+							<p role="status">
+								{ 'ignored' === viewMode
+									? __( 'No ignored items.', 'safe-publish' )
+									: __(
+											'Nothing needs attention.',
+											'safe-publish'
+									  ) }
+							</p>
+						)
 					}
 				/>
 			) }

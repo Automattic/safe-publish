@@ -153,8 +153,8 @@ final class History_Read_Service {
 	/**
 	 * Looks up the most recent active item row for a given imported post.
 	 *
-	 * Rolled-back rows are excluded so the result reflects the post's
-	 * current content.
+	 * Rolled-back and failed rows are excluded so the result reflects the
+	 * post's current content.
 	 *
 	 * @param array $input Read parameters.
 	 * @psalm-param array{post_id: int} $input
@@ -176,6 +176,7 @@ final class History_Read_Service {
 		$row = $wpdb->get_row(
 			$wpdb->prepare(
 				"SELECT * FROM `{$table}` WHERE post_id = %d"
+					. " AND status IN ( 'success', 'updated' )"
 					. ' AND rolled_back = 0'
 					. ' ORDER BY id DESC LIMIT 1',
 				$post_id
@@ -486,8 +487,9 @@ final class History_Read_Service {
 	 * Drives the Manage listing with one query for the whole page
 	 * instead of N. Relies on the (post_id, import_date_gmt) composite
 	 * index for the inner aggregation. Rolled-back rows are excluded so the
-	 * result reflects each post's current content. Ties on import_date_gmt
-	 * resolve to the highest id.
+	 * result reflects each post's current content. Unlike
+	 * get_item_for_post(), failed rows count. Ties on import_date_gmt resolve
+	 * to the highest id.
 	 *
 	 * @param array $input Read parameters.
 	 * @psalm-param array{post_ids: int[]} $input

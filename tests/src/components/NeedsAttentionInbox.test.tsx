@@ -5,12 +5,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import NeedsAttentionInbox from '@/components/NeedsAttentionInbox';
-import type { NeedsAttentionRow } from '@/types';
+import { renderIssueMessage } from '@/utils';
+
+import type { InboxDegradation, NeedsAttentionRow } from '@/types';
 
 const dv = vi.hoisted( () => ( {
 	view: undefined as unknown,
 	onChangeView: undefined as ( ( next: unknown ) => void ) | undefined,
-	actions: [] as Array< { id: string; isPrimary?: boolean } >,
+	actions: [] as Array< {
+		id: string;
+		isPrimary?: boolean;
+		callback?: ( items: NeedsAttentionRow[] ) => void;
+	} >,
 } ) );
 
 const useViewportMatch = vi.hoisted( () => vi.fn( () => false ) );
@@ -23,8 +29,8 @@ vi.mock( '@wordpress/compose', async ( importOriginal ) => ( {
 
 // DataViews pulls in @wordpress/private-apis, which cannot unlock in the test
 // env. Stub it with a minimal renderer that exercises each field's render and
-// each row's eligible actions and the header, and captures view/onChangeView
-// so a test can drive a view change.
+// each row's eligible actions, the header, and the empty state, and captures
+// view/onChangeView so a test can drive a view change.
 vi.mock( '@wordpress/dataviews', () => ( {
 	DataViews: ( {
 		data,
@@ -33,6 +39,7 @@ vi.mock( '@wordpress/dataviews', () => ( {
 		view,
 		onChangeView,
 		header,
+		empty,
 	}: {
 		data: NeedsAttentionRow[];
 		fields: Array< {
@@ -48,6 +55,7 @@ vi.mock( '@wordpress/dataviews', () => ( {
 		view: unknown;
 		onChangeView: ( next: unknown ) => void;
 		header?: JSX.Element;
+		empty?: JSX.Element | false;
 	} ): JSX.Element => {
 		dv.view = view;
 		dv.onChangeView = onChangeView;
@@ -55,6 +63,7 @@ vi.mock( '@wordpress/dataviews', () => ( {
 		return (
 			<div>
 				{ header }
+				{ 0 === data.length && empty }
 				{ data.map( ( item ) => (
 					<div key={ item.row_id }>
 						{ fields.map( ( field ) => (
@@ -92,7 +101,7 @@ const FAILURE: NeedsAttentionRow = {
 	edit_url: '',
 };
 
-const DEGRADATION: NeedsAttentionRow = {
+const DEGRADATION: InboxDegradation = {
 	kind: 'degradation',
 	row_id: 'degradation:1024:nav_ref_rewrite_failed:8300:post:',
 	affected_post_id: 1024,
@@ -136,6 +145,45 @@ function mockListResponse(
 	);
 }
 
+/**
+ * Wraps a body in the response shape that fetch resolves to.
+ */
+const jsonResponse = ( body: unknown ) => ( {
+	json: () => Promise.resolve( body ),
+} );
+
+/**
+ * Builds an inbox endpoint response that lists FAILURE while count is nonzero.
+ */
+const listResponse = ( count: number ) =>
+	jsonResponse( {
+		success: true,
+		data: {
+			items: count > 0 ? [ FAILURE ] : [],
+			has_more: false,
+			needs_attention_count: count,
+		},
+	} );
+
+/**
+ * Reads the AJAX action from a fetch call's form data.
+ */
+const ajaxAction = ( init?: RequestInit ) =>
+	( init?.body as FormData ).get( 'action' );
+
+/**
+ * Runs the Ignore row action on FAILURE, failing fast if it is missing.
+ */
+const ignoreFailure = (): void => {
+	const callback = dv.actions.find(
+		( action ) => 'ignore-needs-attention' === action.id
+	)?.callback;
+	if ( undefined === callback ) {
+		throw new Error( 'The Ignore action is missing.' );
+	}
+	callback( [ FAILURE ] );
+};
+
 beforeEach( () => {
 	dv.actions = [];
 	useViewportMatch.mockReturnValue( false );
@@ -156,6 +204,7 @@ describe( 'NeedsAttentionInbox', () => {
 			<NeedsAttentionInbox
 				ajaxurl="https://example.com/wp-admin/admin-ajax.php"
 				nonce="test-nonce"
+				isActive
 			/>
 		);
 		expect( await screen.findByText( 'Broken import' ) ).toBeInTheDocument();
@@ -175,6 +224,7 @@ describe( 'NeedsAttentionInbox', () => {
 			<NeedsAttentionInbox
 				ajaxurl="https://example.com/wp-admin/admin-ajax.php"
 				nonce="test-nonce"
+				isActive
 			/>
 		);
 		expect( await screen.findByText( 'Broken import' ) ).toBeInTheDocument();
@@ -193,6 +243,7 @@ describe( 'NeedsAttentionInbox', () => {
 			<NeedsAttentionInbox
 				ajaxurl="https://example.com/wp-admin/admin-ajax.php"
 				nonce="test-nonce"
+				isActive
 			/>
 		);
 
@@ -216,6 +267,7 @@ describe( 'NeedsAttentionInbox', () => {
 			<NeedsAttentionInbox
 				ajaxurl="https://example.com/wp-admin/admin-ajax.php"
 				nonce="test-nonce"
+				isActive
 			/>
 		);
 
@@ -238,6 +290,7 @@ describe( 'NeedsAttentionInbox', () => {
 			<NeedsAttentionInbox
 				ajaxurl="https://example.com/wp-admin/admin-ajax.php"
 				nonce="test-nonce"
+				isActive
 				onCountChange={ onCountChange }
 			/>
 		);
@@ -257,6 +310,7 @@ describe( 'NeedsAttentionInbox', () => {
 			<NeedsAttentionInbox
 				ajaxurl="https://example.com/wp-admin/admin-ajax.php"
 				nonce="test-nonce"
+				isActive
 			/>
 		);
 
@@ -275,12 +329,38 @@ describe( 'NeedsAttentionInbox', () => {
 			<NeedsAttentionInbox
 				ajaxurl="https://example.com/wp-admin/admin-ajax.php"
 				nonce="test-nonce"
+				isActive
 			/>
 		);
 
 		// ASSERT: The waiting-on-import badge appears.
 		expect(
 			await screen.findByText( 'Waiting on import' )
+		).toBeInTheDocument();
+	} );
+
+	it( 'Verifies that a deferred URL waits for its target', async () => {
+		// ARRANGE: The target is imported but its URL is not final.
+		mockListResponse( [
+			{
+				...DEGRADATION,
+				issue_type: 'deferred_navigation_url',
+				resolvable: false,
+			},
+		] );
+
+		// ACT: Render the inbox.
+		render(
+			<NeedsAttentionInbox
+				ajaxurl="https://example.com/wp-admin/admin-ajax.php"
+				nonce="test-nonce"
+				isActive
+			/>
+		);
+
+		// ASSERT: The hint names the URL as the missing prerequisite.
+		expect(
+			await screen.findByText( 'Waiting on final URL' )
 		).toBeInTheDocument();
 	} );
 
@@ -293,6 +373,7 @@ describe( 'NeedsAttentionInbox', () => {
 			<NeedsAttentionInbox
 				ajaxurl="https://example.com/wp-admin/admin-ajax.php"
 				nonce="test-nonce"
+				isActive
 			/>
 		);
 		expect(
@@ -308,6 +389,97 @@ describe( 'NeedsAttentionInbox', () => {
 		);
 	} );
 
+	// The detail cell truncates in CSS, so the full text has to stay reachable.
+	it.each( [
+		[ 'failure', FAILURE, 'Timed out' ],
+		[ 'degradation', DEGRADATION, renderIssueMessage( DEGRADATION ) ],
+	] )( "Verifies that a %s's detail has the truncating class and a full-text title", async (
+		_kind,
+		row,
+		message
+	) => {
+		// ARRANGE: The inbox lists one row of that kind.
+		mockListResponse( [ row ] );
+
+		// ACT: Render the inbox.
+		render(
+			<NeedsAttentionInbox
+				ajaxurl="https://example.com/wp-admin/admin-ajax.php"
+				nonce="test-nonce"
+				isActive
+			/>
+		);
+
+		// ASSERT: The detail span carries the truncating class and titles
+		// itself with the message it renders.
+		const detail = await screen.findByTitle( message );
+		expect( detail ).toHaveClass( 'safe-publish-inbox-detail' );
+		expect( detail.textContent ).toBe( message );
+	} );
+
+	it( 'Verifies that a linked content title carries its full text as a title', async () => {
+		// ARRANGE: A degradation, which always has a destination post to link.
+		mockListResponse( [ DEGRADATION ] );
+
+		// ACT: Render the inbox.
+		render(
+			<NeedsAttentionInbox
+				ajaxurl="https://example.com/wp-admin/admin-ajax.php"
+				nonce="test-nonce"
+				isActive
+			/>
+		);
+
+		// ASSERT: The title link titles itself with its own text.
+		const title = await screen.findByTitle( 'Primary Menu' );
+		expect( title.tagName ).toBe( 'A' );
+		expect( title.textContent ).toBe( 'Primary Menu' );
+	} );
+
+	it( 'Verifies that an unlinked content title carries its full text as a title', async () => {
+		// ARRANGE: A first-import failure, which has no destination post to
+		// link to, so the Content cell falls back to plain text.
+		mockListResponse( [ FAILURE ] );
+
+		// ACT: Render the inbox.
+		render(
+			<NeedsAttentionInbox
+				ajaxurl="https://example.com/wp-admin/admin-ajax.php"
+				nonce="test-nonce"
+				isActive
+			/>
+		);
+
+		// ASSERT: The unlinked title span titles itself with its own text.
+		const title = await screen.findByTitle( 'Broken import' );
+		expect( title.tagName ).toBe( 'SPAN' );
+		expect( title.textContent ).toBe( 'Broken import' );
+	} );
+
+	it( 'Verifies that the resolvable badge sits outside the truncated detail', async () => {
+		// ARRANGE: A resolvable degradation, so both elements render.
+		const resolvable = { ...DEGRADATION, resolvable: true };
+		mockListResponse( [ resolvable ] );
+
+		// ACT: Render the inbox.
+		render(
+			<NeedsAttentionInbox
+				ajaxurl="https://example.com/wp-admin/admin-ajax.php"
+				nonce="test-nonce"
+				isActive
+			/>
+		);
+		const badge = await screen.findByText( 'Resolvable now' );
+		const detail = await screen.findByTitle(
+			renderIssueMessage( resolvable )
+		);
+
+		// ASSERT: The badge is the detail's sibling, so truncating the detail
+		// cannot clip it.
+		expect( detail.contains( badge ) ).toBe( false );
+		expect( badge.parentElement ).toBe( detail.parentElement );
+	} );
+
 	it( 'Verifies that an empty inbox shows the reassuring empty state', async () => {
 		// ARRANGE: The endpoint returns no rows.
 		mockListResponse( [], 0 );
@@ -317,13 +489,189 @@ describe( 'NeedsAttentionInbox', () => {
 			<NeedsAttentionInbox
 				ajaxurl="https://example.com/wp-admin/admin-ajax.php"
 				nonce="test-nonce"
+				isActive
 			/>
 		);
 
-		// ASSERT: The empty-state copy appears.
+		// ASSERT: The empty-state copy appears, and Refresh stays reachable.
 		expect(
 			await screen.findByText( 'Nothing needs attention.' )
 		).toBeInTheDocument();
+		expect(
+			screen.getByRole( 'button', { name: 'Refresh' } )
+		).toBeInTheDocument();
+	} );
+
+	it( 'Verifies that a failed load hides the empty state', async () => {
+		// ARRANGE: The endpoint rejects the request.
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockResolvedValue( {
+				json: () =>
+					Promise.resolve( { success: false, data: 'Load failed' } ),
+			} )
+		);
+
+		// ACT: Render the inbox.
+		render(
+			<NeedsAttentionInbox
+				ajaxurl="https://example.com/wp-admin/admin-ajax.php"
+				nonce="test-nonce"
+				isActive
+			/>
+		);
+
+		// ASSERT: The error appears without the contradicting empty-state copy.
+		// Scope to the notice: The a11y-speak region repeats its text.
+		expect(
+			await screen.findByText( 'Load failed', {
+				selector: '.components-notice__content',
+			} )
+		).toBeInTheDocument();
+		expect(
+			screen.queryByText( 'Nothing needs attention.' )
+		).not.toBeInTheDocument();
+	} );
+
+	it( 'Verifies that reopening the tab refetches the list', async () => {
+		// ARRANGE: The first fetch finds nothing; later fetches find a failure.
+		const respond = ( items: NeedsAttentionRow[] ) => ( {
+			json: () =>
+				Promise.resolve( {
+					success: true,
+					data: {
+						items,
+						has_more: false,
+						needs_attention_count: items.length,
+					},
+				} ),
+		} );
+		const fetchMock = vi
+			.fn()
+			.mockResolvedValueOnce( respond( [] ) )
+			.mockResolvedValue( respond( [ FAILURE ] ) );
+		vi.stubGlobal( 'fetch', fetchMock );
+		const props = {
+			ajaxurl: 'https://example.com/wp-admin/admin-ajax.php',
+			nonce: 'test-nonce',
+		};
+		// ACT: Load the page on the Posts tab, with the inbox hidden.
+		const { rerender } = render(
+			<NeedsAttentionInbox { ...props } isActive={ false } />
+		);
+
+		// ASSERT: The hidden inbox skips the fetch.
+		expect( fetchMock ).not.toHaveBeenCalled();
+
+		// ACT: Open the tab, hide it, then open it again.
+		rerender( <NeedsAttentionInbox { ...props } isActive /> );
+		await screen.findByText( 'Nothing needs attention.' );
+		rerender( <NeedsAttentionInbox { ...props } isActive={ false } /> );
+		rerender( <NeedsAttentionInbox { ...props } isActive /> );
+
+		// ASSERT: Each opening fetched, and the second one loaded the row.
+		expect(
+			await screen.findByText( 'Broken import' )
+		).toBeInTheDocument();
+		expect( fetchMock ).toHaveBeenCalledTimes( 2 );
+	} );
+
+	it( 'Verifies that an action finishing after the tab hides updates the count', async () => {
+		// ARRANGE: Hold the Ignore request; the list counts the row until then.
+		let count = 1;
+		let finishIgnore = (): void => {};
+		vi.stubGlobal(
+			'fetch',
+			vi.fn( ( _url: string, init?: RequestInit ) =>
+				'safe_publish_set_needs_attention_ignored' === ajaxAction( init )
+					? new Promise( ( resolve ) => {
+							finishIgnore = () => {
+								count = 0;
+								resolve(
+									jsonResponse( {
+										success: true,
+										data: { updated: 1 },
+									} )
+								);
+							};
+					  } )
+					: Promise.resolve( listResponse( count ) )
+			)
+		);
+		const onCountChange = vi.fn();
+		const props = {
+			ajaxurl: 'https://example.com/wp-admin/admin-ajax.php',
+			nonce: 'test-nonce',
+			onCountChange,
+		};
+		const { rerender } = render(
+			<NeedsAttentionInbox { ...props } isActive />
+		);
+		await waitFor( () =>
+			expect( onCountChange ).toHaveBeenLastCalledWith( 1 )
+		);
+
+		// ACT: Ignore the row, leave the tab, then let the Ignore finish.
+		act( () => ignoreFailure() );
+		rerender( <NeedsAttentionInbox { ...props } isActive={ false } /> );
+		await act( async () => finishIgnore() );
+
+		// ASSERT: The hidden inbox ran the refresh and reported the new count.
+		await waitFor( () =>
+			expect( onCountChange ).toHaveBeenLastCalledWith( 0 )
+		);
+	} );
+
+	it( 'Verifies that hiding the tab lets a running refresh finish', async () => {
+		// ARRANGE: Ignore succeeds at once; hold the refresh it requests.
+		let ignored = false;
+		let finishRefresh = (): void => {};
+		const fetchMock = vi.fn( ( _url: string, init?: RequestInit ) => {
+			if (
+				'safe_publish_set_needs_attention_ignored' === ajaxAction( init )
+			) {
+				ignored = true;
+				return Promise.resolve(
+					jsonResponse( { success: true, data: { updated: 1 } } )
+				);
+			}
+			if ( ! ignored ) {
+				return Promise.resolve( listResponse( 1 ) );
+			}
+			return new Promise( ( resolve ) => {
+				finishRefresh = () => resolve( listResponse( 0 ) );
+			} );
+		} );
+		vi.stubGlobal( 'fetch', fetchMock );
+		const listRequests = (): number =>
+			fetchMock.mock.calls.filter(
+				( [ , init ] ) =>
+					'safe_publish_list_needs_attention' === ajaxAction( init )
+			).length;
+		const onCountChange = vi.fn();
+		const props = {
+			ajaxurl: 'https://example.com/wp-admin/admin-ajax.php',
+			nonce: 'test-nonce',
+			onCountChange,
+		};
+		const { rerender } = render(
+			<NeedsAttentionInbox { ...props } isActive />
+		);
+		await waitFor( () =>
+			expect( onCountChange ).toHaveBeenLastCalledWith( 1 )
+		);
+
+		// ACT: Ignore the row, leave the tab mid-refresh, then let it finish.
+		act( () => ignoreFailure() );
+		await waitFor( () => expect( listRequests() ).toBe( 2 ) );
+		rerender( <NeedsAttentionInbox { ...props } isActive={ false } /> );
+		await act( async () => finishRefresh() );
+
+		// ASSERT: The refresh reported the new count without being resent.
+		await waitFor( () =>
+			expect( onCountChange ).toHaveBeenLastCalledWith( 0 )
+		);
+		expect( listRequests() ).toBe( 2 );
 	} );
 
 	it( 'Verifies that toggling views clears the old rows before the refetch', async () => {
@@ -349,15 +697,20 @@ describe( 'NeedsAttentionInbox', () => {
 			<NeedsAttentionInbox
 				ajaxurl="https://example.com/wp-admin/admin-ajax.php"
 				nonce="test-nonce"
+				isActive
 			/>
 		);
 		expect( await screen.findByText( 'Primary Menu' ) ).toBeInTheDocument();
 		fireEvent.click( screen.getByRole( 'radio', { name: 'Ignored' } ) );
 
-		// ASSERT: The old row is dropped at once, not left actionable mid-fetch.
+		// ASSERT: The old row is dropped at once, not left actionable
+		// mid-fetch, and the empty state waits for the fetch to settle.
 		await waitFor( () =>
 			expect( screen.queryByText( 'Primary Menu' ) ).not.toBeInTheDocument()
 		);
+		expect(
+			screen.queryByText( 'No ignored items.' )
+		).not.toBeInTheDocument();
 	} );
 
 	it( 'Verifies that raising the page size refetches from page 1', async () => {
@@ -383,6 +736,7 @@ describe( 'NeedsAttentionInbox', () => {
 			<NeedsAttentionInbox
 				ajaxurl="https://example.com/wp-admin/admin-ajax.php"
 				nonce="test-nonce"
+				isActive
 			/>
 		);
 		await screen.findByText( 'Primary Menu' );
@@ -405,6 +759,7 @@ describe( 'NeedsAttentionInbox', () => {
 			<NeedsAttentionInbox
 				ajaxurl="https://example.com/wp-admin/admin-ajax.php"
 				nonce="test-nonce"
+				isActive
 			/>
 		);
 		const refresh = await screen.findByRole( 'button', {

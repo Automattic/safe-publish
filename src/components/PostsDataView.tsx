@@ -780,7 +780,9 @@ export function PostsDataView( {
 				id: 'title',
 				label: __( 'Title', 'safe-publish' ),
 				enableSorting: true,
-				render: ( { item } ) => <span>{ item.title }</span>,
+				render: ( { item } ) => (
+					<span title={ item.title }>{ item.title }</span>
+				),
 			},
 			{
 				id: 'local_state',

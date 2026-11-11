@@ -34,6 +34,7 @@ tests/
 │       ├── test-1x1.gif          # GIF test image
 │       └── test-1x1.webp         # WebP test image
 ├── e2e/                          # End-to-end tests (Playwright)
+│   ├── compare/                  # Compare modal tests
 │   └── settings/                 # Settings page tests
 └── src/                          # JavaScript/TypeScript tests (Vitest)
     ├── vitest.setup.ts           # Test setup and configuration
@@ -67,6 +68,12 @@ npm run dev
 
 ```bash
 npm run test:integration
+```
+
+Set `WP_MULTISITE=1` to install the network and run the same suites on multisite, which is how CI covers it. Cases gated on `is_multisite()` skip in the default single-site run.
+
+```bash
+WP_MULTISITE=1 npm run test:integration
 ```
 
 ### Unit Tests with Coverage

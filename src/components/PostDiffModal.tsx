@@ -15,7 +15,7 @@ import {
 	__experimentalVStack as VStack,
 	Spinner,
 } from '@wordpress/components';
-import { useState } from '@wordpress/element';
+import { useEffect, useRef, useState } from '@wordpress/element';
 import { __ } from '@wordpress/i18n';
 
 import BlockDiffViewer from './BlockDiffViewer';
@@ -126,14 +126,47 @@ function HeaderBar( {
 	const successMessage = showViewOptions
 		? __( 'Update applied. Some differences remain.', 'safe-publish' )
 		: __( 'Update applied.', 'safe-publish' );
+	const ref = useRef< HTMLDivElement >( null );
+
+	// The bar sticks below the top padding of the modal's scroll area and
+	// grows as it wraps. The stylesheet offsets the diff's scroll targets by
+	// the bar's bottom edge, so a backward focus move scrolls its target below
+	// the bar, not behind it.
+	useEffect( () => {
+		const bar = ref.current;
+		if ( bar === null ) {
+			return;
+		}
+
+		const scroller = bar.closest< HTMLElement >(
+			'.components-modal__content'
+		);
+		if ( scroller === null ) {
+			return;
+		}
+
+		const observer = new ResizeObserver( () => {
+			const padding = parseFloat(
+				getComputedStyle( scroller ).paddingTop
+			);
+			scroller.style.setProperty(
+				'--safe-publish-compare-toolbar-bottom',
+				`${ padding + bar.offsetHeight }px`
+			);
+		} );
+		observer.observe( bar );
+		return () => observer.disconnect();
+	}, [] );
 
 	return (
 		<HStack
+			ref={ ref }
 			className="safe-publish-compare-modal__toggles"
 			justify="flex-start"
 			alignment="center"
 			spacing={ 6 }
 			expanded={ false }
+			wrap
 		>
 			{ showViewOptions && (
 				<>
@@ -179,7 +212,7 @@ function HeaderBar( {
 				</>
 			) }
 			{ updateError && (
-				<Text role="alert" style={ { color: 'var(--safe-publish-status-error)', whiteSpace: 'nowrap' } }>
+				<Text role="alert" style={ { color: 'var(--safe-publish-status-error)' } }>
 					<IsolatedErrorMessage error={ updateError } />
 				</Text>
 			) }
@@ -423,7 +456,7 @@ export default function PostDiffModal( {
 		blockDiffs.some( ( block ) => block.status !== 'unchanged' ) ||
 		hasAnyNonContentDiff( nonContentDiffs );
 	const hasImages =
-		Boolean( nonContentDiffs?.featuredMedia ) ||
+		/<img\s/i.test( nonContentDiffs?.featuredMedia || '' ) ||
 		blockDiffs.some(
 			( block ) =>
 				/<img\s/i.test( block.current?.rendered || '' ) ||
@@ -453,11 +486,9 @@ export default function PostDiffModal( {
 				showLabels={ showLabels }
 				hasImages={ hasImages }
 				showViewOptions={ showDiffBody }
-				// Outlives the diff the post-update refetch clears; unmounting
-				// the activated action would drop focus to the body.
-				showUpdateButton={
-					! error && ! isUpToDate && ( hasAnyChanges || updateSucceeded )
-				}
+				// Offered whenever the row is stale, including when nothing
+				// differs, so an update can still refresh the import date.
+				showUpdateButton={ ! error && ! isUpToDate }
 				isUpdating={ isUpdating }
 				isLoading={ isLoading }
 				updateSucceeded={ updateSucceeded }

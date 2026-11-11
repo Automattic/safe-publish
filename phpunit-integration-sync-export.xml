@@ -19,6 +19,9 @@
     <!-- Boot the plugin in "export" sync mode. -->
     <env name="WP_TEST_SYNC_MODE" value="export" />
 
+    <!-- Configure a shared secret, as a connected source site has. -->
+    <env name="SAFE_PUBLISH_SHARED_SECRET" value="integration-test-secret" force="true" />
+
     <!-- Point to wp-phpunit installation in vendor -->
     <env name="WP_PHPUNIT__DIR" value="vendor/wp-phpunit/wp-phpunit" />
 

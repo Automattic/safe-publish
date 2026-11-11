@@ -10,6 +10,9 @@ declare(strict_types=1);
 namespace Safe_Publish\API;
 
 use Safe_Publish\Auth\HMAC_Authenticator;
+use Safe_Publish\Media\Media_Importer;
+use Safe_Publish\Validators\URL_Validator;
+use WP_HTML_Tag_Processor;
 use WP_Post;
 use WP_REST_Request;
 
@@ -452,32 +455,46 @@ class Source_Media_REST_Field {
 	/**
 	 * Scans content for this site's media URLs and maps each that resolves to an
 	 * attachment to its raw library values and source parent post. Keyed by the
-	 * query-stripped URL to match the destination's lookup at sideload time.
+	 * download URL to match the destination's lookup at sideload time.
 	 *
 	 * @param string $content Raw post content.
 	 * @return array<string, array<string, string>> Source URL => metadata.
 	 */
 	private function resolve_media_metadata( string $content ): array {
-		$host = wp_parse_url( home_url(), PHP_URL_HOST );
+		$site_url = URL_Validator::normalize_site_url( home_url() );
+		$host     = wp_parse_url( $site_url, PHP_URL_HOST );
 
 		if ( ! is_string( $host ) || '' === $host || '' === $content ) {
 			return array();
 		}
 
-		$pattern = '#https?://' . preg_quote( $host, '#' ) . '/[^\s"\'<>()]+#i';
-		$count   = preg_match_all( $pattern, $content, $matches );
+		$port              = wp_parse_url( $site_url, PHP_URL_PORT );
+		$authority         = $host . ( is_int( $port ) ? ':' . $port : '' );
+		$url_pattern       = '(?:(?:https?:)?//'
+			. preg_quote( $authority, '#' )
+			. '/|/(?!/))[^\s"\'<>()]+';
+		$pattern           = '#(?<![a-z0-9:/<])(?<!<!-- )' . $url_pattern . '#i';
+		$attribute_pattern = '#^' . $url_pattern . '$#i';
+		$count             = preg_match_all( $pattern, $content, $matches );
+		$urls              = is_int( $count ) && 0 < $count ? $matches[0] : array();
+		$urls              = array_merge(
+			$urls,
+			$this->line_broken_attribute_urls( $content, $attribute_pattern ),
+			$this->block_attribute_urls( $content, $attribute_pattern ),
+			$this->line_broken_shortcode_urls( $content, $attribute_pattern )
+		);
 
-		if ( ! is_int( $count ) || 0 === $count ) {
+		if ( array() === $urls ) {
 			return array();
 		}
 
 		$uploads_prefix = $this->uploads_path_prefix();
 		$map            = array();
 
-		foreach ( array_unique( $matches[0] ) as $raw_url ) {
-			$url = strtok( $raw_url, '?' );
+		foreach ( array_unique( $urls ) as $raw_url ) {
+			$url = Media_Importer::get_download_url( $raw_url, $site_url );
 
-			if ( false === $url || isset( $map[ $url ] ) ) {
+			if ( isset( $map[ $url ] ) ) {
 				continue;
 			}
 
@@ -523,6 +540,240 @@ class Source_Media_REST_Field {
 		}
 
 		return $map;
+	}
+
+	/**
+	 * Reads URL attributes with internal line breaks as complete values. The
+	 * content scan cannot cross whitespace without joining unrelated text.
+	 *
+	 * @param string $content Raw post content.
+	 * @param string $pattern Accepted source media URL pattern.
+	 * @return list<string> Normalized same-host attribute URLs.
+	 */
+	private function line_broken_attribute_urls(
+		string $content,
+		string $pattern
+	): array {
+		$processor = new WP_HTML_Tag_Processor( $content );
+		$urls      = array();
+
+		while ( $processor->next_tag() ) {
+			foreach ( array( 'src', 'poster', 'data', 'href' ) as $attribute ) {
+				$url = $this->normalized_line_broken_url(
+					$processor->get_attribute( $attribute ),
+					$pattern
+				);
+
+				if ( null !== $url ) {
+					$urls[] = $url;
+				}
+			}
+		}
+
+		return $urls;
+	}
+
+	/**
+	 * Reads media URLs from parsed Gutenberg attributes, including nested attrs
+	 * and child blocks. Parsing restores JSON-escaped slashes and line breaks
+	 * that the raw scan cannot match.
+	 *
+	 * @param string $content Raw post content.
+	 * @param string $pattern Accepted source media URL pattern.
+	 * @return list<string> Normalized same-host block attribute URLs.
+	 */
+	private function block_attribute_urls(
+		string $content,
+		string $pattern
+	): array {
+		// The raw scan already covers unescaped attrs.
+		if (
+			false === strpos( $content, '<!-- wp:' )
+			|| false === strpos( $content, '\\' )
+		) {
+			return array();
+		}
+
+		$urls = array();
+
+		foreach ( parse_blocks( $content ) as $block ) {
+			$urls = array_merge(
+				$urls,
+				$this->urls_in_block( $block, $pattern )
+			);
+		}
+
+		return $urls;
+	}
+
+	/**
+	 * Collects media URL attributes from a block and its child blocks.
+	 *
+	 * @param array  $block   Parsed block.
+	 * @param string $pattern Accepted source media URL pattern.
+	 * @return list<string> Normalized URLs.
+	 */
+	private function urls_in_block(
+		array $block,
+		string $pattern
+	): array {
+		$attrs = $block['attrs'] ?? array();
+		$urls  = is_array( $attrs )
+			? $this->urls_in_block_values( $attrs, $pattern )
+			: array();
+
+		foreach ( $block['innerBlocks'] ?? array() as $child ) {
+			if ( is_array( $child ) ) {
+				$urls = array_merge(
+					$urls,
+					$this->urls_in_block( $child, $pattern )
+				);
+			}
+		}
+
+		return $urls;
+	}
+
+	/**
+	 * Collects media URL strings from nested block attribute values.
+	 *
+	 * @param array  $values  Attribute values.
+	 * @param string $pattern Accepted source media URL pattern.
+	 * @return list<string> Normalized URLs.
+	 */
+	private function urls_in_block_values(
+		array $values,
+		string $pattern
+	): array {
+		$urls = array();
+
+		foreach ( $values as $value ) {
+			if ( is_array( $value ) ) {
+				$urls = array_merge(
+					$urls,
+					$this->urls_in_block_values( $value, $pattern )
+				);
+				continue;
+			}
+
+			$url = $this->normalized_url( $value, $pattern );
+
+			if ( null !== $url ) {
+				$urls[] = $url;
+			}
+		}
+
+		return $urls;
+	}
+
+	/**
+	 * Normalizes a URL value accepted by the source media pattern.
+	 *
+	 * @param mixed  $value   Attribute value.
+	 * @param string $pattern Accepted source media URL pattern.
+	 * @return string|null Normalized URL, or null when not eligible.
+	 */
+	private function normalized_url(
+		mixed $value,
+		string $pattern
+	): ?string {
+		if ( ! is_string( $value ) ) {
+			return null;
+		}
+
+		$url = URL_Validator::normalize_url_whitespace( $value );
+
+		return 1 === preg_match( $pattern, $url ) ? $url : null;
+	}
+
+	/**
+	 * Reads line-broken media URLs from live audio and video shortcodes.
+	 *
+	 * @param string $content Raw post content.
+	 * @param string $pattern Accepted source media URL pattern.
+	 * @return list<string> Normalized same-host shortcode URLs.
+	 */
+	private function line_broken_shortcode_urls(
+		string $content,
+		string $pattern
+	): array {
+		if (
+			false === strpbrk( $content, "\t\n\r" )
+			|| (
+				false === stripos( $content, '[audio' )
+				&& false === stripos( $content, '[video' )
+			)
+		) {
+			return array();
+		}
+
+		$shortcode_pattern = '#\[(\[?)(audio|video)(?![\w-])([^\]]*)\](\]?)#';
+		$count             = preg_match_all(
+			$shortcode_pattern,
+			$content,
+			$matches,
+			PREG_SET_ORDER
+		);
+
+		if ( ! is_int( $count ) || 0 === $count ) {
+			return array();
+		}
+
+		$urls = array();
+
+		foreach ( $matches as $match ) {
+			if ( '[' === $match[1] && ']' === $match[4] ) {
+				continue;
+			}
+
+			$allowed = 'audio' === $match[2]
+				? array_merge( array( 'src' ), wp_get_audio_extensions() )
+				: array_merge( array( 'src', 'poster' ), wp_get_video_extensions() );
+			$attrs   = shortcode_parse_atts( $match[3] );
+
+			if ( ! is_array( $attrs ) ) {
+				continue;
+			}
+
+			foreach ( $attrs as $name => $value ) {
+				if ( ! in_array( $name, $allowed, true ) ) {
+					continue;
+				}
+
+				$url = $this->normalized_line_broken_url(
+					$value,
+					$pattern
+				);
+
+				if ( null !== $url ) {
+					$urls[] = $url;
+				}
+			}
+		}
+
+		return $urls;
+	}
+
+	/**
+	 * Normalizes a complete URL value only when it carries an internal tab or
+	 * line break, leaving ordinary URL extraction to the existing content scan.
+	 *
+	 * @param mixed  $value   Attribute value.
+	 * @param string $pattern Same-host URL pattern.
+	 * @return string|null Normalized URL, or null when not eligible.
+	 */
+	private function normalized_line_broken_url(
+		mixed $value,
+		string $pattern
+	): ?string {
+		if (
+			! is_string( $value )
+			|| false === strpbrk( $value, "\t\n\r" )
+		) {
+			return null;
+		}
+
+		return $this->normalized_url( $value, $pattern );
 	}
 
 	/**

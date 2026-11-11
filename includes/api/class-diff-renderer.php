@@ -12,9 +12,14 @@ namespace Safe_Publish\API;
 use Safe_Publish\Auth\Permissions;
 
 use Safe_Publish\Admin\Content_Logger;
+use Safe_Publish\Admin\Content_Processor;
+use Safe_Publish\Content\Content_Media_Processor;
+use Safe_Publish\Content\Shortcode_ID_Rewriter;
+use Safe_Publish\Media\Media_Importer;
 use Safe_Publish\Utils\Options;
 use Safe_Publish\Utils\Post_Type_Map;
 use Safe_Publish\Utils\Source_Identity_Lookup;
+use Safe_Publish\Validators\URL_Validator;
 use stdClass;
 use WP_Error;
 use WP_Post;
@@ -36,6 +41,19 @@ if ( ! defined( 'ABSPATH' ) ) {
 final class Diff_Renderer {
 
 	/**
+	 * Attributes that open content in the browser's top layer, above the admin.
+	 *
+	 * @var array<string, true>
+	 */
+	private const TOP_LAYER_TRIGGERS = array(
+		'command'             => true,
+		'commandfor'          => true,
+		'interestfor'         => true,
+		'popovertarget'       => true,
+		'popovertargetaction' => true,
+	);
+
+	/**
 	 * Logger instance.
 	 *
 	 * @var Content_Logger
@@ -50,9 +68,10 @@ final class Diff_Renderer {
 	}
 
 	/**
-	 * Renders a comprehensive diff preview for a source post. The post and
-	 * featured-media fetches are tagged Request_Actions::PREVIEW; the
-	 * rest_base lookup is tagged Request_Actions::LIST_ITEMS.
+	 * Renders a comprehensive diff preview for a source post. Fetches of the
+	 * post, its featured media and the attachments it names are tagged
+	 * Request_Actions::PREVIEW; the rest_base lookup is tagged
+	 * Request_Actions::LIST_ITEMS.
 	 *
 	 * @param WP_REST_Request $request      REST request object.
 	 * @param callable        $make_request fn($url, $action, $credentials): array|WP_Error.
@@ -110,6 +129,13 @@ final class Diff_Renderer {
 			$resolved_post_data['raw_values']
 		);
 
+		$incoming['content'] = $this->preview_incoming_content(
+			$incoming['content'],
+			untrailingslashit( (string) $source_site_url ),
+			$source_post_id,
+			$credentials
+		);
+
 		// Extract current local data.
 		$current = $this->extract_current_data( $local_post );
 
@@ -130,7 +156,11 @@ final class Diff_Renderer {
 			__( 'Current Content', 'safe-publish' ),
 			__( 'Incoming Content', 'safe-publish' )
 		);
-		$non_content_diffs = $this->generate_non_content_diffs( $current, $incoming );
+		$non_content_diffs = $this->generate_non_content_diffs(
+			$current,
+			$incoming,
+			$local_post->ID
+		);
 
 		// Generate featured media side-by-side preview.
 		$featured_media_html = $this->generate_featured_media_diff(
@@ -144,24 +174,17 @@ final class Diff_Renderer {
 		// Generate block-level diffs if content has blocks.
 		$block_diffs = $this->generate_block_diffs( $current['content'], $incoming['content'] );
 
-		// Generate rendered previews.
-		$current_rendered  = $this->render_content( $current['content'] );
-		$incoming_rendered = $this->render_content( $incoming['content'] );
-
 		$non_content_diffs['featuredMedia'] = $featured_media_html;
 
 		return array(
-			'contentDiffHtml'      => $content_diff_html,
-			'blockDiffs'           => $block_diffs,
-			'nonContentDiffs'      => $non_content_diffs,
-			'current'              => array(
+			'contentDiffHtml' => $content_diff_html,
+			'blockDiffs'      => $block_diffs,
+			'nonContentDiffs' => $non_content_diffs,
+			'current'         => array(
 				'title'   => $current['title'] ?? null,
 				'excerpt' => $current['excerpt'] ?? null,
-				'meta'    => $current['meta'] ?? null,
 				'terms'   => $current['terms'] ?? null,
 			),
-			'incomingRenderedHtml' => $incoming_rendered,
-			'currentRenderedHtml'  => $current_rendered,
 		);
 	}
 
@@ -368,6 +391,49 @@ final class Diff_Renderer {
 	}
 
 	/**
+	 * Rewrites incoming content the way the import would, so the comparison
+	 * reports what an update changes rather than the rewrite itself.
+	 *
+	 * Media resolves against what the import already sideloaded, downloading
+	 * nothing. Content is returned as it came in when no source is connected
+	 * or a pass fails, leaving the unrewritten comparison.
+	 *
+	 * @param string $content         Raw source content.
+	 * @param string $source_site_url Connected source site URL, untrailingslashed.
+	 * @param int    $source_post_id  Source post ID, for the gallery id self check.
+	 * @param array  $credentials     Source REST auth credentials.
+	 *
+	 * @return string Content as the import would store it.
+	 */
+	private function preview_incoming_content(
+		string $content,
+		string $source_site_url,
+		int $source_post_id,
+		array $credentials
+	): string {
+		if ( '' === $source_site_url || '' === $content ) {
+			return $content;
+		}
+
+		$media_importer = new Media_Importer( new HTTP_Client(), true );
+
+		$preview = ( new Content_Processor(
+			$media_importer,
+			new Content_Media_Processor( $media_importer ),
+			new Shortcode_ID_Rewriter()
+		) )->preview_content(
+			$content,
+			$source_site_url,
+			array(
+				'source_post_id'   => $source_post_id,
+				'auth_credentials' => $credentials,
+			)
+		);
+
+		return is_string( $preview ) ? $preview : $content;
+	}
+
+	/**
 	 * Extracts current data from local post.
 	 *
 	 * @param WP_Post $post Local post object.
@@ -440,10 +506,15 @@ final class Diff_Renderer {
 	 *
 	 * @param array $current  Current data.
 	 * @param array $incoming Incoming data.
+	 * @param int   $post_id  Local post the meta keys are checked against.
 	 *
 	 * @return array Non-content diff HTML keyed by field.
 	 */
-	private function generate_non_content_diffs( array $current, array $incoming ): array {
+	private function generate_non_content_diffs(
+		array $current,
+		array $incoming,
+		int $post_id
+	): array {
 		$diffs = array();
 
 		// Title diff.
@@ -468,8 +539,14 @@ final class Diff_Renderer {
 		$diffs['taxonomies'] = $this->generate_terms_diff( $current, $incoming );
 
 		// Meta diff.
-		$current_meta_text  = $this->build_meta_text( $current['meta'] ?? array() );
-		$incoming_meta_text = $this->build_meta_text( $incoming['meta'] ?? array() );
+		$current_meta_text  = $this->build_meta_text(
+			$current['meta'] ?? array(),
+			$post_id
+		);
+		$incoming_meta_text = $this->build_meta_text(
+			$incoming['meta'] ?? array(),
+			$post_id
+		);
 		$diffs['meta']      = $this->generate_simple_diff(
 			$current_meta_text,
 			$incoming_meta_text,
@@ -512,9 +589,12 @@ final class Diff_Renderer {
 	/**
 	 * Generates the featured media side-by-side preview.
 	 *
-	 * Returns an empty string when both sides resolve to the same image (or
-	 * both sides are missing); the client uses that signal to omit the
-	 * section.
+	 * Returns an empty string when the incoming image resolves to the
+	 * attachment the post already holds, or when neither side has an image;
+	 * the client uses that signal to omit the section. When the incoming record
+	 * cannot be read, the preview shows the copy the import would reuse, or
+	 * notes the failure when there is none. A difference the import would not
+	 * apply carries a note too.
 	 *
 	 * @param int      $local_post_id   Local post ID.
 	 * @param string   $source_site_url Source site URL.
@@ -534,7 +614,7 @@ final class Diff_Renderer {
 		$incoming_featured_id  = isset( $source_data['featured_media'] ) ? absint( $source_data['featured_media'] ) : 0;
 		$incoming_featured_url = '';
 
-		if ( $incoming_featured_id && ! empty( $source_site_url ) ) {
+		if ( $incoming_featured_id > 0 && '' !== $source_site_url ) {
 			$media_api_url  = trailingslashit( $source_site_url ) . 'wp-json/wp/v2/media/' . $incoming_featured_id;
 			$media_response = $make_request(
 				$media_api_url,
@@ -545,12 +625,24 @@ final class Diff_Renderer {
 			if ( ! is_wp_error( $media_response ) ) {
 				$media_body = wp_remote_retrieve_body( $media_response );
 				$media_json = json_decode( $media_body, true );
-				if ( is_array( $media_json ) && ! empty( $media_json['source_url'] ) ) {
-					$incoming_featured_url = (string) $media_json['source_url'];
+				$source_url = is_array( $media_json )
+					? ( $media_json['source_url'] ?? null )
+					: null;
+				// A non-string source_url counts as missing, never as a cast.
+				if ( is_string( $source_url ) && '' !== $source_url ) {
+					// Resolved so the markup points at the source site,
+					// not at this one.
+					$incoming_featured_url = URL_Validator::resolve_relative_url(
+						$source_url,
+						$source_site_url
+					);
+				} else {
+					$this->logger->content_fetch_invalid_response(
+						$incoming_featured_id,
+						$source_site_url
+					);
 				}
 			} else {
-				// Log the failure rather than silently rendering the incoming
-				// featured image as absent.
 				$this->logger->content_fetch_failed(
 					$incoming_featured_id,
 					$source_site_url,
@@ -559,33 +651,66 @@ final class Diff_Renderer {
 			}
 		}
 
-		$current_featured_id  = get_post_thumbnail_id( $local_post_id );
+		$current_featured_id  = (int) get_post_thumbnail_id( $local_post_id );
 		$current_featured_url = '';
-		if ( $current_featured_id ) {
+		if ( $current_featured_id > 0 ) {
 			$resolved = wp_get_attachment_image_url( $current_featured_id, 'full' );
 			if ( is_string( $resolved ) ) {
 				$current_featured_url = $resolved;
 			}
 		}
 
-		if ( $current_featured_url === $incoming_featured_url ) {
+		// Compare attachment identity: The destination copy always has its own
+		// URL, so the two sides never compare equal. A source image with no
+		// destination copy yet reports even when the post has no thumbnail.
+		$resolved_featured_id = Media_Importer::find_imported_attachment_id(
+			$incoming_featured_id,
+			$source_site_url,
+			$incoming_featured_url
+		);
+
+		if (
+			$resolved_featured_id > 0
+			&& $resolved_featured_id === $current_featured_id
+		) {
 			return '';
 		}
 
-		$current_img  = $current_featured_url
-			? sprintf(
-				'<a href="%1$s" target="_blank" rel="noopener noreferrer"><img alt="" src="%1$s" /></a>',
-				esc_url( $current_featured_url )
-			)
-			: '<em>' . esc_html__( 'None', 'safe-publish' ) . '</em>';
-		$incoming_img = $incoming_featured_url
-			? sprintf(
-				'<a href="%1$s" target="_blank" rel="noopener noreferrer"><img alt="" src="%1$s" /></a>',
-				esc_url( $incoming_featured_url )
-			)
-			: '<em>' . esc_html__( 'None', 'safe-publish' ) . '</em>';
+		// The import reuses a known copy without reading the record, so an
+		// unreadable record previews the copy the update would set.
+		if ( '' === $incoming_featured_url && $resolved_featured_id > 0 ) {
+			$incoming_featured_url = (string) wp_get_attachment_image_url(
+				$resolved_featured_id,
+				'full'
+			);
+		}
 
-		return sprintf(
+		// With no image on either side the preview has nothing to draw.
+		if ( 0 === $incoming_featured_id && '' === $current_featured_url ) {
+			return '';
+		}
+
+		// A source image that cannot be shown must not read as a removal.
+		$incoming_placeholder = $incoming_featured_id > 0
+			? __( 'Unavailable', 'safe-publish' )
+			: __( 'None', 'safe-publish' );
+
+		$current_img  = '' !== $current_featured_url
+			? sprintf(
+				'<a href="%1$s" target="_blank" rel="noopener noreferrer"><img alt="%2$s" src="%1$s" /></a>',
+				esc_url( $current_featured_url ),
+				esc_attr__( 'Current featured image', 'safe-publish' )
+			)
+			: '<em>' . esc_html__( 'None', 'safe-publish' ) . '</em>';
+		$incoming_img = '' !== $incoming_featured_url
+			? sprintf(
+				'<a href="%1$s" target="_blank" rel="noopener noreferrer"><img alt="%2$s" src="%1$s" /></a>',
+				esc_url( $incoming_featured_url ),
+				esc_attr__( 'Incoming featured image', 'safe-publish' )
+			)
+			: '<em>' . esc_html( $incoming_placeholder ) . '</em>';
+
+		$preview = sprintf(
 			'<div class="incoming-featured-media-preview">
 				<div>%1$s</div>
 				<div>%2$s</div>
@@ -593,6 +718,25 @@ final class Diff_Renderer {
 			$current_img,
 			$incoming_img
 		);
+
+		$notes = array();
+
+		// The import only ever sets a thumbnail, so a source that dropped its
+		// featured image is a difference the update leaves in place.
+		if ( 0 === $incoming_featured_id ) {
+			$notes[] = __(
+				'The import will not clear this image.',
+				'safe-publish'
+			);
+		} elseif ( '' === $incoming_featured_url ) {
+			// With no known copy, the update fails without this record.
+			$notes[] = __(
+				'The incoming image could not be read from the source.',
+				'safe-publish'
+			);
+		}
+
+		return $preview . $this->build_diff_notes_html( $notes );
 	}
 
 	/**
@@ -618,12 +762,17 @@ final class Diff_Renderer {
 			// Normalize self-closing tags spacing.
 			$html = preg_replace( '/\s+\/>/', '/>', $html );
 
-			// Normalize wp-image-* numeric class volatility (retain class marker).
-			$html = preg_replace( '/wp-image-\d+/', 'wp-image-XXX', $html );
-
 			// Trim again.
 			return trim( $html );
 		};
+
+		// Previews render inline in the admin, so they drop top-layer triggers.
+		$preview_html = array_map(
+			static fn ( mixed $attributes ): mixed => is_array( $attributes )
+				? array_diff_key( $attributes, self::TOP_LAYER_TRIGGERS )
+				: $attributes,
+			wp_kses_allowed_html( 'post' )
+		);
 
 		$current_blocks  = parse_blocks( $current ?? '' );
 		$incoming_blocks = parse_blocks( $incoming ?? '' );
@@ -642,8 +791,8 @@ final class Diff_Renderer {
 			$inc_name = $inc['blockName'] ?? null;
 
 			// An update writes saved markup, so the verdict reads that. A
-			// render drops whatever wp_kses_post() filters, and invents
-			// changes from the counters some blocks assign per render.
+			// render drops whatever kses filters, and invents changes from the
+			// counters some blocks assign per render.
 			$cur_signal = $cur
 				? $normalize_block_html( serialize_block( $cur ) )
 				: '';
@@ -652,8 +801,12 @@ final class Diff_Renderer {
 				: '';
 
 			// Rendering serves the previews alone.
-			$cur_filtered = $cur ? wp_kses_post( render_block( $cur ) ) : '';
-			$inc_filtered = $inc ? wp_kses_post( render_block( $inc ) ) : '';
+			$cur_filtered = $cur
+				? wp_kses( render_block( $cur ), $preview_html )
+				: '';
+			$inc_filtered = $inc
+				? wp_kses( render_block( $inc ), $preview_html )
+				: '';
 
 			// Skip empty freeform whitespace slots — parse_blocks emits them
 			// between real blocks and they carry no visible signal.
@@ -691,32 +844,6 @@ final class Diff_Renderer {
 		}
 
 		return $block_diffs;
-	}
-
-	/**
-	 * Renders content with WordPress filters and block rendering.
-	 *
-	 * @param string $content Content to render.
-	 *
-	 * @return string Rendered content.
-	 */
-	private function render_content( string $content ): string {
-		$rendered = $content;
-
-		// Render blocks if present.
-		if ( function_exists( 'has_blocks' ) && function_exists( 'do_blocks' ) ) {
-			if ( has_blocks( $rendered ) ) {
-				$rendered = do_blocks( $rendered );
-			}
-		}
-
-		// Apply standard content filters (shortcodes, embeds, formatting).
-		if ( function_exists( 'apply_filters' ) ) {
-			// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound
-			$rendered = apply_filters( 'the_content', $rendered );
-		}
-
-		return $rendered;
 	}
 
 	/**
@@ -879,7 +1006,7 @@ final class Diff_Renderer {
 				$title_right
 			);
 
-			return $html . $this->build_term_notes_html(
+			return $html . $this->build_diff_notes_html(
 				$this->unregistered_taxonomy_notes( $records )
 			);
 		}
@@ -943,11 +1070,11 @@ final class Diff_Renderer {
 			false
 		);
 
-		$html = $assigned_html . $this->build_term_notes_html( $assigned_notes );
+		$html = $assigned_html . $this->build_diff_notes_html( $assigned_notes );
 
 		if ( '' !== $related_html ) {
 			$html .= $this->build_related_terms_html(
-				$related_html . $this->build_term_notes_html( $related_notes )
+				$related_html . $this->build_diff_notes_html( $related_notes )
 			);
 		}
 
@@ -1594,15 +1721,15 @@ final class Diff_Renderer {
 	}
 
 	/**
-	 * Renders the notes as a list below the diff table. Core escapes and
-	 * word-diffs everything inside the table, so a note placed there would read
-	 * as inserted content.
+	 * Renders the notes as a list below a comparison. Core escapes and
+	 * word-diffs everything inside a diff table, so a note placed there would
+	 * read as inserted content.
 	 *
 	 * @param string[] $notes Note lines.
 	 *
 	 * @return string Notes HTML, or '' when there are none.
 	 */
-	private function build_term_notes_html( array $notes ): string {
+	private function build_diff_notes_html( array $notes ): string {
 		if ( array() === $notes ) {
 			return '';
 		}
@@ -1612,7 +1739,7 @@ final class Diff_Renderer {
 			$items .= '<li>' . esc_html( $note ) . '</li>';
 		}
 
-		return '<ul class="safe-publish-term-notes">' . $items . '</ul>';
+		return '<ul class="safe-publish-diff-notes">' . $items . '</ul>';
 	}
 
 	/**
@@ -1651,21 +1778,41 @@ final class Diff_Renderer {
 	}
 
 	/**
-	 * Builds text representation of meta for diff comparison.
+	 * Builds text representation of meta for diff comparison. Users without
+	 * the management capability see only the keys the Custom Fields panel would
+	 * show them.
 	 *
 	 * @param array $meta_array Post meta array.
+	 * @param int   $post_id    Local post the keys are checked against.
 	 *
 	 * @return string Text representation.
 	 */
-	private function build_meta_text( array $meta_array ): string {
+	private function build_meta_text(
+		array $meta_array,
+		int $post_id
+	): string {
 		if ( empty( $meta_array ) ) {
 			return '';
 		}
 
-		$lines = array();
+		$restricted = ! current_user_can( Permissions::manage_capability() );
+		$lines      = array();
 		foreach ( $meta_array as $key => $value ) {
+			// PHP turns numeric string keys into ints.
+			$key = (string) $key;
+
 			// Skip protected meta (leading underscore) and plugin internal meta.
 			if ( 0 === strpos( $key, '_' ) || 0 === strpos( $key, 'safe_publish_' ) ) {
+				continue;
+			}
+
+			if (
+				$restricted
+				&& (
+					is_protected_meta( $key, 'post' )
+					|| ! current_user_can( 'edit_post_meta', $post_id, $key )
+				)
+			) {
 				continue;
 			}
 

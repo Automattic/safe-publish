@@ -31,6 +31,7 @@ use Safe_Publish\Utils\Telemetry_Service;
 use Safe_Publish\Tests\Integration\Mock_Post_API_Trait;
 use WP_Error;
 use WP_REST_Request;
+use WP_REST_Response;
 
 /**
  * Full Workflow Test Class.
@@ -447,8 +448,12 @@ class Full_Workflow_Test extends Integration_Test_Case {
 		$auth_result = $this->authenticator->authenticate_request( null, null, $request );
 
 		// ASSERT: Auth failed; no import should have proceeded.
-		$this->assertInstanceOf( WP_Error::class, $auth_result );
-		$this->assertSame( 'safe_publish_auth_invalid', $auth_result->get_error_code() );
+		$this->assertInstanceOf( WP_REST_Response::class, $auth_result );
+		$this->assertSame( 401, $auth_result->get_status() );
+		$this->assertSame(
+			'safe_publish_auth_invalid',
+			$auth_result->get_data()['code']
+		);
 		$this->assertFalse( $this->authenticator->is_authenticated() );
 	}
 

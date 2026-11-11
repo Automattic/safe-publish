@@ -16,8 +16,8 @@ use Safe_Publish\Auth\Auth_Logger;
 use Safe_Publish\Auth\HMAC_Authenticator;
 use Safe_Publish\Auth\Permission_Manager;
 use Safe_Publish\Utils\Audit_Log_Table;
-use WP_Error;
 use WP_REST_Request;
+use WP_REST_Response;
 use WP_UnitTestCase;
 
 /**
@@ -100,10 +100,8 @@ class HMAC_Authenticator_Test extends WP_UnitTestCase {
 		// ACT: Attempt authentication with the tampered signature.
 		$result = $this->authenticator->authenticate_request( null, null, $request );
 
-		// ASSERT: Returns 401 WP_Error; authentication state is unchanged.
-		$this->assertInstanceOf( WP_Error::class, $result );
-		$this->assertSame( 'safe_publish_auth_invalid', $result->get_error_code() );
-		$this->assertSame( 401, $result->get_error_data()['status'] );
+		// ASSERT: Returns a 401 rejection; authentication state is unchanged.
+		$this->assert_rejected( $result, 'safe_publish_auth_invalid', 401 );
 		$this->assertFalse( $this->authenticator->is_authenticated() );
 	}
 
@@ -123,10 +121,8 @@ class HMAC_Authenticator_Test extends WP_UnitTestCase {
 		// ACT: Attempt authentication with the expired timestamp.
 		$result = $this->authenticator->authenticate_request( null, null, $request );
 
-		// ASSERT: Returns 401 WP_Error; authentication state is unchanged.
-		$this->assertInstanceOf( WP_Error::class, $result );
-		$this->assertSame( 'safe_publish_auth_expired', $result->get_error_code() );
-		$this->assertSame( 401, $result->get_error_data()['status'] );
+		// ASSERT: Returns a 401 rejection; authentication state is unchanged.
+		$this->assert_rejected( $result, 'safe_publish_auth_expired', 401 );
 		$this->assertFalse( $this->authenticator->is_authenticated() );
 	}
 
@@ -141,7 +137,7 @@ class HMAC_Authenticator_Test extends WP_UnitTestCase {
 		// ACT: Authenticate the request.
 		$result = $this->authenticator->authenticate_request( null, null, $request );
 
-		// ASSERT: Pass-through (null returned, not a WP_Error).
+		// ASSERT: Pass-through (null returned, not a rejection).
 		$this->assertNull( $result );
 		$this->assertFalse( $this->authenticator->is_authenticated() );
 	}
@@ -167,10 +163,8 @@ class HMAC_Authenticator_Test extends WP_UnitTestCase {
 		// ACT: Attempt authentication without the content hash header.
 		$result = $this->authenticator->authenticate_request( null, null, $request );
 
-		// ASSERT: Returns 401 WP_Error; authentication state is unchanged.
-		$this->assertInstanceOf( WP_Error::class, $result );
-		$this->assertSame( 'safe_publish_auth_content_hash_missing', $result->get_error_code() );
-		$this->assertSame( 401, $result->get_error_data()['status'] );
+		// ASSERT: Returns a 401 rejection; authentication state is unchanged.
+		$this->assert_rejected( $result, 'safe_publish_auth_content_hash_missing', 401 );
 		$this->assertFalse( $this->authenticator->is_authenticated() );
 	}
 
@@ -195,10 +189,8 @@ class HMAC_Authenticator_Test extends WP_UnitTestCase {
 		// ACT: Attempt authentication with the mismatched content hash.
 		$result = $this->authenticator->authenticate_request( null, null, $request );
 
-		// ASSERT: Returns 401 WP_Error; authentication state is unchanged.
-		$this->assertInstanceOf( WP_Error::class, $result );
-		$this->assertSame( 'safe_publish_auth_content_hash_invalid', $result->get_error_code() );
-		$this->assertSame( 401, $result->get_error_data()['status'] );
+		// ASSERT: Returns a 401 rejection; authentication state is unchanged.
+		$this->assert_rejected( $result, 'safe_publish_auth_content_hash_invalid', 401 );
 		$this->assertFalse( $this->authenticator->is_authenticated() );
 	}
 
@@ -281,10 +273,8 @@ class HMAC_Authenticator_Test extends WP_UnitTestCase {
 		// ACT: Attempt authentication with the future timestamp.
 		$result = $this->authenticator->authenticate_request( null, null, $request );
 
-		// ASSERT: Returns 401 WP_Error; authentication state is unchanged.
-		$this->assertInstanceOf( WP_Error::class, $result );
-		$this->assertSame( 'safe_publish_auth_expired', $result->get_error_code() );
-		$this->assertSame( 401, $result->get_error_data()['status'] );
+		// ASSERT: Returns a 401 rejection; authentication state is unchanged.
+		$this->assert_rejected( $result, 'safe_publish_auth_expired', 401 );
 		$this->assertFalse( $this->authenticator->is_authenticated() );
 	}
 
@@ -309,10 +299,8 @@ class HMAC_Authenticator_Test extends WP_UnitTestCase {
 		// ACT: Attempt authentication with no connected site URL configured.
 		$result = $authenticator->authenticate_request( null, null, $request );
 
-		// ASSERT: Returns 500 WP_Error; authentication state is unchanged.
-		$this->assertInstanceOf( WP_Error::class, $result );
-		$this->assertSame( 'safe_publish_auth_no_connected_site_url', $result->get_error_code() );
-		$this->assertSame( 500, $result->get_error_data()['status'] );
+		// ASSERT: Returns a 500 rejection; authentication state is unchanged.
+		$this->assert_rejected( $result, 'safe_publish_auth_no_connected_site_url', 500 );
 		$this->assertFalse( $authenticator->is_authenticated() );
 	}
 
@@ -337,10 +325,8 @@ class HMAC_Authenticator_Test extends WP_UnitTestCase {
 		// ACT: Attempt authentication from a different site URL.
 		$result = $authenticator->authenticate_request( null, null, $request );
 
-		// ASSERT: Returns 403 WP_Error; authentication state is unchanged.
-		$this->assertInstanceOf( WP_Error::class, $result );
-		$this->assertSame( 'safe_publish_auth_site_url_mismatch', $result->get_error_code() );
-		$this->assertSame( 403, $result->get_error_data()['status'] );
+		// ASSERT: Returns a 403 rejection; authentication state is unchanged.
+		$this->assert_rejected( $result, 'safe_publish_auth_site_url_mismatch', 403 );
 		$this->assertFalse( $authenticator->is_authenticated() );
 	}
 
@@ -366,10 +352,8 @@ class HMAC_Authenticator_Test extends WP_UnitTestCase {
 		// ACT: Attempt authentication without the site URL header.
 		$result = $authenticator->authenticate_request( null, null, $request );
 
-		// ASSERT: Returns 401 WP_Error; authentication state is unchanged.
-		$this->assertInstanceOf( WP_Error::class, $result );
-		$this->assertSame( 'safe_publish_auth_site_url_missing', $result->get_error_code() );
-		$this->assertSame( 401, $result->get_error_data()['status'] );
+		// ASSERT: Returns a 401 rejection; authentication state is unchanged.
+		$this->assert_rejected( $result, 'safe_publish_auth_site_url_missing', 401 );
 		$this->assertFalse( $authenticator->is_authenticated() );
 	}
 
@@ -497,8 +481,7 @@ class HMAC_Authenticator_Test extends WP_UnitTestCase {
 
 		// ASSERT: Signature verification fails — the action is part of the
 		// signed payload and cannot be flipped post-signing.
-		$this->assertInstanceOf( WP_Error::class, $result );
-		$this->assertSame( 'safe_publish_auth_invalid', $result->get_error_code() );
+		$this->assert_rejected( $result, 'safe_publish_auth_invalid', 401 );
 		$this->assertFalse( $this->authenticator->is_authenticated() );
 	}
 
@@ -546,6 +529,160 @@ class HMAC_Authenticator_Test extends WP_UnitTestCase {
 				array( $this->authenticator, 'force_rest_nocache_headers' )
 			)
 		);
+	}
+
+	/**
+	 * Verifies that a request whose body was never set is rejected.
+	 */
+	public function test_request_with_no_body_is_rejected(): void {
+		// ARRANGE: A request carrying the hash of an empty body, body unset.
+		$request = new WP_REST_Request( 'GET', '/wp/v2/posts' );
+		$request->set_header( 'X-Safe-Publish-Timestamp', (string) time() );
+		$request->set_header(
+			'X-Safe-Publish-Content-Hash',
+			hash( 'sha256', '' )
+		);
+		$request->set_header( 'X-Safe-Publish-Site-URL', home_url() );
+		$request->set_header( 'X-Safe-Publish-Signature', 'invalid-signature' );
+		$this->assertNull( $request->get_body() );
+
+		// ACT: Attempt authentication.
+		$result = $this->authenticator->authenticate_request(
+			null,
+			null,
+			$request
+		);
+
+		// ASSERT: The unset body is read as empty and the signature decides.
+		$this->assert_rejected( $result, 'safe_publish_auth_invalid', 401 );
+		$this->assertFalse( $this->authenticator->is_authenticated() );
+	}
+
+	/**
+	 * Verifies that a content hash header carrying no value is rejected.
+	 */
+	public function test_valueless_content_hash_header_is_rejected(): void {
+		// ARRANGE: A content hash header present but holding no value.
+		$request = new WP_REST_Request( 'GET', '/wp/v2/posts' );
+		$request->set_body( '' );
+		$request->set_headers(
+			array(
+				'X-Safe-Publish-Timestamp'    => (string) time(),
+				'X-Safe-Publish-Content-Hash' => array(),
+				'X-Safe-Publish-Site-URL'     => home_url(),
+				'X-Safe-Publish-Signature'    => 'invalid-signature',
+			)
+		);
+
+		// ACT: Attempt authentication.
+		$result = $this->authenticator->authenticate_request(
+			null,
+			null,
+			$request
+		);
+
+		// ASSERT: The empty value cannot match the body's hash.
+		$this->assert_rejected(
+			$result,
+			'safe_publish_auth_content_hash_invalid',
+			401
+		);
+		$this->assertFalse( $this->authenticator->is_authenticated() );
+	}
+
+	/**
+	 * Verifies that a signature header carrying no value is rejected.
+	 */
+	public function test_valueless_signature_header_is_rejected(): void {
+		// ARRANGE: A signature header present but holding no value.
+		$request = new WP_REST_Request( 'GET', '/wp/v2/posts' );
+		$request->set_body( '' );
+		$request->set_headers(
+			array(
+				'X-Safe-Publish-Timestamp'    => (string) time(),
+				'X-Safe-Publish-Content-Hash' => hash( 'sha256', '' ),
+				'X-Safe-Publish-Site-URL'     => home_url(),
+				'X-Safe-Publish-Signature'    => array(),
+			)
+		);
+
+		// ACT: Attempt authentication.
+		$result = $this->authenticator->authenticate_request(
+			null,
+			null,
+			$request
+		);
+
+		// ASSERT: The empty value cannot match the expected signature.
+		$this->assert_rejected( $result, 'safe_publish_auth_invalid', 401 );
+		$this->assertFalse( $this->authenticator->is_authenticated() );
+	}
+
+	/**
+	 * Verifies that a rejected batch sub-request is served as a response.
+	 *
+	 * Batch dispatch hands a rest_pre_dispatch result straight to
+	 * rest_post_dispatch, so a rejection has to arrive in response form. It
+	 * also builds sub-requests without a body, which is where an unset body
+	 * reaches the authenticator.
+	 */
+	public function test_rejected_batch_request_returns_error_response(): void {
+		// ARRANGE: Batch one junk-signed sub-request. The hash of an empty
+		// body matches its unset body, so validation reaches the signature.
+		add_filter(
+			'rest_pre_dispatch',
+			array( $this->authenticator, 'authenticate_request' ),
+			10,
+			3
+		);
+
+		$request = new WP_REST_Request( 'POST', '/batch/v1' );
+		$request->set_body_params(
+			array(
+				'requests' => array(
+					array(
+						'method'  => 'POST',
+						'path'    => '/safe-publish/v1/diff-preview',
+						'headers' => array(
+							'X-Safe-Publish-Timestamp'    => (string) time(),
+							'X-Safe-Publish-Content-Hash' => hash( 'sha256', '' ),
+							'X-Safe-Publish-Site-URL'     => home_url(),
+							'X-Safe-Publish-Signature'    => 'invalid-signature',
+						),
+					),
+				),
+			)
+		);
+
+		// ACT: Dispatch the batch.
+		$response = rest_do_request( $request );
+
+		// ASSERT: The envelope carries the sub-request's rejection.
+		$this->assertSame( 207, $response->get_status() );
+		$sub_response = $response->get_data()['responses'][0];
+		$this->assertSame( 401, $sub_response['status'] );
+		$this->assertSame(
+			'safe_publish_auth_invalid',
+			$sub_response['body']['code']
+		);
+		$this->assertFalse( $this->authenticator->is_authenticated() );
+	}
+
+	/**
+	 * Asserts that a request was rejected with the expected code and status.
+	 *
+	 * @param mixed  $result Value returned by the authenticator.
+	 * @param string $code   Expected error code.
+	 * @param int    $status Expected HTTP status.
+	 */
+	private function assert_rejected(
+		mixed $result,
+		string $code,
+		int $status
+	): void {
+		$this->assertInstanceOf( WP_REST_Response::class, $result );
+		$this->assertSame( $status, $result->get_status() );
+		$this->assertSame( $code, $result->get_data()['code'] );
 	}
 
 	/**

@@ -34,6 +34,7 @@ class Import_Sanitization_Test extends Integration_Test_Case {
 
 	use Image_Byte_Mock_Trait;
 	use Mock_Post_API_Trait;
+	use Unfiltered_Html_Trait;
 
 	/**
 	 * Post import service instance.
@@ -55,6 +56,8 @@ class Import_Sanitization_Test extends Integration_Test_Case {
 	#[\Override]
 	protected function setUp(): void {
 		parent::setUp();
+
+		$this->grant_current_user_unfiltered_html();
 
 		$this->repository = new History_Repository();
 
@@ -438,13 +441,12 @@ class Import_Sanitization_Test extends Integration_Test_Case {
 	 */
 	public function test_import_succeeds_for_caller_with_unfiltered_html(): void {
 		// ARRANGE: A non-administrator role (author, which does not normally
-		// hold `unfiltered_html`) is granted the capability explicitly. The
-		// capability — not the role — must decide.
+		// hold `unfiltered_html`) is granted the capability by whichever route
+		// the install allows. The capability — not the role — must decide.
 		$author_id = self::factory()->user->create(
 			array( 'role' => 'author' )
 		);
-		$author    = get_user_by( 'id', $author_id );
-		$author->add_cap( 'unfiltered_html' );
+		$this->grant_unfiltered_html( $author_id );
 		wp_set_current_user( $author_id );
 
 		$content = '<p>Safe content.</p>'

@@ -23,11 +23,31 @@ jobs:
       wordpress-ref: ${{ format('WordPress/WordPress#{0}-branch', matrix.wordpress-version) }}
       wordpress-version: ${{ matrix.wordpress-version }}
 
+  integration-tests-multisite:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - wordpress-version: '6.9'
+            php-version: '8.5'
+          - wordpress-version: '7.0'
+            php-version: '8.5'
+          - wordpress-version: '7.1'
+            php-version: '8.5'
+    uses: ./.github/workflows/reusable-integration-tests.yml
+    with:
+      php-version: ${{ matrix.php-version }}
+      wordpress-ref: ${{ format('WordPress/WordPress#{0}-branch', matrix.wordpress-version) }}
+      wordpress-version: ${{ matrix.wordpress-version }}
+      multisite: true
+
   required:
     name: Integration tests
     runs-on: ubuntu-latest
-    needs: integration-tests
+    needs: [integration-tests, integration-tests-multisite]
     if: ${{ !cancelled() }}
     steps:
       - name: Verify matrix result
-        run: test '${{ needs.integration-tests.result }}' = 'success'
+        run: |
+          test '${{ needs.integration-tests.result }}' = 'success'
+          test '${{ needs.integration-tests-multisite.result }}' = 'success'

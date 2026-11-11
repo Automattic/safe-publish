@@ -76,13 +76,13 @@ If an `<a>` tag's `href` ends in a file extension allowed by WordPress, it is pr
 ### For Each Media URL Found
 
 1. **Resolve**: Relative URLs (URLs without a domain) are converted into absolute URLs by prepending the source site's base URL (scheme and host).
-2. **Normalize**: Query parameters are removed from the working URL; they are reapplied from the original URL in step 7.
+2. **Normalize**: The query and fragment are removed from the working URL, so `guide.pdf?v=2` and `guide.pdf#page=2` both name `guide.pdf`. They are reapplied from the original URL in step 8.
 3. **Filter**: Third-party domain URLs are left unchanged.
 4. **Deduplicate**: If the URL was already imported, the existing attachment URL is used, and download is skipped.
 5. **Download**: File fetched using WordPress core's `download_url()`; downloadability is verified at this point. Redirects are followed only while they stay on the host and port the media URL names, at most three of them — an `http` URL upgraded to `https` still imports, while a redirect to another host, to another port, or back down to `http` fails the download with `download_redirected`.
 6. **Import**: The file type is classified from the downloaded content, not the URL extension — image, video, audio, and PDF are added to the media library via `media_handle_sideload()`; a media-looking URL that resolves to a page is kept as a link.
 7. **Enrich**: The image's source library metadata — alt text, title, caption, and description — is applied to the new attachment. The source resolves each URL back to its attachment record (a capability core REST lacks) and returns the values alongside the post.
-8. **Replace**: Source URL replaced with the new attachment URL in content; previously stripped query parameters are reapplied.
+8. **Replace**: Source URL replaced with the new attachment URL in content. The stripped query and fragment are reapplied.
 
 ### Inline Image ID References
 
@@ -94,11 +94,14 @@ An inline `<img>` carries two attachment-ID references alongside its URL — the
 - Uploaded to media library regardless of serving host — unlike content media (step 3), an off-domain featured image is still downloaded because it belongs to the source.
 - The source library metadata (alt text, title, caption, description) is applied to the destination attachment, fetched in edit context for the raw values.
 - Set as post thumbnail via `set_post_thumbnail()`.
+- A re-import reuses the destination attachment already recorded against the source media ID and origin site, falling back to one sideloaded from the same URL. **Compare** resolves the incoming image the same way, so an unchanged featured image reports no difference, while a repointed or not-yet-imported one still does. A source that dropped its featured image is reported with a note, since the import sets a thumbnail but never clears one. When the source's media record cannot be read, the comparison previews the copy the import would reuse; with no copy, it marks the image unavailable with a note, since the import needs that same record. The failure goes to the audit log.
 - The redirect rule in step 5 applies here too: whichever host the featured image URL names has to serve the file itself.
 
 ### URL Replacement
 
-After media processing, all remaining source-domain URLs in the content are replaced with the destination site URL. This catches URLs outside media elements, such as normal links, block comment attributes, and text references.
+After media processing, all remaining URLs on the source site's host and port are replaced with the destination site URL. This catches URLs outside media elements, such as normal links, block comment attributes, and text references.
+
+The **Compare** action runs this whole transform over the incoming content before diffing it, resolving media against what earlier imports already sideloaded rather than downloading anything, so the comparison reports what a re-import would change instead of the rewrite it already applied. Media the destination has never imported cannot be resolved this way, so it keeps its source URL: it still reads as a difference, and the comparison shows the source file. A file link, which the import may keep as a link (step 6), is left to the URL replacement instead.
 
 ### Content and Excerpt Filtering
 
@@ -117,13 +120,14 @@ Post content and excerpts pass through WordPress' normal save filters for the ac
 - Post data set:
   - **Title**: From source post title
   - **Content**: Transformed content with updated URLs
-  - **Slug**: From source post slug (WordPress appends `-2`, `-3`, etc. if the slug already exists)
+  - **Slug**: From source post slug, kept as-is even when the destination already uses it. WordPress resolves a collision by appending `-2`, `-3`, and so on only once the post leaves draft or pending, for example when it is published or scheduled in the editor, so the slug is not final at import.
   - **Status**: Always `draft`
   - **Post type**: Same as source post
   - **Post Meta**: meta available via REST is transferred, see below for more details.
   - **Terms**: tags and categories are transferred. If they don't exist, they are created. Custom taxonomies that appear in a REST request are transferred if they exist. See below for more details.
 - Additional Post meta stored:
   - `safe_publish_source_post_id` — post ID on the source site
+  - `safe_publish_source_site_url` — source site the post was imported from
   - `safe_publish_source_link` — URL of the source post
   - `safe_publish_imported_from` — plugin identifier (`safe-publish`)
 
@@ -249,9 +253,12 @@ Bulk imports process multiple posts sequentially:
 
 - **Trashed destination post**: Import is refused when the only destination post linked to the source post is in the trash, so a second linked copy is never created. Restore that post to update it, or delete it permanently to import a fresh copy.
 - **Inline media download failures**: Import is aborted; any attachments already created during the run are deleted.
-- **Featured image failures**: Import is aborted.
+- **Featured image failures**: Import is aborted; any attachments already created during the run are deleted.
+- **Post insert rejected**: Import is aborted; any attachments already created during the run are deleted.
 - **Meta/term failures**: Import is aborted; for new posts, the post and its attachments are deleted. For updates, the post is rolled back to its pre-update state.
 - **Network timeouts on API requests**: No automatic retry; on WordPress VIP, consecutive failures will temporarily block further requests for up to 20 seconds to protect performance.
+
+Cleanup deletes only the media the aborted run itself downloaded; a file an earlier import already brought in is left alone. An attachment the cleanup cannot remove is named in the reported error.
 
 ### Error Reporting
 
@@ -305,11 +312,13 @@ Internal links inside post body content (for example `<a href>` in paragraphs an
 
 A permalink stored in a custom or third-party block's attributes — for example a block that saves a post's own URL — is treated the same way: host-swapped, but not re-derived. Rewriting an arbitrary attribute that merely looks like a permalink could point it at the wrong content, so only blocks whose attributes carry an explicit, known entity reference are re-derived.
 
-Navigation links and submenus are the exception: they carry an explicit entity reference, so their URLs are re-derived to the destination permalink automatically — unless the target was a draft at import (see [below](#navigation-links-to-draft-targets-may-404-or-open-the-wrong-page)).
+Navigation links and submenus are the exception: they carry an explicit entity reference, so their URLs are re-derived to the destination permalink when the target post type is registered and its path is settled. Otherwise, the link ID is still mapped, and the URL is deferred (see [below](#navigation-links-with-deferred-urls)).
 
-### Navigation links to draft targets may 404 or open the wrong page
+### Navigation links with deferred URLs
 
-Navigation links and submenus are re-derived only when their target was already published at import. If the target was a draft, its slug isn't final, so the link keeps the host-swapped source path and behaves like an [internal body link](#internal-body-links-may-404-or-open-the-wrong-page) — it can 404 or open the wrong page under a slug collision or a different permalink structure. Re-import the referring content after the target is published to re-derive the URL; the Retry action does not cover this case.
+WordPress settles a post's slug only when it leaves draft or pending. A target in either status keeps the host-swapped source path instead of a URL that would move later. The same applies when a parent page the target sits under is a draft, pending, or in the trash (where its slug carries a temporary `__trashed` suffix), because the parent's slug forms part of the child's path. Under plain permalinks, a page's URL uses its ID instead of a path, so its parents do not matter. An unregistered target post type also prevents a final permalink from being derived.
+
+A deferred link can 404 or open the wrong page under a slug collision or a different permalink structure. Needs attention records the deferred URL. Once the target's path is settled and its post type is registered, use Retry to repair the URL without changing the mapped ID. Scheduled targets and targets in a non-public custom status can be re-derived during import because their slugs are already settled.
 
 ### Navigation links to a term in another taxonomy are left unrepointed
 

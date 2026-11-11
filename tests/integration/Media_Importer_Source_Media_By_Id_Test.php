@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace Safe_Publish\Tests\Integration;
 
 use Safe_Publish\API\HTTP_Client;
+use Safe_Publish\API\Request_Actions;
 use Safe_Publish\Media\Media_Importer;
 use Safe_Publish\Utils\Options;
 use WP_UnitTestCase;
@@ -18,8 +19,9 @@ use WP_UnitTestCase;
  * Exercises the shared source-ID resolver that both featured-image import and
  * shortcode ID rewriting rely on, asserting its three outcomes: A resolved and
  * sideloaded attachment ID, null for a dangling reference (unreachable record,
- * or a record with a missing or non-string source_url), and false for a
- * resolved URL whose bytes fail to download.
+ * or a record with a missing or non-string source_url) or for media a
+ * resolve-only importer has not imported, and false for a resolved URL whose
+ * bytes fail to download. Also covers the action its lookup declares.
  */
 class Media_Importer_Source_Media_By_Id_Test extends WP_UnitTestCase {
 
@@ -242,6 +244,72 @@ class Media_Importer_Source_Media_By_Id_Test extends WP_UnitTestCase {
 		// ASSERT: Genuine sideload failure signalled by false; nothing created.
 		$this->assertFalse( $result );
 		$this->assert_no_new_attachments( $count );
+	}
+
+	/**
+	 * Verifies that a resolve-only importer returns null for a resolvable ID it
+	 * has not imported, rather than reporting a failed download.
+	 */
+	public function test_resolve_only_returns_null_when_not_imported(): void {
+		// ARRANGE: Mock the media record; nothing is imported yet.
+		$this->add_per_source_id_media_api_mock();
+		$count = $this->get_attachment_count();
+
+		$importer = new Media_Importer( new HTTP_Client(), true );
+
+		// ACT: Resolve the source ID without downloading.
+		try {
+			$result = $importer->import_source_media_by_id(
+				9910001,
+				self::SOURCE
+			);
+		} finally {
+			$this->remove_per_source_id_media_api_mock();
+		}
+
+		// ASSERT: Unresolved rather than failed, after the record resolved its
+		// URL; nothing sideloaded.
+		$this->assertNull( $result );
+		$this->assertSame(
+			array( self::SOURCE_MEDIA[9910001] ),
+			$importer->take_unresolved_urls()
+		);
+		$this->assert_no_new_attachments( $count );
+	}
+
+	/**
+	 * Verifies that the lookup declares a media import, or a preview from a
+	 * resolve-only importer, so the source logs real exports only.
+	 */
+	public function test_lookup_declares_media_import_or_preview(): void {
+		// ARRANGE: Record the action each lookup declares.
+		$actions = array();
+		add_filter(
+			'pre_http_request',
+			static function ( $preempt, $args, $url ) use ( &$actions ) {
+				if ( str_contains( (string) $url, '/wp-json/wp/v2/media/' ) ) {
+					$actions[] = $args['headers']['X-Safe-Publish-Action']
+						?? null;
+				}
+
+				return $preempt;
+			},
+			1,
+			3
+		);
+		$credentials = array( 'shared_secret' => str_repeat( 's', 32 ) );
+
+		// ACT: Look the ID up with an importing and a resolve-only importer.
+		( new Media_Importer( new HTTP_Client() ) )
+			->import_source_media_by_id( 9999999, self::SOURCE, $credentials );
+		( new Media_Importer( new HTTP_Client(), true ) )
+			->import_source_media_by_id( 9999999, self::SOURCE, $credentials );
+
+		// ASSERT: Only the importing lookup declared a media import.
+		$this->assertSame(
+			array( Request_Actions::MEDIA_IMPORT, Request_Actions::PREVIEW ),
+			$actions
+		);
 	}
 
 	/**

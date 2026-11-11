@@ -9,6 +9,7 @@ import type { AdminData } from '@/types';
 // Stub the heavy panels so this focuses on tab wiring: Both must stay mounted
 // (toggled via `hidden`), and either may drive the count.
 let reportPostsCount: ( ( n: number ) => void ) | undefined;
+let inboxIsActive: boolean | undefined;
 vi.mock( '@/components/PostsDataView', () => ( {
 	PostsDataView: ( {
 		onNeedsAttentionCountChange,
@@ -20,13 +21,17 @@ vi.mock( '@/components/PostsDataView', () => ( {
 	},
 } ) );
 vi.mock( '@/components/NeedsAttentionInbox', () => ( {
-	default: (): JSX.Element => <div>inbox-panel</div>,
+	default: ( { isActive }: { isActive: boolean } ): JSX.Element => {
+		inboxIsActive = isActive;
+		return <div>inbox-panel</div>;
+	},
 } ) );
 
 import { ManageTabs } from '@/components/ManageTabs';
 
 beforeEach( () => {
 	reportPostsCount = undefined;
+	inboxIsActive = undefined;
 	window.safePublishAdminData = {
 		ajaxurl: 'https://example.com/wp-admin/admin-ajax.php',
 		nonce: 'test-nonce',
@@ -62,6 +67,28 @@ describe( 'ManageTabs', () => {
 		expect( screen.getByText( 'inbox-panel' ) ).toBe( inbox );
 		expect( posts.parentElement ).toHaveAttribute( 'hidden' );
 		expect( inbox.parentElement ).not.toHaveAttribute( 'hidden' );
+	} );
+
+	it( 'Verifies that the inbox is active only on its own tab', () => {
+		// ARRANGE + ACT: Render the tabs (Posts is the default tab).
+		render( <ManageTabs sourceSiteUrl="https://source.example" /> );
+
+		// ASSERT: The hidden inbox is inactive.
+		expect( inboxIsActive ).toBe( false );
+
+		// ACT: Switch to the Needs attention tab.
+		fireEvent.click(
+			screen.getByRole( 'tab', { name: /Needs attention/ } )
+		);
+
+		// ASSERT: The shown inbox is active.
+		expect( inboxIsActive ).toBe( true );
+
+		// ACT: Switch back to the Posts tab.
+		fireEvent.click( screen.getByRole( 'tab', { name: 'Posts' } ) );
+
+		// ASSERT: The inbox is inactive again.
+		expect( inboxIsActive ).toBe( false );
 	} );
 
 	it( 'Verifies that a panel-reported count drives the tab label', () => {

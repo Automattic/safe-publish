@@ -24,6 +24,7 @@ final class Attention_Read_Service {
 	 */
 	public const ATTENTION_ISSUE_RETRYABLE_TYPES = array(
 		'unmapped_block_reference',
+		'deferred_navigation_url',
 		'unmapped_gallery_reference',
 		'nav_ref_rewrite_failed',
 		'parent_orphaned',

@@ -51,7 +51,7 @@ class Connection_Service_Test extends WP_Ajax_UnitTestCase {
 					if ( 'update_option_' === $prefix ) {
 						add_option( $option, 'previous-value' );
 					}
-					set_site_transient(
+					set_transient(
 						Connection_Service::AUTH_STATUS_TRANSIENT,
 						$cached
 					);
@@ -60,7 +60,7 @@ class Connection_Service_Test extends WP_Ajax_UnitTestCase {
 					// ASSERT: No replacement callback invalidates the cache.
 					$this->assertSame(
 						$cached,
-						get_site_transient( Connection_Service::AUTH_STATUS_TRANSIENT )
+						get_transient( Connection_Service::AUTH_STATUS_TRANSIENT )
 					);
 				} finally {
 					add_action( $hook, $callback );
@@ -166,6 +166,34 @@ class Connection_Service_Test extends WP_Ajax_UnitTestCase {
 	}
 
 	/**
+	 * Verifies that the probe cache occupies a per-site slot rather than the
+	 * network-wide one every site would share.
+	 */
+	public function test_probe_cache_is_scoped_per_site(): void {
+		// ARRANGE: A cold cache and an unconfigured URL avoid network requests.
+		delete_option( Options::OPTION_CONNECTED_SITE_URL );
+		Connection_Service::bust_auth_status_cache();
+		$service = new Connection_Service(
+			new Source_Posts_API(),
+			new Telemetry_Service()
+		);
+
+		// ACT: Warm the cache through the public read.
+		$service->auth_status( array() );
+
+		// ASSERT: The probe lands in the per-site slot, leaving the network
+		// slot every other site would read untouched.
+		$this->assertSame(
+			array( 'status' => 'url_unset' ),
+			get_transient( Connection_Service::AUTH_STATUS_TRANSIENT )
+		);
+		$this->assertFalse(
+			get_site_transient( Connection_Service::AUTH_STATUS_TRANSIENT )
+		);
+		Connection_Service::bust_auth_status_cache();
+	}
+
+	/**
 	 * Verifies that cached probe data stays untranslated until each read.
 	 */
 	public function test_cache_lifetime_and_localized_reads(): void {
@@ -180,7 +208,7 @@ class Connection_Service_Test extends WP_Ajax_UnitTestCase {
 
 		// ACT: Populate the cache, then read under a different translation.
 		$first  = $service->auth_status( array() );
-		$cached = get_site_transient(
+		$cached = get_transient(
 			Connection_Service::AUTH_STATUS_TRANSIENT
 		);
 		$filter = static function (
@@ -212,10 +240,10 @@ class Connection_Service_Test extends WP_Ajax_UnitTestCase {
 		$this->assertNotSame( $first['message'], $second['message'] );
 		$this->assertSame(
 			$cached,
-			get_site_transient( Connection_Service::AUTH_STATUS_TRANSIENT )
+			get_transient( Connection_Service::AUTH_STATUS_TRANSIENT )
 		);
-		$expires = (int) get_site_option(
-			'_site_transient_timeout_safe_publish_auth_status'
+		$expires = (int) get_option(
+			'_transient_timeout_safe_publish_auth_status'
 		);
 		$this->assertGreaterThanOrEqual( $before + 300, $expires );
 		$this->assertLessThanOrEqual( time() + 300, $expires );
