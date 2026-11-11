@@ -338,7 +338,7 @@ class Media_Source_Url_Derivation_Test extends Source_Posts_API_Test_Base {
 			'Inline image must be imported, not left pointing at the source.'
 		);
 		$this->assertStringContainsString(
-			'wp-content/uploads',
+			$this->uploads_url(),
 			$saved_content,
 			'Inline image URL must be rewritten to the destination library.'
 		);

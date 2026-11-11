@@ -179,7 +179,10 @@ class Content_Processor_Static_Media_Id_Remap_Test extends Integration_Test_Case
 		// ASSERT: One attachment, and url, id, and class all point at it.
 		$this->assertSame( $before + 1, $this->get_attachment_count() );
 		$attrs = $this->block_attrs( $result, 'core/cover' );
-		$this->assertStringContainsString( 'wp-content/uploads', (string) $attrs['url'] );
+		$this->assertStringStartsWith(
+			$this->uploads_url(),
+			(string) $attrs['url']
+		);
 		$this->assertSame(
 			$this->media_importer->get_attachment_id_from_url( (string) $attrs['url'] ),
 			$attrs['id']
@@ -230,8 +233,8 @@ class Content_Processor_Static_Media_Id_Remap_Test extends Integration_Test_Case
 
 		// ASSERT: The url is local, and the id is unchanged.
 		$attrs = $this->block_attrs( $result, 'core/cover' );
-		$this->assertStringContainsString(
-			'wp-content/uploads',
+		$this->assertStringStartsWith(
+			$this->uploads_url(),
 			(string) $attrs['url']
 		);
 		$this->assertSame( $id, $attrs['id'] ?? null );
@@ -255,7 +258,10 @@ class Content_Processor_Static_Media_Id_Remap_Test extends Integration_Test_Case
 		// ASSERT: One attachment; href + id point at it; fileId anchor id kept.
 		$this->assertSame( $before + 1, $this->get_attachment_count() );
 		$attrs = $this->block_attrs( $result, 'core/file' );
-		$this->assertStringContainsString( 'wp-content/uploads', (string) $attrs['href'] );
+		$this->assertStringStartsWith(
+			$this->uploads_url(),
+			(string) $attrs['href']
+		);
 		$this->assertSame(
 			$this->media_importer->get_attachment_id_from_url( (string) $attrs['href'] ),
 			$attrs['id']
@@ -284,7 +290,7 @@ class Content_Processor_Static_Media_Id_Remap_Test extends Integration_Test_Case
 		$this->assertSame( $before + 1, $this->get_attachment_count() );
 		$attrs   = $this->block_attrs( $result, 'core/media-text' );
 		$new_src = $this->first_media_src( $result );
-		$this->assertStringContainsString( 'wp-content/uploads', $new_src );
+		$this->assertStringStartsWith( $this->uploads_url(), $new_src );
 		$this->assertSame(
 			$this->media_importer->get_attachment_id_from_url( $new_src ),
 			$attrs['mediaId']
@@ -343,7 +349,7 @@ class Content_Processor_Static_Media_Id_Remap_Test extends Integration_Test_Case
 		$this->assertSame( $before + 1, $this->get_attachment_count() );
 		$attrs   = $this->block_attrs( $result, 'core/media-text' );
 		$new_src = $this->first_media_src( $result );
-		$this->assertStringContainsString( 'wp-content/uploads', $new_src );
+		$this->assertStringStartsWith( $this->uploads_url(), $new_src );
 		$this->assertSame(
 			$this->media_importer->get_attachment_id_from_url( $new_src ),
 			$attrs['mediaId']
@@ -450,8 +456,11 @@ class Content_Processor_Static_Media_Id_Remap_Test extends Integration_Test_Case
 		$this->assertSame( $before + 1, $this->get_attachment_count(), 'Cover background must import exactly once' );
 		$attrs   = $this->block_attrs( $result, 'core/cover' );
 		$img_src = $this->first_media_src( $result );
-		$this->assertStringContainsString( 'wp-content/uploads', (string) $attrs['url'] );
-		$this->assertStringContainsString( 'wp-content/uploads', $img_src );
+		$this->assertStringStartsWith(
+			$this->uploads_url(),
+			(string) $attrs['url']
+		);
+		$this->assertStringStartsWith( $this->uploads_url(), $img_src );
 		$this->assertSame( (string) $attrs['url'], $img_src, 'Cover url attr and inner img src must match' );
 		$this->assertSame(
 			$this->media_importer->get_attachment_id_from_url( (string) $attrs['url'] ),
@@ -471,11 +480,12 @@ class Content_Processor_Static_Media_Id_Remap_Test extends Integration_Test_Case
 	 */
 	public function test_same_host_different_port_media_is_imported_not_skipped(): void {
 		// ARRANGE: A cover background on the destination host but a different
-		// port, under an uploads-shaped path that a path-only check would
+		// port, under this site's uploads path, which a path-only check would
 		// misread as already-local.
 		$dest_origin = $this->origin( get_site_url() );
 		$source_site = $this->with_other_port( $dest_origin );
-		$url         = $source_site . '/wp-content/uploads/2020/01/photo.jpg';
+		$uploads     = wp_parse_url( $this->uploads_url(), PHP_URL_PATH );
+		$url         = $source_site . $uploads . '2020/01/photo.jpg';
 		$content     = $this->cover_block( $url, 900011 );
 
 		$serve = function ( $preempt, array $args, string $requested ) use ( $source_site ) {
@@ -498,7 +508,12 @@ class Content_Processor_Static_Media_Id_Remap_Test extends Integration_Test_Case
 		// site's uploads, not left pointing at the source.
 		$this->assertSame( $before + 1, $this->get_attachment_count(), 'Different-port media must be imported' );
 		$attrs = $this->block_attrs( $result, 'core/cover' );
-		$this->assertStringContainsString( $dest_origin . '/wp-content/uploads', (string) $attrs['url'] );
+		$this->assertSame(
+			wp_get_attachment_url(
+				$this->media_importer->get_newly_created_attachment_ids()[0]
+			),
+			$attrs['url']
+		);
 		$this->assertStringNotContainsString( $url, $result );
 		$this->assertSame( array(), $this->processor->get_failed_media() );
 	}

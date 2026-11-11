@@ -783,15 +783,22 @@ class Content_Processor_Test extends Integration_Test_Case {
 		// ASSERT: The source URL no longer appears anywhere in the output.
 		$this->assertStringNotContainsString( $external_url, $processed, 'External URL should be replaced' );
 
-		// ASSERT: The local upload URL appears in the output.
-		$this->assertStringContainsString( 'wp-content/uploads', $processed, 'Local upload URL should be present' );
+		// ASSERT: The img src points at the imported attachment.
+		$local_url = wp_get_attachment_url(
+			$this->media_importer->get_newly_created_attachment_ids()[0]
+		);
+		$this->assertStringContainsString(
+			'src="' . $local_url . '"',
+			$processed,
+			'Image src should be the local upload URL'
+		);
 
 		// ASSERT: No failure was recorded — the import succeeded.
 		$this->assertSame( array(), $this->processor->get_failed_media(), 'No media failures should be recorded' );
 
 		// ASSERT: The block attrs contain a local upload URL (not the source one).
-		$this->assertMatchesRegularExpression(
-			'/"url":"[^"]*wp-content\/uploads[^"]*"/',
+		$this->assertStringContainsString(
+			'"url":"' . $local_url . '"',
 			$processed,
 			'Block attrs url should point to local uploads'
 		);
@@ -1272,7 +1279,7 @@ class Content_Processor_Test extends Integration_Test_Case {
 
 		// ASSERT: The nested block attrs point at a local upload URL and an id.
 		$this->assertMatchesRegularExpression(
-			'/"url":"[^"]*wp-content\/uploads[^"]*"/',
+			'/"url":"' . preg_quote( $this->uploads_url(), '/' ) . '[^"]+"/',
 			$processed,
 			'Nested block attrs url should point to local uploads'
 		);
@@ -1338,7 +1345,7 @@ class Content_Processor_Test extends Integration_Test_Case {
 
 		// ASSERT: A local upload URL is present in the block attrs.
 		$this->assertMatchesRegularExpression(
-			'/"url":"[^"]*wp-content\/uploads[^"]*"/',
+			'/"url":"' . preg_quote( $this->uploads_url(), '/' ) . '[^"]+"/',
 			$processed,
 			'Deeply nested block attrs url should point to local uploads'
 		);
@@ -1457,7 +1464,7 @@ class Content_Processor_Test extends Integration_Test_Case {
 
 		// ASSERT: A local upload URL is present.
 		$this->assertStringContainsString(
-			'wp-content/uploads',
+			$this->uploads_url(),
 			$processed,
 			'Local upload URL should be present in processed content'
 		);
@@ -1583,7 +1590,7 @@ class Content_Processor_Test extends Integration_Test_Case {
 
 		// ASSERT: A local upload URL appears in the serialized block comment.
 		$this->assertStringContainsString(
-			'wp-content/uploads',
+			$this->uploads_url(),
 			$processed,
 			'Local upload URL should appear in the processed output'
 		);
@@ -2093,7 +2100,15 @@ class Content_Processor_Test extends Integration_Test_Case {
 			'Non-ASCII source media should be sideloaded'
 		);
 		$this->assertSame( array(), $this->processor->get_failed_media() );
-		$this->assertStringContainsString( 'wp-content/uploads', $processed );
+
+		// ASSERT: The src points at the imported attachment.
+		$local_url = wp_get_attachment_url(
+			$this->media_importer->get_newly_created_attachment_ids()[0]
+		);
+		$this->assertStringContainsString(
+			'src="' . $local_url . '"',
+			$processed
+		);
 	}
 
 	/**
@@ -2245,7 +2260,14 @@ class Content_Processor_Test extends Integration_Test_Case {
 			'Non-ASCII attrs media should be sideloaded as an attachment'
 		);
 		$this->assertStringNotContainsString( $media_url, $processed );
-		$this->assertStringContainsString( 'wp-content/uploads', $processed );
+
+		// ASSERT: The attr points at the imported attachment.
+		$this->assertSame(
+			wp_get_attachment_url(
+				$this->media_importer->get_newly_created_attachment_ids()[0]
+			),
+			parse_blocks( $processed )[0]['attrs']['backgroundUrl']
+		);
 	}
 
 	/**
@@ -2474,7 +2496,7 @@ class Content_Processor_Test extends Integration_Test_Case {
 
 		// ASSERT: The <img> src now points at a local upload.
 		$this->assertStringContainsString(
-			'wp-content/uploads',
+			$this->uploads_url(),
 			$processed,
 			'Extensionless image src should be rewritten to a local upload URL'
 		);
@@ -2523,7 +2545,7 @@ class Content_Processor_Test extends Integration_Test_Case {
 
 		// ASSERT: The block now references a local upload, not the source URL.
 		$this->assertStringContainsString(
-			'wp-content/uploads',
+			$this->uploads_url(),
 			$processed,
 			'Extensionless image should be rewritten to a local upload URL'
 		);
@@ -2568,7 +2590,7 @@ class Content_Processor_Test extends Integration_Test_Case {
 
 		// ASSERT: The embed src now points at a local .pdf upload.
 		$this->assertStringContainsString(
-			'wp-content/uploads',
+			$this->uploads_url(),
 			$processed,
 			'Extensionless PDF src should be rewritten to a local upload URL'
 		);
@@ -2618,7 +2640,7 @@ class Content_Processor_Test extends Integration_Test_Case {
 			'Page link should be host-swapped, not localized'
 		);
 		$this->assertStringNotContainsString(
-			'wp-content/uploads',
+			$this->uploads_url(),
 			$processed,
 			'Page link must not become a local upload'
 		);
@@ -2760,7 +2782,7 @@ class Content_Processor_Test extends Integration_Test_Case {
 			'A text page at an extensionless img src must not be sideloaded'
 		);
 		$this->assertStringNotContainsString(
-			'wp-content/uploads',
+			$this->uploads_url(),
 			$processed,
 			'Extensionless text must not be rewritten to a local upload'
 		);
@@ -2845,7 +2867,7 @@ class Content_Processor_Test extends Integration_Test_Case {
 			'Source image URL should be replaced'
 		);
 		$this->assertStringContainsString(
-			'wp-content/uploads',
+			$this->uploads_url(),
 			$processed,
 			'Local upload URL should be present'
 		);
@@ -2906,7 +2928,7 @@ class Content_Processor_Test extends Integration_Test_Case {
 		// ASSERT: The upload URL survives serialization from innerContent, so
 		// the host-swapped source path is not what remains.
 		$this->assertStringContainsString(
-			'wp-content/uploads',
+			$this->uploads_url(),
 			$processed,
 			'Rewritten upload URL must survive serialization'
 		);
@@ -2957,7 +2979,7 @@ class Content_Processor_Test extends Integration_Test_Case {
 		// ASSERT: The upload URL survives serialization from innerContent, so
 		// the host-swapped source path is not what remains.
 		$this->assertStringContainsString(
-			'wp-content/uploads',
+			$this->uploads_url(),
 			$processed,
 			'Rewritten upload URL must survive serialization'
 		);
@@ -3010,7 +3032,7 @@ class Content_Processor_Test extends Integration_Test_Case {
 
 		// ASSERT: The upload URL survives serialization from innerContent.
 		$this->assertStringContainsString(
-			'wp-content/uploads',
+			$this->uploads_url(),
 			$processed,
 			'Rewritten upload URL must survive serialization'
 		);
@@ -3054,7 +3076,7 @@ class Content_Processor_Test extends Integration_Test_Case {
 
 		// ASSERT: The upload URL survives serialization from innerContent.
 		$this->assertStringContainsString(
-			'wp-content/uploads',
+			$this->uploads_url(),
 			$processed,
 			'Rewritten upload URL must survive serialization'
 		);
@@ -3100,7 +3122,7 @@ class Content_Processor_Test extends Integration_Test_Case {
 
 		// ASSERT: The upload URL survives serialization from innerContent.
 		$this->assertStringContainsString(
-			'wp-content/uploads',
+			$this->uploads_url(),
 			$processed,
 			'Rewritten upload URL must survive serialization'
 		);
