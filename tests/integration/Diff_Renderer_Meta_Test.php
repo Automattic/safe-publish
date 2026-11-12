@@ -177,7 +177,10 @@ class Diff_Renderer_Meta_Test extends Integration_Test_Case {
 			);
 		};
 
-		$request = new WP_REST_Request( 'POST', '/safe-publish/v1/diff-preview' );
+		$request = new WP_REST_Request(
+			'POST',
+			'/safe-publish/v1/diff-preview'
+		);
 		$request->set_param( 'postId', self::SOURCE_POST_ID );
 		$request->set_param( 'postType', 'post' );
 
@@ -187,7 +190,10 @@ class Diff_Renderer_Meta_Test extends Integration_Test_Case {
 			array()
 		);
 
-		$this->assertIsArray( $result, 'The diff should render without erroring.' );
+		$this->assertIsArray(
+			$result,
+			'The diff should render without erroring.'
+		);
 
 		return (string) $result['nonContentDiffs']['meta'];
 	}

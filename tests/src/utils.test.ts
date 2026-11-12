@@ -732,6 +732,7 @@ describe( 'renderWarningShortLabel', () => {
 		// ASSERT: The label identifies the missing rollback history.
 		expect( label ).toBe( 'rollback history unavailable' );
 	} );
+
 	it( 'should return the short label for reserved_meta_skipped', () => {
 		// ARRANGE: Any reserved_meta_skipped warning.
 		const warning: ReservedMetaSkippedWarning = {
