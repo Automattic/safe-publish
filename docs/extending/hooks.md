@@ -141,30 +141,30 @@ add_filter( 'safe_publish_source_post_meta', function( array $meta, array $data 
 
 ### `safe_publish_import_allowed_meta_keys`
 
-Filter which reserved post meta keys an import may write. Safe Publish refuses two groups: its own `safe_publish_` and `_safe_publish_` tracking namespace, and a list of core-owned keys that hold destination state or point at source-side IDs and paths — `_edit_last`, `_edit_lock`, `_encloseme`, `_pingme`, `_thumbnail_id`, `_wp_attached_file`, `_wp_attachment_backup_sizes`, `_wp_attachment_metadata`, `_wp_desired_post_slug`, `_wp_old_date`, `_wp_old_slug`, `_wp_trash_meta_comments_status`, `_wp_trash_meta_status`, and `_wp_trash_meta_time`. Forms of these keys that the database stores or matches as the same key are reserved too, such as ones that differ only in letter case, accents, or backslashes. Every other key imports unchanged, protected (underscore-prefixed) ones included.
+Filter which reserved core meta keys an import may write. The import skips two groups of reserved keys: the plugin's own `safe_publish_` and `_safe_publish_` keys, which no filter re-enables, and core keys that hold destination state or source-side IDs and paths — `_edit_last`, `_edit_lock`, `_encloseme`, `_pingme`, `_thumbnail_id`, `_wp_attached_file`, `_wp_attachment_backup_sizes`, `_wp_attachment_metadata`, `_wp_desired_post_slug`, `_wp_old_date`, `_wp_old_slug`, `_wp_trash_meta_comments_status`, `_wp_trash_meta_status`, and `_wp_trash_meta_time`. Variants WordPress treats as the same key, such as `_Thumbnail_ID`, are skipped too. Every other key imports unchanged, underscore-prefixed ones included.
 
-Return the subset of the core list this site wants imported anyway. Opt a key back in only where the destination can use the source's value — `_thumbnail_id` and `_wp_attached_file` hold source-side IDs and paths, for example. The plugin's own namespace can never be re-enabled: those keys are destination state the plugin writes and reads itself.
+Return the core keys to import anyway. Do this only where the destination can use the source's value: `_thumbnail_id` and `_wp_attached_file`, for example, hold source-side IDs and paths. Allowing a key also allows its variants.
 
-A refused key does not fail the import. The post imports without it and a `reserved_meta_skipped` warning names the skipped keys in the import results and on the item's history row. To go the other way and refuse more keys, unset them in `safe_publish_source_post_meta`.
+A skipped key does not fail the import. A `reserved_meta_skipped` warning names it in the import results and on the item's history row. To skip more keys, unset them in `safe_publish_source_post_meta`.
 
 **Parameters:**
 
-- `string[] $allowed_keys` — reserved keys the import may write (default empty array)
-- `string[] $reserved_keys` — every core key the policy reserves
+- `string[] $allowed_keys` — reserved core keys the import may write (default empty array)
+- `string[] $reserved_keys` — every reserved core key
 
 **Returns:** `string[]`
 
 **Example:**
 
 ```php
-// Keep the source's slug-change redirects; leave the rest refused.
+// Keep the source's slug-change redirects; skip the rest.
 add_filter(
     'safe_publish_import_allowed_meta_keys',
     static fn( array $allowed ): array => array_merge( $allowed, array( '_wp_old_slug' ) )
 );
 ```
 
-To accept every reserved core key, as imports did before the policy existed:
+To import every reserved core key, as imports did before the policy existed:
 
 ```php
 add_filter(
