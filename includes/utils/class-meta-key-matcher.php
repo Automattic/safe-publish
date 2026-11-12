@@ -50,6 +50,13 @@ final class Meta_Key_Matcher {
 		global $wpdb;
 		static $matches = array();
 
+		// SQLite folds only ASCII case, as strtolower() does, and has no MySQL
+		// collations to query.
+		/** @psalm-suppress UndefinedClass */
+		if ( is_a( $wpdb, 'WP_SQLite_DB' ) ) {
+			return in_array( strtolower( $meta_key ), $keys, true );
+		}
+
 		$table     = $wpdb->postmeta;
 		$collation = self::meta_key_collation( $table );
 
