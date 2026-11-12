@@ -165,8 +165,7 @@ class Diff_Renderer_Meta_Test extends Integration_Test_Case {
 			'meta'    => $meta,
 		);
 
-		// phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
-		$make_request = static function ( $url, $_action, $_credentials ) use ( $response ) {
+		$make_request = static function ( $url ) use ( $response ) {
 			if ( str_contains( $url, '/catalog/post-types' ) ) {
 				return \_safe_publish_test_catalog_response();
 			}
