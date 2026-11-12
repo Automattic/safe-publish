@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace Safe_Publish\Tests\Integration;
 
+use ReflectionClass;
 use Safe_Publish\API\Meta_Terms_Manager;
 use Safe_Publish\Utils\Options;
 use WP_Error;
@@ -1410,25 +1411,10 @@ class Meta_Terms_Manager_Test extends Integration_Test_Case {
 			)
 		);
 
-		// ASSERT: The filter is handed exactly the documented reserved list,
-		// so the class and the hooks documentation cannot drift apart.
+		// ASSERT: The filter is handed the whole reserved core list.
 		$this->assertSame(
-			array(
-				'_edit_last',
-				'_edit_lock',
-				'_encloseme',
-				'_pingme',
-				'_thumbnail_id',
-				'_wp_attached_file',
-				'_wp_attachment_backup_sizes',
-				'_wp_attachment_metadata',
-				'_wp_desired_post_slug',
-				'_wp_old_date',
-				'_wp_old_slug',
-				'_wp_trash_meta_comments_status',
-				'_wp_trash_meta_status',
-				'_wp_trash_meta_time',
-			),
+			( new ReflectionClass( Meta_Terms_Manager::class ) )
+				->getConstant( 'RESERVED_CORE_KEYS' ),
 			$reserved
 		);
 	}

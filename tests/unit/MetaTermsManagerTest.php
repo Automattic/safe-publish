@@ -76,10 +76,10 @@ class MetaTermsManagerTest extends TestCase {
 	}
 
 	/**
-	 * Every core key the policy reserves, as the docs list it.
+	 * Every reserved core key, as the hooks documentation lists it.
 	 *
-	 * Kept here rather than read from the class so a key added to the constant
-	 * without a documentation change fails a test.
+	 * Kept here rather than read from the class, so changing the class list
+	 * fails a test as a reminder to update the documentation.
 	 *
 	 * @var string[]
 	 */
@@ -157,51 +157,8 @@ class MetaTermsManagerTest extends TestCase {
 	}
 
 	/**
-	 * Verifies that core keys holding destination state or source-side
-	 * pointers are refused by default.
-	 *
-	 * @dataProvider reserved_core_key_provider
-	 *
-	 * @param string $key Reserved core meta key.
-	 */
-	public function test_refused_meta_keys_covers_reserved_core_keys(
-		string $key
-	): void {
-		// ARRANGE: The reserved key alongside a migratable one.
-		$meta = array(
-			$key           => 'source-value',
-			'custom_field' => 'value',
-		);
-
-		// ACT: Split the payload by the import key policy.
-		$refused = Meta_Terms_Manager::refused_meta_keys( $meta );
-
-		// ASSERT: The reserved key is refused and the other still written.
-		$this->assertSame( array( $key ), $refused );
-		$this->assertSame(
-			array( 'custom_field' ),
-			Meta_Terms_Manager::importable_meta_keys( $meta )
-		);
-	}
-
-	/**
-	 * Data provider naming every reserved core key the documentation lists.
-	 *
-	 * @return array<string, array{string}> One case per reserved core key.
-	 */
-	public static function reserved_core_key_provider(): array {
-		$cases = array();
-
-		foreach ( self::DOCUMENTED_RESERVED_CORE_KEYS as $key ) {
-			$cases[ $key ] = array( $key );
-		}
-
-		return $cases;
-	}
-
-	/**
-	 * Verifies that the reserved core list is exactly the documented one, so
-	 * the class and the hooks documentation cannot drift apart.
+	 * Verifies that every documented reserved core key is refused, and that the
+	 * class reserves exactly those.
 	 */
 	public function test_reserved_core_keys_match_the_documented_list(): void {
 		// ARRANGE: Every documented reserved key, plus a migratable control.
