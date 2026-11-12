@@ -1042,7 +1042,7 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 	 * Verifies that failed update-history writes surface for single and bulk
 	 * imports.
 	 *
-	 * @dataProvider history_write_failure_session_type_provider
+	 * @dataProvider session_type_provider
 	 *
 	 * @param string $session_type Import session type under test.
 	 */
@@ -1109,7 +1109,7 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 	 *
 	 * @return array<string, array{string}> Session type cases.
 	 */
-	public function history_write_failure_session_type_provider(): array {
+	public function session_type_provider(): array {
 		return array(
 			'single import' => array( 'single' ),
 			'bulk import'   => array( 'bulk' ),
@@ -4233,7 +4233,7 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 	 * Verifies that a reserved key in the source payload is skipped, reported,
 	 * and leaves the destination's own state intact on the update path.
 	 *
-	 * @dataProvider reserved_meta_session_type_provider
+	 * @dataProvider session_type_provider
 	 *
 	 * @param string $session_type Import session type under test.
 	 */
@@ -4319,18 +4319,6 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 		$this->assertSame(
 			$result['warnings'],
 			json_decode( (string) $items[1]['warnings'], true )
-		);
-	}
-
-	/**
-	 * Provides every controller session type using the shared import service.
-	 *
-	 * @return array<string, array{string}> Session type cases.
-	 */
-	public function reserved_meta_session_type_provider(): array {
-		return array(
-			'single import' => array( 'single' ),
-			'bulk import'   => array( 'bulk' ),
 		);
 	}
 
