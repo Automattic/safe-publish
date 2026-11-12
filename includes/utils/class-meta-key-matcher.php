@@ -93,8 +93,8 @@ final class Meta_Key_Matcher {
 	}
 
 	/**
-	 * Returns a postmeta table's meta_key collation, or an empty string when
-	 * it can't be read.
+	 * Returns a postmeta table's meta_key collation, or an empty string when it
+	 * can't be read.
 	 *
 	 * @param string $table Postmeta table name.
 	 * @return string Collation name.

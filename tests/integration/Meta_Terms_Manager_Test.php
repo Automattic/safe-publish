@@ -1313,8 +1313,8 @@ class Meta_Terms_Manager_Test extends Integration_Test_Case {
 	 * source value cannot repoint the identity an imported post is found by.
 	 */
 	public function test_update_meta_skips_the_plugin_namespace(): void {
-		// ARRANGE: The destination's own identity meta, and a payload sending
-		// a different value for it beside a migratable field.
+		// ARRANGE: The destination's own identity meta, and a payload sending a
+		// different value for it beside a migratable field.
 		update_post_meta( $this->post_id, Options::META_SOURCE_POST_ID, 4242 );
 		$meta = array(
 			Options::META_SOURCE_POST_ID => 1111,
@@ -1342,8 +1342,8 @@ class Meta_Terms_Manager_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Verifies that update_meta() skips a reserved core key instead of
-	 * failing, since a WP_Error from a meta write undoes the whole import.
+	 * Verifies that update_meta() skips a reserved core key instead of failing,
+	 * since a WP_Error from a meta write undoes the whole import.
 	 */
 	public function test_update_meta_skips_reserved_core_keys(): void {
 		// ARRANGE: A payload pairing a reserved core key with a custom one.
@@ -1368,9 +1368,9 @@ class Meta_Terms_Manager_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Verifies that safe_publish_import_allowed_meta_keys re-enables a
-	 * reserved core key, is handed the whole reserved list, and never opens
-	 * the plugin's own namespace.
+	 * Verifies that safe_publish_import_allowed_meta_keys re-enables a reserved
+	 * core key, is handed the whole reserved list, and never opens the plugin's
+	 * own namespace.
 	 */
 	public function test_update_meta_honors_allowed_meta_keys_filter(): void {
 		// ARRANGE: A site that opts the featured image pointer back in, and a
@@ -1396,8 +1396,8 @@ class Meta_Terms_Manager_Test extends Integration_Test_Case {
 
 		remove_filter( 'safe_publish_import_allowed_meta_keys', $filter, 10 );
 
-		// ASSERT: The opted-in key is written, and the plugin's namespace
-		// stays refused.
+		// ASSERT: The opted-in key is written, and the plugin's namespace stays
+		// refused.
 		$this->assertTrue( $result );
 		$this->assertSame(
 			77,
@@ -1420,8 +1420,8 @@ class Meta_Terms_Manager_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Returns variants of the source post ID key PHP can't compare, and
-	 * whether lookups read each as that key.
+	 * Returns variants of the source post ID key PHP can't compare, and whether
+	 * lookups read each as that key.
 	 *
 	 * @return array<string, array{string, bool}> Key, and whether it matches.
 	 */
@@ -1439,8 +1439,8 @@ class Meta_Terms_Manager_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Verifies that update_meta() skips exactly the variants lookups read as
-	 * a plugin key, so none can repoint the identity meta.
+	 * Verifies that update_meta() skips exactly the variants lookups read as a
+	 * plugin key, so none can repoint the identity meta.
 	 *
 	 * @dataProvider plugin_key_collation_variant_provider
 	 *
@@ -1451,17 +1451,17 @@ class Meta_Terms_Manager_Test extends Integration_Test_Case {
 		string $key,
 		bool $matched
 	): void {
-		// ARRANGE: The destination's own identity meta, and a payload sending
-		// a different value under the variant.
+		// ARRANGE: The destination's own identity meta, and a payload sending a
+		// different value under the variant.
 		update_post_meta( $this->post_id, Options::META_SOURCE_POST_ID, 4242 );
 		$meta = array( $key => 1111 );
 
 		// ACT: Write the payload.
 		$result = $this->manager->update_meta( $this->post_id, $meta );
 
-		// ASSERT: The write succeeds, the identity meta keeps the
-		// destination's value, and the policy refuses the variant exactly
-		// when lookups match it.
+		// ASSERT: The write succeeds, the identity meta keeps the destination's
+		// value, and the policy refuses the variant exactly when lookups match
+		// it.
 		$this->assertTrue( $result );
 		$this->assertSame(
 			4242,

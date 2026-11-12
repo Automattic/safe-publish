@@ -190,8 +190,8 @@ class MetaTermsManagerTest extends TestCase {
 
 	/**
 	 * Verifies that the policy tests the sanitized key, which is the key the
-	 * write path stores, so a raw key that only becomes reserved once
-	 * sanitized is still refused.
+	 * write path stores, so a raw key that only becomes reserved once sanitized
+	 * is still refused.
 	 */
 	public function test_refused_meta_keys_matches_the_sanitized_key(): void {
 		// ARRANGE: A raw key sanitize_text_field() collapses onto a reserved

@@ -538,8 +538,8 @@ final class Diff_Renderer {
 		// Taxonomies diff.
 		$diffs['taxonomies'] = $this->generate_terms_diff( $current, $incoming );
 
-		// Meta diff over the keys the import writes. It deletes none, so a
-		// key only the destination holds is not a pending change.
+		// Meta diff over the keys the import writes. It deletes none, so a key
+		// only the destination holds is not a pending change.
 		$meta_keys          = Meta_Terms_Manager::importable_meta_keys(
 			$incoming['meta'] ?? array()
 		);

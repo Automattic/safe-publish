@@ -4283,8 +4283,8 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 		$result = $this->import_service->import_post( $post_data, $session_id );
 
 		// ASSERT: The update lands on the same post, the migratable field is
-		// written, and the destination keeps its identity meta and the
-		// featured image the import mapped.
+		// written, and the destination keeps its identity meta and the featured
+		// image the import mapped.
 		$this->assertTrue( $result['success'] );
 		$this->assertTrue( $result['existing'] );
 		$this->assertSame(
@@ -4352,8 +4352,8 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 			$session_id
 		);
 
-		// ASSERT: The post carries its own identity meta, the migratable
-		// field lands, and the skip is reported.
+		// ASSERT: The post carries its own identity meta, the migratable field
+		// lands, and the skip is reported.
 		$this->assertTrue( $result['success'] );
 		$this->assertFalse( $result['existing'] );
 		$post_id = (int) $result['post_id'];
@@ -4384,8 +4384,8 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 	}
 
 	/**
-	 * Verifies that a re-import refuses the forms of the identity key the
-	 * write stores, or lookups read, as that key, and reports each one.
+	 * Verifies that a re-import refuses the forms of the identity key the write
+	 * stores, or lookups read, as that key, and reports each one.
 	 */
 	public function test_import_refuses_reserved_meta_key_variants(): void {
 		// ARRANGE: Import a post once, so the update has a destination post
