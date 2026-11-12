@@ -392,9 +392,9 @@ export interface TermFieldConflictWarning {
 }
 
 /**
- * Surfaced when the source payload carries meta keys Safe Publish reserves —
- * its own tracking keys, or core keys that hold destination state. The post
- * imports with the rest of its meta; the named keys are not written.
+ * Surfaced when the source payload carries values for meta keys Safe Publish
+ * reserves — its own tracking keys, or core keys that hold destination state.
+ * The post imports with the rest of its meta; the named keys are not written.
  */
 export interface ReservedMetaSkippedWarning {
 	type: 'reserved_meta_skipped';

@@ -4442,6 +4442,90 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 	}
 
 	/**
+	 * Provides reserved meta payloads, some keys holding only an empty value,
+	 * with the warnings an import of each reports.
+	 *
+	 * @return array<string, array{array<string, mixed>, list<array>}> Payload
+	 *                                                                  cases.
+	 */
+	public function empty_reserved_meta_provider(): array {
+		$empty_values = array(
+			'_thumbnail_id' => 0,
+			'_edit_lock'    => '',
+			'_wp_old_slug'  => array(),
+			'_pingme'       => false,
+			'_encloseme'    => null,
+		);
+
+		return array(
+			'only empty values'        => array( $empty_values, array() ),
+			'one key with a value'     => array(
+				$empty_values + array( '_edit_last' => 7 ),
+				array(
+					array(
+						'type' => 'reserved_meta_skipped',
+						'keys' => array( '_edit_last' ),
+					),
+				),
+			),
+			'a zero string is a value' => array(
+				array( '_edit_lock' => '0' ),
+				array(
+					array(
+						'type' => 'reserved_meta_skipped',
+						'keys' => array( '_edit_lock' ),
+					),
+				),
+			),
+		);
+	}
+
+	/**
+	 * Verifies that a reserved key holding only an empty value, as REST sends
+	 * for a registered key the post stores nothing for, is skipped without a
+	 * warning, while one holding a value is still reported.
+	 *
+	 * @dataProvider empty_reserved_meta_provider
+	 *
+	 * @param array<string, mixed> $meta     Reserved keys the source sends.
+	 * @param list<array>          $warnings Warnings the import reports.
+	 */
+	public function test_import_reports_only_reserved_meta_with_a_value(
+		array $meta,
+		array $warnings
+	): void {
+		// ARRANGE: A source payload sending the reserved keys beside a
+		// migratable field.
+		$session_id                = $this->repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+		$this->mock_post_overrides = array(
+			'meta' => $meta + array( 'sp_custom_field' => 'imported' ),
+		);
+
+		// ACT: Import a source post the destination does not hold yet.
+		$result = $this->import_service->import_post(
+			array(
+				'id'        => 9503,
+				'title'     => 'New title',
+				'link'      => 'https://source.example.com/empty-reserved-meta',
+				'post_type' => 'posts',
+			),
+			$session_id
+		);
+
+		// ASSERT: The post imports with its migratable field, and only the
+		// reserved key holding a value is reported.
+		$this->assertTrue( $result['success'] );
+		$this->assertSame(
+			'imported',
+			get_post_meta( (int) $result['post_id'], 'sp_custom_field', true )
+		);
+		$this->assertSame( $warnings, $result['warnings'] );
+	}
+
+	/**
 	 * Verifies that undoing a failed update keeps the identity meta and the
 	 * featured image when the payload sent uppercase forms of their keys.
 	 */

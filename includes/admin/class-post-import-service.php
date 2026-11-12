@@ -1918,13 +1918,23 @@ class Post_Import_Service {
 	}
 
 	/**
-	 * Records one warning naming the meta keys the import key policy refused.
+	 * Records one warning naming the refused meta keys that carried a value.
+	 *
+	 * A refused key holding an empty value, such as the default REST sends for
+	 * a registered key the post stores nothing for, withholds nothing.
 	 *
 	 * @param array $fields Post fields; mutated to append a warning.
 	 */
 	private function add_reserved_meta_warning( array &$fields ): void {
 		$refused_keys = Meta_Terms_Manager::refused_meta_keys(
-			$fields['meta']
+			array_filter(
+				$fields['meta'],
+				static fn( mixed $value ): bool => ! in_array(
+					$value,
+					array( '', 0, false, null, array() ),
+					true
+				)
+			)
 		);
 
 		if ( array() === $refused_keys ) {
