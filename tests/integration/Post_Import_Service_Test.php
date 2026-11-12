@@ -4452,4 +4452,76 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 			$result['warnings']
 		);
 	}
+
+	/**
+	 * Verifies that undoing a failed update keeps the identity meta and the
+	 * featured image when the payload sent uppercase forms of their keys.
+	 */
+	public function test_failed_update_undo_keeps_reserved_meta(): void {
+		// ARRANGE: Import a post with a featured image once, so the update has
+		// a destination post holding its identity meta and a mapped featured
+		// image.
+		$session_id = $this->repository->create_session(
+			'https://source.example.com',
+			'single'
+		);
+		$post_data  = array(
+			'id'        => 9503,
+			'title'     => 'Queued title',
+			'link'      => 'https://source.example.com/reserved-meta-undo',
+			'post_type' => 'posts',
+		);
+
+		$this->mock_post_overrides = array( 'featured_media' => 100 );
+
+		$first = $this->import_service->import_post( $post_data, $session_id );
+		$this->assertTrue( $first['success'] );
+
+		$post_id       = (int) $first['post_id'];
+		$attachment_id = (int) get_post_thumbnail_id( $post_id );
+		$this->assertGreaterThan(
+			0,
+			$attachment_id,
+			'The first import should map a featured image.'
+		);
+
+		// ARRANGE: The source now sends the identity key and the featured image
+		// pointer uppercased, beside a field whose write fails, so the update
+		// is undone.
+		$this->mock_post_overrides = array(
+			'featured_media' => 100,
+			'meta'           => array(
+				strtoupper( Options::META_SOURCE_POST_ID ) => 4321,
+				'_THUMBNAIL_ID'                            => 999999,
+				'sp_blocked_field'                         => 'imported',
+			),
+		);
+
+		$block_meta = static function ( $check, $object_id, $meta_key ) {
+			unset( $object_id );
+			return 'sp_blocked_field' === $meta_key ? false : $check;
+		};
+		add_filter( 'update_post_metadata', $block_meta, 10, 3 );
+
+		// ACT: Re-import the post.
+		$result = $this->import_service->import_post( $post_data, $session_id );
+
+		remove_filter( 'update_post_metadata', $block_meta, 10 );
+
+		// ASSERT: The blocked field failed the update, and the undo kept the
+		// identity meta and the featured image the first import mapped.
+		$this->assertFalse( $result['success'] );
+		$this->assertSame(
+			'Failed to update post meta key(s): sp_blocked_field.',
+			$result['error']
+		);
+		$this->assertSame(
+			9503,
+			(int) get_post_meta( $post_id, Options::META_SOURCE_POST_ID, true )
+		);
+		$this->assertSame(
+			$attachment_id,
+			(int) get_post_thumbnail_id( $post_id )
+		);
+	}
 }

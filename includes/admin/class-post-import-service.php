@@ -2971,7 +2971,7 @@ class Post_Import_Service {
 			'terms'          => array(),
 		);
 
-		// Only the keys the write touches; the policy skips the rest.
+		// Only keys the write touches, so the restore deletes no reserved meta.
 		foreach ( Meta_Terms_Manager::importable_meta_keys( $meta ) as $key ) {
 			$snapshot['custom_meta'][ $key ] = get_post_meta(
 				$post_id,
