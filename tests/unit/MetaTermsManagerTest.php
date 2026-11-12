@@ -11,6 +11,9 @@ namespace Safe_Publish\Tests;
 
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
+use Safe_Publish\Admin\Content_Processor;
+use Safe_Publish\Admin\Navigation_Ref_Rewriter;
+use Safe_Publish\Admin\Post_Import_Service;
 use Safe_Publish\API\Meta_Terms_Manager;
 use Safe_Publish\Utils\Options;
 
@@ -254,28 +257,37 @@ class MetaTermsManagerTest extends TestCase {
 	}
 
 	/**
-	 * Verifies that the reserved plugin keys are every post meta key Options
-	 * defines, so a new key can't skip the collation check, and that every
-	 * reserved key is lowercase printable ASCII, which the check requires.
+	 * Verifies that the reserved plugin keys are every post meta key the plugin
+	 * defines, so none skips the collation check, and that every reserved key
+	 * is lowercase printable ASCII, which the check requires.
 	 */
-	public function test_reserved_plugin_keys_cover_options_meta_keys(): void {
-		// ARRANGE: Options' post meta keys, minus term meta keys and the
-		// imported-from value; the policy's reserved lists.
-		$excluded  = array(
+	public function test_reserved_plugin_keys_cover_plugin_meta_keys(): void {
+		// ARRANGE: The post meta keys Options and the admin classes define,
+		// minus term meta keys and the imported-from value; the policy's
+		// reserved lists.
+		$excluded = array(
 			'META_SOURCE_TERM_ID',
 			'META_SOURCE_TERM_URL',
 			'META_TERM_ORIGIN_URL',
 			'META_IMPORTED_FROM_VALUE',
 		);
-		$keys      = array();
-		$constants = ( new ReflectionClass( Options::class ) )->getConstants();
-		foreach ( $constants as $name => $value ) {
-			if (
-				str_starts_with( $name, 'META_' )
-				&& ! in_array( $name, $excluded, true )
-				&& is_string( $value )
-			) {
-				$keys[] = $value;
+		$classes  = array(
+			Options::class,
+			Content_Processor::class,
+			Navigation_Ref_Rewriter::class,
+			Post_Import_Service::class,
+		);
+		$keys     = array();
+		foreach ( $classes as $class_name ) {
+			$constants = ( new ReflectionClass( $class_name ) )->getConstants();
+			foreach ( $constants as $name => $value ) {
+				if (
+					str_starts_with( $name, 'META_' )
+					&& ! in_array( $name, $excluded, true )
+					&& is_string( $value )
+				) {
+					$keys[] = $value;
+				}
 			}
 		}
 		$policy = new ReflectionClass( Meta_Terms_Manager::class );

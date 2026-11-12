@@ -11,6 +11,9 @@ declare(strict_types=1);
 
 namespace Safe_Publish\API;
 
+use Safe_Publish\Admin\Content_Processor;
+use Safe_Publish\Admin\Navigation_Ref_Rewriter;
+use Safe_Publish\Admin\Post_Import_Service;
 use Safe_Publish\Utils\Meta_Key_Matcher;
 use Safe_Publish\Utils\Options;
 use Safe_Publish\Utils\Term_Conflict;
@@ -61,6 +64,10 @@ final class Meta_Terms_Manager {
 		Options::META_SOURCE_AUTHOR_LOGIN,
 		Options::META_SOURCE_POST_PARENT_ID,
 		Options::META_SOURCE_ATTACHMENT_PARENT_ID,
+		Content_Processor::META_REF_REPOINTED_AT,
+		Content_Processor::META_GALLERY_REF_REPOINTED_AT,
+		Navigation_Ref_Rewriter::META_REWRITTEN_AT,
+		Post_Import_Service::META_PARENT_RELINKED_AT,
 	);
 
 	/**
