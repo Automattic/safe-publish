@@ -453,12 +453,11 @@ export function renderWarningMessage( warning: Warning ): string {
 			return sprintf(
 				/* translators: %s: comma-separated meta keys */
 				__(
-					'Safe Publish reserves these custom fields, so they were not imported: %s.',
+					'These custom fields are reserved, so they were not imported: %s.',
 					'safe-publish'
 				),
 				warning.keys.join( ', ' )
 			);
-
 		case 'history_write_failed':
 			return __(
 				'The post was updated, but its rollback history could not be saved. This update cannot be rolled back from Safe Publish.',
@@ -504,7 +503,6 @@ export function renderWarningShortLabel( warning: Warning ): string {
 			return __( 'term not reconciled', 'safe-publish' );
 		case 'reserved_meta_skipped':
 			return __( 'reserved fields skipped', 'safe-publish' );
-
 		case 'history_write_failed':
 			return __( 'rollback history unavailable', 'safe-publish' );
 		default: {
