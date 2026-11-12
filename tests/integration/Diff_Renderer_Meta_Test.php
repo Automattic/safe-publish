@@ -130,6 +130,28 @@ class Diff_Renderer_Meta_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that fields the destination stores in a different order than the
+	 * payload sends them show no change.
+	 */
+	public function test_meta_diff_ignores_key_order(): void {
+		// ARRANGE: Two destination fields, stored in the reverse of the order
+		// the payload sends them.
+		update_post_meta( $this->post_id, 'sp_alpha', 'one' );
+		update_post_meta( $this->post_id, 'sp_beta', 'two' );
+
+		// ACT: Render the diff for the same values in the payload's order.
+		$meta = $this->render_meta(
+			array(
+				'sp_beta'  => 'two',
+				'sp_alpha' => 'one',
+			)
+		);
+
+		// ASSERT: The order alone is no pending change.
+		$this->assertSame( '', $meta );
+	}
+
+	/**
 	 * Renders the custom fields diff against a mocked source response.
 	 *
 	 * @param array $meta Meta the source payload carries.
