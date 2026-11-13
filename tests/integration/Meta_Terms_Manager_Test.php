@@ -1373,8 +1373,8 @@ class Meta_Terms_Manager_Test extends Integration_Test_Case {
 	 * own namespace.
 	 */
 	public function test_update_meta_honors_allowed_meta_keys_filter(): void {
-		// ARRANGE: A site that opts the featured image pointer back in, and a
-		// payload sending it together with a plugin tracking key.
+		// ARRANGE: A site that opts the featured image pointer back in and also
+		// returns a plugin tracking key, and a payload sending both.
 		$reserved = array();
 		$filter   = static function (
 			array $allowed,
@@ -1382,7 +1382,10 @@ class Meta_Terms_Manager_Test extends Integration_Test_Case {
 		) use ( &$reserved ): array {
 			$reserved = $reserved_keys;
 
-			return array_merge( $allowed, array( '_thumbnail_id' ) );
+			return array_merge(
+				$allowed,
+				array( '_thumbnail_id', Options::META_SOURCE_POST_ID )
+			);
 		};
 		add_filter( 'safe_publish_import_allowed_meta_keys', $filter, 10, 2 );
 
@@ -1396,8 +1399,8 @@ class Meta_Terms_Manager_Test extends Integration_Test_Case {
 
 		remove_filter( 'safe_publish_import_allowed_meta_keys', $filter, 10 );
 
-		// ASSERT: The opted-in key is written, and the plugin's namespace stays
-		// refused.
+		// ASSERT: The opted-in core key is written, and the plugin key stays
+		// refused though the filter returns it.
 		$this->assertTrue( $result );
 		$this->assertSame(
 			77,
