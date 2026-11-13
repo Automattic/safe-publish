@@ -47,6 +47,10 @@ if ( ! defined( 'MB_IN_BYTES' ) ) {
 	define( 'MB_IN_BYTES', 1024 * 1024 );
 }
 
+if ( ! defined( 'ARRAY_A' ) ) {
+	define( 'ARRAY_A', 'ARRAY_A' );
+}
+
 // Load Composer autoloader.
 require_once __DIR__ . '/../../vendor/autoload.php';
 

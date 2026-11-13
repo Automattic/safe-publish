@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace Safe_Publish\Tests\Integration;
 
+use ReflectionClass;
 use Safe_Publish\API\Meta_Terms_Manager;
 use Safe_Publish\Utils\Options;
 use WP_Error;
@@ -1304,6 +1305,178 @@ class Meta_Terms_Manager_Test extends Integration_Test_Case {
 				'post_tag',
 				array( 'fields' => 'names' )
 			)
+		);
+	}
+
+	/**
+	 * Verifies that update_meta() skips the plugin's own tracking keys, so a
+	 * source value cannot repoint the identity an imported post is found by.
+	 */
+	public function test_update_meta_skips_the_plugin_namespace(): void {
+		// ARRANGE: The destination's own identity meta, and a payload sending a
+		// different value for it beside a migratable field.
+		update_post_meta( $this->post_id, Options::META_SOURCE_POST_ID, 4242 );
+		$meta = array(
+			Options::META_SOURCE_POST_ID => 1111,
+			'source_color'               => 'blue',
+		);
+
+		// ACT: Write the payload.
+		$result = $this->manager->update_meta( $this->post_id, $meta );
+
+		// ASSERT: The write succeeds, the migratable field lands, and the
+		// identity meta keeps the destination's value.
+		$this->assertTrue( $result );
+		$this->assertSame(
+			'blue',
+			get_post_meta( $this->post_id, 'source_color', true )
+		);
+		$this->assertSame(
+			4242,
+			(int) get_post_meta(
+				$this->post_id,
+				Options::META_SOURCE_POST_ID,
+				true
+			)
+		);
+	}
+
+	/**
+	 * Verifies that update_meta() skips a reserved core key instead of failing,
+	 * since a WP_Error from a meta write undoes the whole import.
+	 */
+	public function test_update_meta_skips_reserved_core_keys(): void {
+		// ARRANGE: A payload pairing a reserved core key with a custom one.
+		$meta = array(
+			'_edit_lock'   => '1700000000:1',
+			'source_color' => 'blue',
+		);
+
+		// ACT: Write the payload.
+		$result = $this->manager->update_meta( $this->post_id, $meta );
+
+		// ASSERT: The write succeeds, the custom key lands, and the reserved
+		// key was never stored.
+		$this->assertTrue( $result );
+		$this->assertSame(
+			'blue',
+			get_post_meta( $this->post_id, 'source_color', true )
+		);
+		$this->assertFalse(
+			metadata_exists( 'post', $this->post_id, '_edit_lock' )
+		);
+	}
+
+	/**
+	 * Verifies that safe_publish_import_allowed_meta_keys re-enables a reserved
+	 * core key, is handed the whole reserved list, and never opens the plugin's
+	 * own namespace.
+	 */
+	public function test_update_meta_honors_allowed_meta_keys_filter(): void {
+		// ARRANGE: A site that opts the featured image pointer back in and also
+		// returns a plugin tracking key, and a payload sending both.
+		$reserved = array();
+		$filter   = static function (
+			array $allowed,
+			array $reserved_keys
+		) use ( &$reserved ): array {
+			$reserved = $reserved_keys;
+
+			return array_merge(
+				$allowed,
+				array( '_thumbnail_id', Options::META_SOURCE_POST_ID )
+			);
+		};
+		add_filter( 'safe_publish_import_allowed_meta_keys', $filter, 10, 2 );
+
+		$meta = array(
+			'_thumbnail_id'              => 77,
+			Options::META_SOURCE_POST_ID => 1111,
+		);
+
+		// ACT: Write the payload with the filter in place.
+		$result = $this->manager->update_meta( $this->post_id, $meta );
+
+		remove_filter( 'safe_publish_import_allowed_meta_keys', $filter, 10 );
+
+		// ASSERT: The opted-in core key is written, and the plugin key stays
+		// refused though the filter returns it.
+		$this->assertTrue( $result );
+		$this->assertSame(
+			77,
+			(int) get_post_meta( $this->post_id, '_thumbnail_id', true )
+		);
+		$this->assertFalse(
+			metadata_exists(
+				'post',
+				$this->post_id,
+				Options::META_SOURCE_POST_ID
+			)
+		);
+
+		// ASSERT: The filter is handed the whole reserved core list.
+		$this->assertSame(
+			( new ReflectionClass( Meta_Terms_Manager::class ) )
+				->getConstant( 'RESERVED_CORE_KEYS' ),
+			$reserved
+		);
+	}
+
+	/**
+	 * Returns variants of the source post ID key PHP can't compare, and whether
+	 * lookups read each as that key.
+	 *
+	 * @return array<string, array{string, bool}> Key, and whether it matches.
+	 */
+	public static function plugin_key_collation_variant_provider(): array {
+		$key  = Options::META_SOURCE_POST_ID;
+		$tail = substr( $key, 1 );
+
+		return array(
+			'accented'         => array( "\u{15B}{$tail}", true ),
+			'long s'           => array( "\u{17F}{$tail}", true ),
+			'fullwidth'        => array( "\u{FF53}{$tail}", true ),
+			'zero-width space' => array( "\u{200B}{$key}", true ),
+			'homoglyph'        => array( "\u{455}{$tail}", false ),
+		);
+	}
+
+	/**
+	 * Verifies that update_meta() skips exactly the variants lookups read as a
+	 * plugin key, so none can repoint the identity meta.
+	 *
+	 * @dataProvider plugin_key_collation_variant_provider
+	 *
+	 * @param string $key     Variant of the source post ID key.
+	 * @param bool   $matched Whether lookups read it as that key.
+	 */
+	public function test_update_meta_skips_plugin_key_collation_variants(
+		string $key,
+		bool $matched
+	): void {
+		// ARRANGE: The destination's own identity meta, and a payload sending a
+		// different value under the variant.
+		update_post_meta( $this->post_id, Options::META_SOURCE_POST_ID, 4242 );
+		$meta = array( $key => 1111 );
+
+		// ACT: Write the payload.
+		$result = $this->manager->update_meta( $this->post_id, $meta );
+
+		// ASSERT: The write succeeds, the identity meta keeps the destination's
+		// value, and the policy refuses the variant exactly when lookups match
+		// it.
+		$this->assertTrue( $result );
+		$this->assertSame(
+			4242,
+			(int) get_post_meta(
+				$this->post_id,
+				Options::META_SOURCE_POST_ID,
+				true
+			)
+		);
+		$this->assertSame(
+			$matched ? array( $key ) : array(),
+			Meta_Terms_Manager::refused_meta_keys( $meta )
 		);
 	}
 }

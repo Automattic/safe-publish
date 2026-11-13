@@ -139,6 +139,42 @@ add_filter( 'safe_publish_source_post_meta', function( array $meta, array $data 
 }, 10, 2 );
 ```
 
+### `safe_publish_import_allowed_meta_keys`
+
+Filter which reserved core meta keys an import may write. The import skips two groups of reserved keys: every key that starts with `safe_publish_` or `_safe_publish_`, which no filter re-enables, and core keys that hold destination state or source-side IDs and paths — `_edit_last`, `_edit_lock`, `_encloseme`, `_pingme`, `_thumbnail_id`, `_wp_attached_file`, `_wp_attachment_backup_sizes`, `_wp_attachment_metadata`, `_wp_desired_post_slug`, `_wp_old_date`, `_wp_old_slug`, `_wp_trash_meta_comments_status`, `_wp_trash_meta_status`, and `_wp_trash_meta_time`. Variants the database treats as the same key, such as `_Thumbnail_ID`, are skipped too. Every other key imports unchanged, underscore-prefixed ones included.
+
+Return the core keys to import anyway. Do this only where the destination can use the source's value: `_thumbnail_id` and `_wp_attached_file`, for example, hold source-side IDs and paths. Avoid `_wp_old_slug` and `_wp_old_date`: WordPress writes its own rows for them on the destination, and an import overwrites every row. Allowing a key also allows its variants.
+
+A skipped key does not fail the import. If it carries a value, a `reserved_meta_skipped` warning names it in the import results and on the item's history row. An empty value, which REST sends for a registered key the post stores nothing for, is skipped without a warning. To skip more keys, or to skip a reserved key without a warning, unset them in `safe_publish_source_post_meta`.
+
+**Parameters:**
+
+- `string[] $allowed_keys` — reserved core keys the import may write (default empty array)
+- `string[] $reserved_keys` — every reserved core key
+
+**Returns:** `string[]`
+
+**Example:**
+
+```php
+// Both sites share user IDs, so keep the source's last editor; skip the rest.
+add_filter(
+    'safe_publish_import_allowed_meta_keys',
+    static fn( array $allowed ): array => array_merge( $allowed, array( '_edit_last' ) )
+);
+```
+
+To import every reserved core key, as imports did before the policy existed:
+
+```php
+add_filter(
+    'safe_publish_import_allowed_meta_keys',
+    static fn( array $_allowed, array $reserved ): array => $reserved,
+    10,
+    2
+);
+```
+
 ### `safe_publish_import_allow_author_fallback`
 
 Filter whether the import may fall back to the importing author when the source author cannot be matched on the destination site. By default, an unmatched source author aborts the import.
