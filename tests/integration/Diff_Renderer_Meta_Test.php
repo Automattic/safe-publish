@@ -152,6 +152,27 @@ class Diff_Renderer_Meta_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that a source key the import sanitizes is compared under the key
+	 * the import writes, so the pending change shows on both sides.
+	 */
+	public function test_meta_diff_compares_a_sanitized_source_key(): void {
+		// ARRANGE: A destination value for the key a tagged source key
+		// sanitizes to.
+		update_post_meta( $this->post_id, 'sp_bold', 'destination-value' );
+
+		// ACT: Render the diff for the tagged form of the key.
+		$meta = $this->render_meta(
+			array( '<b>sp_bold</b>' => 'source-value' )
+		);
+
+		// ASSERT: The written key and both sides of the change are on show.
+		$text = wp_strip_all_tags( $meta );
+		$this->assertStringContainsString( 'sp_bold', $text );
+		$this->assertStringContainsString( 'destination-value', $text );
+		$this->assertStringContainsString( 'source-value', $text );
+	}
+
+	/**
 	 * Renders the custom fields diff against a mocked source response.
 	 *
 	 * @param array $meta Meta the source payload carries.
