@@ -42,8 +42,8 @@ final class Meta_Terms_Manager {
 	/**
 	 * Meta key prefixes reserved for this plugin's own import state.
 	 *
-	 * A source value under one would repoint an imported post's identity, so no
-	 * filter re-enables them.
+	 * A source value under one would overwrite that state, such as an imported
+	 * post's identity, so no filter re-enables them.
 	 *
 	 * @var string[]
 	 */
@@ -239,7 +239,7 @@ final class Meta_Terms_Manager {
 	 *
 	 * Reads the sanitized key the way the write stores it, unslashed, and the
 	 * way lookups match it, under the meta_key column's collation, so no form
-	 * of a reserved key slips past.
+	 * of a listed reserved key slips past.
 	 *
 	 * @param string   $key          Sanitized meta key.
 	 * @param string[] $allowed_keys Reserved core keys a site opted back in.
