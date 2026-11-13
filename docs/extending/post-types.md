@@ -172,6 +172,10 @@ add_action( 'init', function() {
 } );
 ```
 
+**Check that the key is not reserved:**
+
+The import skips reserved keys, such as `_thumbnail_id` and every key that starts with `safe_publish_` or `_safe_publish_`. The import results name each skipped key that carried a value. For the full list, and to import a core key anyway, see [`safe_publish_import_allowed_meta_keys`](hooks.md#safe_publish_import_allowed_meta_keys).
+
 ### Taxonomies Not Importing
 
 **Check taxonomy REST support:**
