@@ -538,13 +538,19 @@ final class Diff_Renderer {
 		// Taxonomies diff.
 		$diffs['taxonomies'] = $this->generate_terms_diff( $current, $incoming );
 
-		// Meta diff.
+		// Meta diff over the keys the import writes. It deletes none, so a key
+		// only the destination holds is not a pending change.
+		$meta_keys          = Meta_Terms_Manager::importable_meta_keys(
+			$incoming['meta'] ?? array()
+		);
 		$current_meta_text  = $this->build_meta_text(
 			$current['meta'] ?? array(),
+			$meta_keys,
 			$post_id
 		);
 		$incoming_meta_text = $this->build_meta_text(
 			$incoming['meta'] ?? array(),
+			$meta_keys,
 			$post_id
 		);
 		$diffs['meta']      = $this->generate_simple_diff(
@@ -1782,27 +1788,30 @@ final class Diff_Renderer {
 	 * the management capability see only the keys the Custom Fields panel would
 	 * show them.
 	 *
-	 * @param array $meta_array Post meta array.
-	 * @param int   $post_id    Local post the keys are checked against.
+	 * Walks both sides in the same key order, so a reordered key does not read
+	 * as a removal plus an addition.
+	 *
+	 * @param array    $meta_array      Post meta array.
+	 * @param string[] $comparable_keys Keys to compare, sanitized the way the
+	 *                                  import sanitizes them.
+	 * @param int      $post_id         Local post the keys are checked against.
 	 *
 	 * @return string Text representation.
 	 */
 	private function build_meta_text(
 		array $meta_array,
+		array $comparable_keys,
 		int $post_id
 	): string {
-		if ( empty( $meta_array ) ) {
-			return '';
+		$by_key = array();
+		foreach ( $meta_array as $key => $value ) {
+			$by_key[ sanitize_text_field( (string) $key ) ] = $value;
 		}
 
 		$restricted = ! current_user_can( Permissions::manage_capability() );
 		$lines      = array();
-		foreach ( $meta_array as $key => $value ) {
-			// PHP turns numeric string keys into ints.
-			$key = (string) $key;
-
-			// Skip protected meta (leading underscore) and plugin internal meta.
-			if ( 0 === strpos( $key, '_' ) || 0 === strpos( $key, 'safe_publish_' ) ) {
+		foreach ( $comparable_keys as $key ) {
+			if ( ! array_key_exists( $key, $by_key ) ) {
 				continue;
 			}
 
@@ -1816,7 +1825,10 @@ final class Diff_Renderer {
 				continue;
 			}
 
-			$val = is_array( $value ) ? ( isset( $value[0] ) ? $value[0] : wp_json_encode( $value ) ) : $value;
+			$value = $by_key[ $key ];
+			$val   = is_array( $value )
+				? ( isset( $value[0] ) ? $value[0] : wp_json_encode( $value ) )
+				: $value;
 			if ( is_array( $val ) || is_object( $val ) ) {
 				$val = wp_json_encode( $val );
 			}
