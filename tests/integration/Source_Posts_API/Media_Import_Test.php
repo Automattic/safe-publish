@@ -38,7 +38,11 @@ class Media_Import_Test extends Source_Posts_API_Test_Base {
 
 		// ASSERT: Verify source URL was replaced with local URL.
 		$this->assertStringNotContainsString( $external_url, $processed_content, 'External URL should be replaced' );
-		$this->assertStringContainsString( 'wp-content/uploads', $processed_content, 'Should contain local upload URL' );
+		$this->assertStringContainsString(
+			$this->uploads_url(),
+			$processed_content,
+			'Should contain local upload URL'
+		);
 		$this->assertStringContainsString( 'alt="Test Image"', $processed_content, 'Should preserve alt text' );
 	}
 
@@ -206,7 +210,10 @@ class Media_Import_Test extends Source_Posts_API_Test_Base {
 		$this->assertStringNotContainsString( 'example.com/image3.gif', $processed_content );
 
 		// ASSERT: Verify local URLs present.
-		$this->assertStringContainsString( 'wp-content/uploads', $processed_content );
+		$this->assertStringContainsString(
+			$this->uploads_url(),
+			$processed_content
+		);
 
 		// ASSERT: Verify alt texts preserved.
 		$this->assertStringContainsString( 'alt="First"', $processed_content );
@@ -263,7 +270,10 @@ class Media_Import_Test extends Source_Posts_API_Test_Base {
 		// ASSERT: Verify import succeeded.
 		$this->assertNotFalse( $featured_image_local, 'Featured image should import successfully' );
 		$this->assertIsString( $featured_image_local );
-		$this->assertStringContainsString( 'wp-content/uploads', $featured_image_local );
+		$this->assertStringStartsWith(
+			$this->uploads_url(),
+			$featured_image_local
+		);
 
 		// ASSERT: Verify attachment created.
 		$attachments_after = $this->get_attachment_count();
@@ -324,7 +334,10 @@ class Media_Import_Test extends Source_Posts_API_Test_Base {
 		// ASSERT: Verify all inline image URLs replaced with local URLs.
 		$this->assertStringNotContainsString( 'example.com/inline-image-1.jpg', $processed_content );
 		$this->assertStringNotContainsString( 'example.com/inline-image-2.png', $processed_content );
-		$this->assertStringContainsString( 'wp-content/uploads', $processed_content );
+		$this->assertStringContainsString(
+			$this->uploads_url(),
+			$processed_content
+		);
 
 		// ASSERT: Verify HTML attributes preserved.
 		$this->assertStringContainsString( 'alt="First inline image"', $processed_content );
