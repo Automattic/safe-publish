@@ -27,7 +27,7 @@ export interface DiffPreviewPayload {
 /**
  * Represents a single block's diff information.
  *
- * @property {number} index      Block's position index.
+ * @property {number} index      Incoming position, or current one if removed.
  * @property {string} status     Diff status of the block.
  * @property {Object} [current]  Current block data.
  * @property {Object} [incoming] Incoming block data.
