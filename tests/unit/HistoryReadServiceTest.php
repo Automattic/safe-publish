@@ -13,12 +13,6 @@ use PHPUnit\Framework\TestCase;
 use Safe_Publish\Admin\History_Read_Service;
 use WP_Error;
 
-if ( ! defined( 'ARRAY_A' ) ) {
-	// Supply the WordPress output-mode constant in the unit environment.
-	// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedConstantFound
-	define( 'ARRAY_A', 'ARRAY_A' );
-}
-
 /**
  * Verifies history reads against a narrow database double.
  */
