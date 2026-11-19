@@ -219,7 +219,7 @@ When a post is imported, Safe Publish processes its content so that it renders c
 
 - **Featured images and inline media** referenced from the source site are downloaded and added to the destination's media library. This includes media in `img`, `video`, `audio`, and `source` elements, and file links in classic HTML and in block markup.
 - **Source URLs are rewritten** to point at the destination's copies, so the imported content no longer links back to the source.
-- **Media is deduplicated** by its original URL. If the same source file has already been imported, Safe Publish reuses the existing attachment on the destination instead of downloading it again.
+- **Media is deduplicated** by its original URL, whether it uses `http` or `https`. If the same source file has already been imported, Safe Publish reuses the existing attachment on the destination instead of downloading it again.
 - **Third-party media is left untouched.** Files hosted on domains other than the source site are not downloaded; their original URLs are preserved as written.
 
 Safe Publish records where imported content came from in post metadata — including the source post ID and source permalink — so that subsequent imports of the same post update the existing post rather than duplicating it, except when that post is in the trash.
