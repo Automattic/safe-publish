@@ -11,6 +11,10 @@ declare(strict_types=1);
 
 namespace Safe_Publish\API;
 
+use Safe_Publish\Admin\Content_Processor;
+use Safe_Publish\Admin\Navigation_Ref_Rewriter;
+use Safe_Publish\Admin\Post_Import_Service;
+use Safe_Publish\Utils\Meta_Key_Matcher;
 use Safe_Publish\Utils\Options;
 use Safe_Publish\Utils\Term_Conflict;
 use Safe_Publish\Utils\Term_Reconcile_Report;
@@ -34,6 +38,60 @@ final class Meta_Terms_Manager {
 	 * it; the write path resolves parents first, so it always has a real ID.
 	 */
 	private const PARENT_PENDING = -1;
+
+	/**
+	 * Meta key prefixes reserved for this plugin's own import state.
+	 *
+	 * A source value under one would overwrite that state, such as an imported
+	 * post's identity, so no filter re-enables them.
+	 *
+	 * @var string[]
+	 */
+	private const RESERVED_KEY_PREFIXES = array(
+		'safe_publish_',
+		'_safe_publish_',
+	);
+
+	/**
+	 * Post meta keys this plugin stores, which the import also refuses in any
+	 * form that lookups read as one of them.
+	 *
+	 * @var string[]
+	 */
+	private const RESERVED_PLUGIN_KEYS = array(
+		...Options::TRACKING_META_KEYS,
+		Options::META_SOURCE_AUTHOR_EMAIL,
+		Options::META_SOURCE_AUTHOR_LOGIN,
+		Options::META_SOURCE_POST_PARENT_ID,
+		Options::META_SOURCE_ATTACHMENT_PARENT_ID,
+		Content_Processor::META_REF_REPOINTED_AT,
+		Content_Processor::META_GALLERY_REF_REPOINTED_AT,
+		Navigation_Ref_Rewriter::META_REWRITTEN_AT,
+		Post_Import_Service::META_PARENT_RELINKED_AT,
+	);
+
+	/**
+	 * Core-owned post meta keys that hold destination state or point at source
+	 * IDs and paths. The import skips them unless a site opts a key back in.
+	 *
+	 * @var string[]
+	 */
+	private const RESERVED_CORE_KEYS = array(
+		'_edit_last',
+		'_edit_lock',
+		'_encloseme',
+		'_pingme',
+		'_thumbnail_id',
+		'_wp_attached_file',
+		'_wp_attachment_backup_sizes',
+		'_wp_attachment_metadata',
+		'_wp_desired_post_slug',
+		'_wp_old_date',
+		'_wp_old_slug',
+		'_wp_trash_meta_comments_status',
+		'_wp_trash_meta_status',
+		'_wp_trash_meta_time',
+	);
 
 	/**
 	 * Destination term IDs resolved by source identity, keyed by source site
@@ -61,6 +119,7 @@ final class Meta_Terms_Manager {
 	 * Updates post meta based on provided input.
 	 *
 	 * Accepts array or object; keys are meta keys, values are meta values.
+	 * Skips reserved keys; refused_meta_keys() lists them.
 	 *
 	 * Returns true on success, or a WP_Error listing any keys that could not
 	 * be written due to a database error.
@@ -73,10 +132,17 @@ final class Meta_Terms_Manager {
 		// Update meta if provided (accept object or array).
 		$meta_array = (array) $meta;
 		if ( array() !== $meta_array ) {
-			$failed_keys = array();
+			$failed_keys  = array();
+			$allowed_keys = self::allowed_reserved_keys();
 
 			foreach ( $meta_array as $meta_key => $meta_value ) {
 				$key = sanitize_text_field( (string) $meta_key );
+
+				// Skipped, not failed: A WP_Error here aborts the whole import.
+				if ( ! self::is_importable_key( $key, $allowed_keys ) ) {
+					continue;
+				}
+
 				// Slashed only for the write: The compare below reads the
 				// stored value back unslashed.
 				$result = update_post_meta(
@@ -115,6 +181,125 @@ final class Meta_Terms_Manager {
 		}
 
 		return true;
+	}
+
+	/**
+	 * Returns the payload meta keys an import writes.
+	 *
+	 * @param array|object $meta Meta keyed by meta key.
+	 * @return string[] Sanitized keys the import writes, in payload order.
+	 */
+	public static function importable_meta_keys( array|object $meta ): array {
+		return self::select_meta_keys( $meta, true );
+	}
+
+	/**
+	 * Returns the payload meta keys an import refuses to write.
+	 *
+	 * @param array|object $meta Meta keyed by meta key.
+	 * @return string[] Sanitized keys the import skips, in payload order.
+	 */
+	public static function refused_meta_keys( array|object $meta ): array {
+		return self::select_meta_keys( $meta, false );
+	}
+
+	/**
+	 * Returns the payload keys on one side of the import key policy.
+	 *
+	 * Two raw keys can sanitize to one stored key, so the result is
+	 * deduplicated on the sanitized form the write uses.
+	 *
+	 * @param array|object $meta       Meta keyed by meta key.
+	 * @param bool         $importable True for the keys the import writes,
+	 *                                 false for the keys it refuses.
+	 * @return string[] Sanitized keys, in payload order.
+	 */
+	private static function select_meta_keys(
+		array|object $meta,
+		bool $importable
+	): array {
+		$allowed_keys = self::allowed_reserved_keys();
+		$keys         = array();
+
+		foreach ( array_keys( (array) $meta ) as $meta_key ) {
+			$key = sanitize_text_field( (string) $meta_key );
+
+			if ( self::is_importable_key( $key, $allowed_keys ) === $importable
+				&& ! in_array( $key, $keys, true )
+			) {
+				$keys[] = $key;
+			}
+		}
+
+		return $keys;
+	}
+
+	/**
+	 * Returns whether the import may write a meta key.
+	 *
+	 * Reads the sanitized key the way the write stores it, unslashed, and the
+	 * way lookups match it, under the meta_key column's collation, so no form
+	 * of a listed reserved key slips past.
+	 *
+	 * @param string   $key          Sanitized meta key.
+	 * @param string[] $allowed_keys Reserved core keys a site opted back in.
+	 * @return bool True when the import may write the key.
+	 */
+	private static function is_importable_key(
+		string $key,
+		array $allowed_keys
+	): bool {
+		$stored = (string) wp_unslash( $key );
+
+		foreach ( self::RESERVED_KEY_PREFIXES as $prefix ) {
+			if ( str_starts_with( strtolower( $stored ), $prefix ) ) {
+				return false;
+			}
+		}
+
+		return ! Meta_Key_Matcher::matches(
+			$stored,
+			array_merge(
+				self::RESERVED_PLUGIN_KEYS,
+				array_diff( self::RESERVED_CORE_KEYS, $allowed_keys )
+			)
+		);
+	}
+
+	/**
+	 * Returns the reserved core meta keys a site opted back in.
+	 *
+	 * @return string[] Keys from the reserved core list the import may write.
+	 */
+	private static function allowed_reserved_keys(): array {
+		/**
+		 * Filters the reserved core meta keys an import may write.
+		 *
+		 * Return the subset to import anyway, or the second argument for all.
+		 * Other keys are unaffected, and the plugin's own keys stay refused.
+		 *
+		 * @param string[] $allowed_keys  Reserved keys the import may write.
+		 * @param string[] $reserved_keys Every core key the policy reserves.
+		 */
+		$allowed_keys = apply_filters(
+			'safe_publish_import_allowed_meta_keys',
+			array(),
+			self::RESERVED_CORE_KEYS
+		);
+
+		if ( ! is_array( $allowed_keys ) ) {
+			return array();
+		}
+
+		$keys = array();
+
+		foreach ( $allowed_keys as $allowed_key ) {
+			if ( is_string( $allowed_key ) ) {
+				$keys[] = $allowed_key;
+			}
+		}
+
+		return $keys;
 	}
 
 	/**
