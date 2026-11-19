@@ -50,6 +50,8 @@ Starting the environment runs the `afterStart` lifecycle script configured in `.
 
 Commands such as `npm run seed:full` use wrapper scripts that select the appropriate CLI target. Source seeding runs against `tests-cli`, while destination seeding runs against `cli`. You do not need to start or configure a second `wp-env` process manually.
 
+Neither site runs a persistent object cache, so the object cache lasts only for one request. Production on WordPress VIP uses Memcached, so behavior that relies on the cache across requests can differ locally.
+
 Stop the development environment with `Ctrl+C` and resume it by running the same command. You can also manually stop the environment with `npm run dev:stop`. Stopping the environment optionally stops the WordPress containers but preserves their state.
 
 ### Worktrees
@@ -238,7 +240,7 @@ npm run build # or `npm start` in a separate terminal
 npm run playground
 ```
 
-Playgrounds do not closely mirror production environments and are missing persistent object cache, debugging tools, and other important features. Use `npm run dev` for local development.
+Playgrounds do not closely mirror production environments and are missing debugging tools and other important features. Use `npm run dev` for local development.
 
 ## Tips for Development
 

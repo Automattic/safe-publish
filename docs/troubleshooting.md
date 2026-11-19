@@ -292,6 +292,14 @@ Open the trash for that post's type in WordPress, then choose the outcome you wa
 1. **Restore the post** to keep its history, then import again to update it.
 2. **Delete it permanently**, then import again to create a fresh copy.
 
+#### Import or rollback refused while another is in progress
+
+**Symptoms**: Importing or rolling back reports "Another import or rollback of this post is in progress. Try again in a moment."
+
+**Solutions**:
+
+Imports and rollbacks of one source post take a shared lock, so their changes cannot mix. Wait for the other request to finish, then try again. If a request was interrupted, the post can stay locked for up to five minutes. The lock is the `safe_publish_post_lock_{source post ID}` row in the options table.
+
 #### Embedded posts display as plain links
 
 This is a known limitation of WordPress' embed cache when imported posts reference each other while still in draft. See [Embedded posts may render as plain links](concepts/import-process.md#embedded-posts-may-render-as-plain-links) for the cause and recovery steps.

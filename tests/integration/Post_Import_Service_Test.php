@@ -37,6 +37,7 @@ use WP_Post;
 class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 
 	use Failing_Query_Trait;
+	use Held_Post_Lock_Trait;
 	use Unfiltered_Html_Trait;
 
 	/**
@@ -3757,20 +3758,13 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 
 	/**
 	 * Verifies that import_post() bails with a concurrent-import error when
-	 * the per-source-post lock is already held by another request, and that
-	 * no destination post is created.
+	 * the post's lock is already held by another request, and that no
+	 * destination post is created.
 	 */
 	public function test_import_post_blocks_when_lock_already_held(): void {
-		// ARRANGE: Pre-acquire the per-source-post import lock to simulate
-		// another concurrent import mid-flight.
+		// ARRANGE: Hold the post's lock as another request mid-flight would.
 		$source_id = 9100;
-		wp_cache_add(
-			Post_Import_Service::IMPORT_LOCK_KEY_PREFIX . $source_id,
-			1,
-			Post_Import_Service::IMPORT_LOCK_GROUP,
-			// phpcs:ignore WordPressVIPMinimum.Performance.LowExpiryCacheTime.CacheTimeUndetermined -- IMPORT_LOCK_TTL is 300 seconds.
-			Post_Import_Service::IMPORT_LOCK_TTL
-		);
+		$this->hold_post_lock( $source_id );
 
 		$session_id = $this->repository->create_session(
 			'https://source.example.com',
@@ -3793,8 +3787,8 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 			$result['success'],
 			'Import should be rejected when the lock is held.'
 		);
-		$this->assertStringContainsString(
-			'currently being imported',
+		$this->assertSame(
+			'Another import or rollback of this post is in progress. Try again in a moment.',
 			$result['error']
 		);
 
@@ -3813,6 +3807,50 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 			),
 			'No post should be created when the lock blocks the import.'
 		);
+
+		// ASSERT: The holder's lock stays in place.
+		$this->assertIsArray( $this->post_lock_row( $source_id ) );
+	}
+
+	/**
+	 * Verifies that an import interrupted by an exception releases the post's
+	 * lock, so a retry is not refused as concurrent.
+	 */
+	public function test_import_post_releases_the_lock_when_it_throws(): void {
+		// ARRANGE: An import whose source fetch throws.
+		$post_data = array(
+			'id'        => 9103,
+			'title'     => 'Throwing Import',
+			'link'      => 'https://source.example.com/throwing-import',
+			'post_type' => 'posts',
+		);
+		$throw     = static function (
+			false|array|WP_Error $preempt,
+			array $_args,
+			string $url
+		): false|array|WP_Error {
+			if ( str_contains( $url, '/wp/v2/posts/' ) ) {
+				throw new \RuntimeException( 'Fetch failure.' );
+			}
+
+			return $preempt;
+		};
+		add_filter( 'pre_http_request', $throw, 0, 3 );
+
+		try {
+			$failed = $this->import_service->import_post( $post_data );
+		} finally {
+			remove_filter( 'pre_http_request', $throw, 0 );
+		}
+
+		$this->assertFalse( $failed['success'] );
+		$this->assertSame( 'Fetch failure.', $failed['error'] );
+
+		// ACT: Retry the import.
+		$result = $this->import_service->import_post( $post_data );
+
+		// ASSERT: The retry ran instead of being refused as concurrent.
+		$this->assertTrue( $result['success'] );
 	}
 
 	/**
@@ -3821,9 +3859,8 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 	 * a duplicate_import error so subsequent find_imported_post() lookups stay
 	 * deterministic.
 	 *
-	 * Calls persist_new_post() directly to exercise the safety net that
-	 * activates when the wp_cache_add lock degrades (no persistent object
-	 * cache, TTL expiry).
+	 * Calls persist_new_post() directly to exercise the safety net for an
+	 * import that outlives the post lock's TTL.
 	 */
 	public function test_persist_new_post_discards_concurrent_duplicate(): void {
 		// ARRANGE: A sibling post already exists for this source post ID and
