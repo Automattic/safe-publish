@@ -1526,11 +1526,13 @@ class Content_Processor {
 	 *
 	 * @param string $html          HTML content.
 	 * @param int    $attachment_id Destination attachment ID.
+	 * @param int    $found         Incremented by the number of tokens found.
 	 * @return string Updated HTML content.
 	 */
 	private function repoint_wp_image_class(
 		string $html,
-		int $attachment_id
+		int $attachment_id,
+		int &$found = 0
 	): string {
 		$processor = new WP_HTML_Tag_Processor( $html );
 
@@ -1543,8 +1545,11 @@ class Content_Processor {
 			$new_class = preg_replace(
 				'/(?<![\w-])wp-image-\d+(?![\w-])/',
 				'wp-image-' . $attachment_id,
-				$class
+				$class,
+				-1,
+				$count
 			);
+			$found    += (int) $count;
 			if ( is_string( $new_class ) && $new_class !== $class ) {
 				$processor->set_attribute( 'class', $new_class );
 			}
@@ -1736,26 +1741,34 @@ class Content_Processor {
 			return $html;
 		}
 
-		// Pattern to match wp-image-{number} class.
-		$pattern     = '/wp-image-\d+/';
-		$replacement = 'wp-image-' . $new_attachment_id;
-
-		$updated_html = preg_replace( $pattern, $replacement, $html, -1, $count );
+		$count        = 0;
+		$updated_html = $this->repoint_wp_image_class(
+			$html,
+			$new_attachment_id,
+			$count
+		);
 
 		// A rewrite onto the same ID is a no-op, so test the match count.
-		if ( 0 === $count && strpos( $html, '<img' ) !== false ) {
-			// Add wp-image class to img tag that doesn't have one.
-			$pattern      = '/(<img[^>]+class=["\'])([^"\']*?)(["\'][^>]*>)/i';
-			$replacement  = '${1}${2} wp-image-' . $new_attachment_id . '${3}';
-			$updated_html = preg_replace( $pattern, $replacement, $html );
-
-			// If img tag has no class attribute at all, add one. The lazy
-			// quantifier keeps a self-closing solidus in the closing group.
-			if ( $updated_html === $html ) {
-				$pattern      = '/(<img[^>]+?)(\s*\/?>)/i';
-				$replacement  = '${1} class="wp-image-' . $new_attachment_id . '"${2}';
-				$updated_html = preg_replace( $pattern, $replacement, $html );
+		if ( 0 === $count ) {
+			$processor = new WP_HTML_Tag_Processor( $html );
+			if (
+				$processor->next_tag( array( 'tag_name' => 'IMG' ) )
+				&& null !== $processor->get_attribute( 'class' )
+			) {
+				$processor->add_class( 'wp-image-' . $new_attachment_id );
+				return $processor->get_updated_html();
 			}
+
+			// Without a class attribute, add one at the end of the tag, where
+			// the editor writes it, since Compare treats a reorder as a change.
+			// Quoted values may hold a ">", and the lazy quantifier keeps a
+			// self-closing solidus in the closing group.
+			$updated_html = preg_replace(
+				'/(<img(?:=\s*(?:"[^"]*"|\'[^\']*\')|[^>])+?)(\s*\/?>)/i',
+				'${1} class="wp-image-' . $new_attachment_id . '"${2}',
+				$html,
+				1
+			);
 		}
 
 		return is_string( $updated_html ) ? $updated_html : $html;
