@@ -78,7 +78,7 @@ If an `<a>` tag's `href` ends in a file extension allowed by WordPress, it is pr
 1. **Resolve**: Relative URLs (URLs without a domain) are converted into absolute URLs by prepending the source site's base URL (scheme and host).
 2. **Normalize**: The query and fragment are removed from the working URL, so `guide.pdf?v=2` and `guide.pdf#page=2` both name `guide.pdf`. They are reapplied from the original URL in step 8.
 3. **Filter**: Third-party domain URLs are left unchanged.
-4. **Deduplicate**: If the URL was already imported, the existing attachment URL is used, and download is skipped.
+4. **Deduplicate**: If the URL was already imported, under either `http` or `https`, the existing attachment URL is used, and download is skipped.
 5. **Download**: File fetched using WordPress core's `download_url()`; downloadability is verified at this point.
 6. **Import**: The file type is classified from the downloaded content, not the URL extension — image, video, audio, and PDF are added to the media library via `media_handle_sideload()`; a media-looking URL that resolves to a page is kept as a link.
 7. **Enrich**: The image's source library metadata — alt text, title, caption, and description — is applied to the new attachment. The source resolves each URL back to its attachment record (a capability core REST lacks) and returns the values alongside the post.
@@ -253,6 +253,7 @@ Bulk imports process multiple posts sequentially:
 ### Failure Behavior
 
 - **Trashed destination post**: Import is refused when the only destination post linked to the source post is in the trash, so a second linked copy is never created. Restore that post to update it, or delete it permanently to import a fresh copy.
+- **Concurrent import or rollback**: Import is refused when another import or rollback of the same post is in progress, so their changes cannot mix. Try again once it finishes. If a request was interrupted, the post can stay locked for up to five minutes.
 - **Inline media download failures**: Import is aborted; any attachments already created during the run are deleted.
 - **Featured image failures**: Import is aborted; any attachments already created during the run are deleted.
 - **Post insert rejected**: Import is aborted; any attachments already created during the run are deleted.

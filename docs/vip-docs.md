@@ -219,7 +219,7 @@ When a post is imported, Safe Publish processes its content so that it renders c
 
 - **Featured images and inline media** referenced from the source site are downloaded and added to the destination's media library. This includes media in `img`, `video`, `audio`, and `source` elements, and file links in classic HTML and in block markup.
 - **Source URLs are rewritten** to point at the destination's copies, so the imported content no longer links back to the source.
-- **Media is deduplicated** by its original URL. If the same source file has already been imported, Safe Publish reuses the existing attachment on the destination instead of downloading it again.
+- **Media is deduplicated** by its original URL, whether it uses `http` or `https`. If the same source file has already been imported, Safe Publish reuses the existing attachment on the destination instead of downloading it again.
 - **Third-party media is left untouched.** Files hosted on domains other than the source site are not downloaded; their original URLs are preserved as written.
 
 Safe Publish records where imported content came from in post metadata — including the source post ID and source permalink — so that subsequent imports of the same post update the existing post rather than duplicating it, except when that post is in the trash.
@@ -353,6 +353,10 @@ Other catalog problems report different errors:
 Safe Publish compares the content and excerpt WordPress saved against what was requested, and fails the operation if there is a mismatch. This is usually because the user running the import lacks the `unfiltered_html` capability, and the content includes HTML, inline scripts, or event handlers that WordPress' save filters strip or change.
 
 Ask a user who can save the content unfiltered to retry the import or rollback. On multisite, only super administrators can hold `unfiltered_html`, and no user can when `DISALLOW_UNFILTERED_HTML` is set. Alternatively, remove the unsupported markup from the content at the source, then re-import. If this happens during a rollback, the history item is reopened so it stays retryable.
+
+### An import or rollback was refused because another one is in progress
+
+The error "Another import or rollback of this post is in progress. Try again in a moment." means another request is importing or rolling back the same post, for example from another browser tab or by another user. Safe Publish refuses the second request so that the two cannot mix their changes. Wait for the other request to finish, reload the listing, and try again. If a request was interrupted, the post can stay locked for up to five minutes.
 
 ### A rollback was refused
 

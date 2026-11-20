@@ -29,6 +29,7 @@ class Telemetry_Rollback_Test extends WP_Ajax_UnitTestCase {
 
 	use Ajax_Die_Continue_Trait;
 	use Failing_Query_Trait;
+	use Held_Post_Lock_Trait;
 	use Unfiltered_Html_Trait;
 
 	/**
@@ -270,6 +271,56 @@ class Telemetry_Rollback_Test extends WP_Ajax_UnitTestCase {
 		);
 
 		// ACT: Dispatch the item rollback against the same item again.
+		$this->dispatch_ajax_expecting_die( 'safe_publish_rollback_item' );
+
+		// ASSERT: Scope=item, every count zero, outcome=refused.
+		$events = $this->queue->events();
+		$this->assertCount( 1, $events );
+		$this->assertSame(
+			Telemetry_Events::ROLLBACK_SCOPE_ITEM,
+			$events[0]['properties']['scope']
+		);
+		$this->assertSame( 0, $events[0]['properties']['deleted_count'] );
+		$this->assertSame( 0, $events[0]['properties']['restored_count'] );
+		$this->assertSame( 0, $events[0]['properties']['failed_count'] );
+		$this->assertSame(
+			Telemetry_Events::ROLLBACK_OUTCOME_REFUSED,
+			$events[0]['properties']['outcome']
+		);
+	}
+
+	/**
+	 * Verifies that a rollback refused while another request holds the post's
+	 * lock fires rollback_performed with outcome=refused.
+	 */
+	public function test_item_rollback_locked_post_fires_refused_outcome(): void {
+		// ARRANGE: An updated item whose post another request has locked.
+		$session_id = $this->repository->create_session(
+			'https://source.example.com',
+			'single'
+		);
+		$post_id    = $this->factory()->post->create();
+		$item_id    = $this->repository->log_import_action(
+			$session_id,
+			2,
+			'Imported Post',
+			'updated',
+			$post_id,
+			null,
+			array(
+				'previous_content' => 'Old content.',
+				'action'           => 'updated_existing',
+			)
+		);
+		$this->repository->complete_session( $session_id );
+		$this->hold_post_lock( 2 );
+
+		$_POST = array(
+			'nonce'   => wp_create_nonce( 'safe_publish_ajax_nonce' ),
+			'item_id' => $item_id,
+		);
+
+		// ACT: Dispatch the item rollback.
 		$this->dispatch_ajax_expecting_die( 'safe_publish_rollback_item' );
 
 		// ASSERT: Scope=item, every count zero, outcome=refused.
