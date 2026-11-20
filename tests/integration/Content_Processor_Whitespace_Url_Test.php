@@ -253,7 +253,8 @@ class Content_Processor_Whitespace_Url_Test extends Integration_Test_Case {
 		$this->assertSame( $before + 1, $this->get_attachment_count() );
 		$this->assertStringNotContainsString( self::IMAGE, $result );
 		$this->assertMatchesRegularExpression(
-			'~"bgUrl":"[^"]+/wp-content/uploads/[^"]+\.png"~',
+			'~"bgUrl":"' . preg_quote( $this->uploads_url(), '~' )
+				. '[^"]+\.png"~',
 			$result
 		);
 		$this->assertNull( $this->processor->get_failed_media_error_message() );

@@ -1263,7 +1263,9 @@ class Media_Importer {
 	/**
 	 * Gets the attachment imported from a source media URL. Falls back to the
 	 * key that imports recorded before fragments were ignored: The URL cut only
-	 * at its query, which kept a fragment when there was no query.
+	 * at its query, which kept a fragment when there was no query. A copy that
+	 * differs only in http or https names the same file, so it is tried once
+	 * the exact keys miss.
 	 *
 	 * @param string $media_url       Source media URL.
 	 * @param string $source_site_url Source site URL for relative URLs.
@@ -1273,21 +1275,29 @@ class Media_Importer {
 		string $media_url,
 		string $source_site_url
 	): int|false {
-		$download_url  = self::get_download_url( $media_url, $source_site_url );
-		$attachment_id = self::get_attachment_by_url( $download_url );
-
-		if ( false !== $attachment_id ) {
-			return $attachment_id;
-		}
-
-		$legacy_url = (string) strtok(
+		$download_url = self::get_download_url( $media_url, $source_site_url );
+		$legacy_url   = (string) strtok(
 			URL_Validator::resolve_relative_url( $media_url, $source_site_url ),
 			'?'
 		);
 
-		return $legacy_url === $download_url
-			? false
-			: self::get_attachment_by_url( $legacy_url );
+		// The keys differ only for a fragment without a query.
+		$keys = array_unique( array( $download_url, $legacy_url ) );
+		$urls = $keys;
+		foreach ( $keys as $key ) {
+			if ( 1 === preg_match( '~^http(s?)(://.*)~i', $key, $parts ) ) {
+				$urls[] = ( '' === $parts[1] ? 'https' : 'http' ) . $parts[2];
+			}
+		}
+
+		foreach ( $urls as $url ) {
+			$attachment_id = self::get_attachment_by_url( $url );
+			if ( false !== $attachment_id ) {
+				return $attachment_id;
+			}
+		}
+
+		return false;
 	}
 
 	/**

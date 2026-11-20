@@ -17,6 +17,7 @@ use Safe_Publish\Admin\Content_Processor;
 use Safe_Publish\Admin\History_Repository;
 use Safe_Publish\Admin\Navigation_Ref_Rewriter;
 use Safe_Publish\Admin\Post_Import_Service;
+use Safe_Publish\Admin\Session_Rollback_Service;
 use Safe_Publish\API\Source_Posts_API;
 use Safe_Publish\API\HTTP_Client;
 use Safe_Publish\API\Meta_Terms_Manager;
@@ -794,6 +795,82 @@ class Import_Sanitization_Test extends Integration_Test_Case {
 		$this->assertSame(
 			'<!-- wp:html --><!-- /wp:html -->',
 			get_post( $first_result['post_id'] )->post_content
+		);
+	}
+
+	/**
+	 * Verifies that rolling back the update before a failed one restores its
+	 * snapshot over what the failed update's incomplete recovery left.
+	 */
+	public function test_rollback_restores_over_an_incomplete_recovery(): void {
+		// ARRANGE: An imported post, updated with content only an unfiltered
+		// user can save, then a filtered user's update that fails and whose
+		// filtered recovery leaves different content.
+		$session_id = $this->repository->create_session(
+			'https://source.example.com',
+			'bulk'
+		);
+		$post_data  = array(
+			'id'        => 8036,
+			'title'     => 'Incomplete Recovery Test',
+			'link'      => 'https://source.example.com/incomplete-recovery',
+			'post_type' => 'posts',
+		);
+		$unsafe     = '<!-- wp:html --><iframe src="https://example.com/embed">'
+			. '</iframe><!-- /wp:html -->';
+
+		$this->mock_post_overrides = array( 'content' => '<p>Initial.</p>' );
+
+		$post_id = (int) $this->import_service->import_post(
+			$post_data,
+			$session_id
+		)['post_id'];
+		$created = $this->repository->get_item_for_post( $post_id );
+
+		$this->mock_post_overrides = array( 'content' => $unsafe );
+		$this->import_service->import_post( $post_data, $session_id );
+		$updated = $this->repository->get_item_for_post( $post_id );
+
+		wp_set_current_user(
+			self::factory()->user->create( array( 'role' => 'author' ) )
+		);
+		$this->mock_post_overrides = array(
+			'content' => '<p>Allowed replacement.</p>',
+			'meta'    => array( 'blocked_key' => 'new value' ),
+		);
+		$block_meta                = static function (
+			mixed $check,
+			int $_object_id,
+			string $meta_key
+		): mixed {
+			return 'blocked_key' === $meta_key ? false : $check;
+		};
+		add_filter( 'update_post_metadata', $block_meta, 10, 3 );
+		$failed = $this->import_service->import_post( $post_data, $session_id );
+		remove_filter( 'update_post_metadata', $block_meta, 10 );
+
+		$this->assertFalse( $failed['success'] );
+		$this->assertSame(
+			'<!-- wp:html --><!-- /wp:html -->',
+			get_post( $post_id )->post_content
+		);
+
+		// ACT: Roll back the update before the failed one.
+		$result = ( new Session_Rollback_Service( $this->repository ) )
+			->rollback_item( (int) $updated['id'] );
+
+		// ASSERT: The update's snapshot replaced the leftover content.
+		$this->assertIsArray( $result );
+		$this->assertSame( 'restored', $result['action'] );
+		$this->assertSame(
+			'<p>Initial.</p>',
+			get_post( $post_id )->post_content
+		);
+
+		// ASSERT: The creation is the active import again.
+		$this->assertSame(
+			(int) $created['id'],
+			(int) $this->repository->get_item_for_post( $post_id )['id']
 		);
 	}
 

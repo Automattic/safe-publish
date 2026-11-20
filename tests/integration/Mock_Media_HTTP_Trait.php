@@ -13,11 +13,20 @@ namespace Safe_Publish\Tests\Integration;
  * Provides reusable helpers for mocking HTTP media downloads in integration tests.
  *
  * Composes Image_Byte_Mock_Trait for the wp_remote_get() interception and adds
- * attachment-count assertions for tests that need them.
+ * attachment-count assertions and the uploads URL for tests that need them.
  */
 trait Mock_Media_HTTP_Trait {
 
 	use Image_Byte_Mock_Trait;
+
+	/**
+	 * Returns this site's uploads base URL, with a trailing slash.
+	 *
+	 * @return string Uploads base URL.
+	 */
+	protected function uploads_url(): string {
+		return trailingslashit( wp_get_upload_dir()['baseurl'] );
+	}
 
 	/**
 	 * Gets the total count of attachments in the database.

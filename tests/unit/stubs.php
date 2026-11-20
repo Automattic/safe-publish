@@ -400,6 +400,24 @@ function sanitize_text_field( mixed $value ): string {
 }
 
 /**
+ * Removes backslashes from a unit fixture string, as core does.
+ *
+ * @template T
+ * @param T $value Slashed value.
+ * @return T Unslashed value.
+ */
+function wp_unslash( mixed $value ): mixed {
+	if ( ! is_string( $value ) ) {
+		return $value;
+	}
+
+	/** @var T $unslashed */
+	$unslashed = stripslashes( $value );
+
+	return $unslashed;
+}
+
+/**
  * Sanitizes a unit fixture key.
  *
  * @param string $key Raw key.
