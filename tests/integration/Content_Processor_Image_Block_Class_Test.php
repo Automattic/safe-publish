@@ -202,21 +202,48 @@ class Content_Processor_Image_Block_Class_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Provides imgs without a wp-image token: Their class attribute, if any,
-	 * their alt text, and the class expected after processing.
+	 * Provides imgs without a wp-image token: Their markup, with %s for the
+	 * src, and the class expected after processing.
 	 *
-	 * @return array<string, array{string|null, string, string}>
+	 * @return array<string, array{string, string}>
 	 */
 	public static function token_less_img_provider(): array {
 		return array(
-			'class without a token'   => array(
-				'has-border-color',
-				'',
+			'class without a token'        => array(
+				'<img src="%s" alt="" class="has-border-color"/>',
 				'has-border-color wp-image-%d',
 			),
-			'alt text naming a class' => array(
-				null,
-				"Use class='hero' here",
+			'class before a data-class'    => array(
+				'<img src="%s" alt="" class="x" data-class="y"/>',
+				'x wp-image-%d',
+			),
+			'valueless class'              => array(
+				'<img src="%s" alt="" class/>',
+				'wp-image-%d',
+			),
+			'alt text naming a class'      => array(
+				'<img src="%s" alt="Use class=\'hero\' here"/>',
+				'wp-image-%d',
+			),
+			'greater-than sign in alt'     => array(
+				'<img src="%s" alt="a > b"/>',
+				'wp-image-%d',
+			),
+			'spaces around an equals sign' => array(
+				'<img src="%s" alt = "a > b"/>',
+				'wp-image-%d',
+			),
+			'unquoted alt with a quote'    => array(
+				'<img src="%s" alt=it\'s />',
+				'wp-image-%d',
+			),
+			'uppercase tag'                => array(
+				'<IMG src="%s" alt=""/>',
+				'wp-image-%d',
+			),
+			'img followed by another'      => array(
+				'<img src="%s" alt=""/>'
+					. '<img src="https://third-party.example.com/a.jpg"/>',
 				'wp-image-%d',
 			),
 		);
@@ -228,30 +255,38 @@ class Content_Processor_Image_Block_Class_Test extends Integration_Test_Case {
 	 *
 	 * @dataProvider token_less_img_provider
 	 *
-	 * @param string|null $class_value    Img class attribute, or null to omit it.
-	 * @param string      $alt            Img alt text.
-	 * @param string      $expected_class Expected class, with %d for the
-	 *                                    destination attachment ID.
+	 * @param string $img            Img markup, with %s for the src.
+	 * @param string $expected_class Expected class, with %d for the destination
+	 *                               attachment ID.
 	 */
 	public function test_adds_token_to_the_class_attribute_only(
-		?string $class_value,
-		string $alt,
+		string $img,
 		string $expected_class
 	): void {
 		// ARRANGE: Seed the attachment for an image without a token.
 		$url     = self::SOURCE . '/token-less.jpg';
 		$dest_id = $this->import( $url );
-		$content = $this->image_block( $url, null, $class_value, $alt );
+		$content = "<!-- wp:image -->\n"
+			. '<figure class="wp-block-image size-large">'
+			. sprintf( $img, $url )
+			. "</figure>\n<!-- /wp:image -->";
 
 		// ACT: Process the block.
 		$result = $this->process( $content );
 
-		// ASSERT: The class gains the token, and the alt text is kept.
+		// ASSERT: The class holds the only token; alt and data-class are kept.
 		$this->assertSame(
 			sprintf( $expected_class, $dest_id ),
 			$this->first_img_attr( $result, 'class' )
 		);
-		$this->assertSame( $alt, $this->first_img_attr( $result, 'alt' ) );
+		$this->assertSame( 1, substr_count( $result, 'wp-image-' ) );
+		foreach ( array( 'alt', 'data-class' ) as $attr ) {
+			$this->assertSame(
+				$this->first_img_attr( $content, $attr ),
+				$this->first_img_attr( $result, $attr ),
+				$attr
+			);
+		}
 	}
 
 	/**
@@ -275,14 +310,12 @@ class Content_Processor_Image_Block_Class_Test extends Integration_Test_Case {
 	 *                                 to serialize the block without attrs.
 	 * @param string|null $class_value Value for the img class attribute, or null
 	 *                                 to omit the attribute.
-	 * @param string      $alt         Optional. Img alt text. Default empty.
 	 * @return string Serialized block markup.
 	 */
 	private function image_block(
 		string $url,
 		?int $block_id,
-		?string $class_value,
-		string $alt = ''
+		?string $class_value
 	): string {
 		$attrs      = null === $block_id ? '' : ' {"id":' . $block_id . '}';
 		$class_attr = null === $class_value
@@ -291,7 +324,7 @@ class Content_Processor_Image_Block_Class_Test extends Integration_Test_Case {
 
 		return "<!-- wp:image{$attrs} -->\n"
 			. '<figure class="wp-block-image size-large">'
-			. '<img src="' . $url . '" alt="' . $alt . '"' . $class_attr . '/>'
+			. '<img src="' . $url . '" alt=""' . $class_attr . '/>'
 			. "</figure>\n<!-- /wp:image -->";
 	}
 

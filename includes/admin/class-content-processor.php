@@ -1749,22 +1749,26 @@ class Content_Processor {
 		);
 
 		// A rewrite onto the same ID is a no-op, so test the match count.
-		if ( 0 === $count && strpos( $html, '<img' ) !== false ) {
+		if ( 0 === $count ) {
 			$processor = new WP_HTML_Tag_Processor( $html );
 			if (
 				$processor->next_tag( array( 'tag_name' => 'IMG' ) )
-				&& is_string( $processor->get_attribute( 'class' ) )
+				&& null !== $processor->get_attribute( 'class' )
 			) {
 				$processor->add_class( 'wp-image-' . $new_attachment_id );
 				return $processor->get_updated_html();
 			}
 
-			// If img tag has no class attribute at all, add one. The lazy
-			// quantifier keeps a self-closing solidus in the closing group.
-			$pattern      = '/(<img[^>]+?)(\s*\/?>)/i';
-			$replacement  = '${1} class="wp-image-' . $new_attachment_id
-				. '"${2}';
-			$updated_html = preg_replace( $pattern, $replacement, $html );
+			// Without a class attribute, add one at the end of the tag, where
+			// the editor writes it, since Compare treats a reorder as a change.
+			// Quoted values may hold a ">", and the lazy quantifier keeps a
+			// self-closing solidus in the closing group.
+			$updated_html = preg_replace(
+				'/(<img(?:=\s*(?:"[^"]*"|\'[^\']*\')|[^>])+?)(\s*\/?>)/i',
+				'${1} class="wp-image-' . $new_attachment_id . '"${2}',
+				$html,
+				1
+			);
 		}
 
 		return is_string( $updated_html ) ? $updated_html : $html;
