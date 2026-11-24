@@ -12,12 +12,14 @@ declare(strict_types=1);
 namespace Safe_Publish\API;
 
 use Safe_Publish\Admin\Content_Processor;
+use Safe_Publish\Admin\Import_Logger;
 use Safe_Publish\Admin\Navigation_Ref_Rewriter;
 use Safe_Publish\Admin\Post_Import_Service;
 use Safe_Publish\Utils\Meta_Key_Matcher;
 use Safe_Publish\Utils\Options;
 use Safe_Publish\Utils\Term_Conflict;
 use Safe_Publish\Utils\Term_Reconcile_Report;
+use Throwable;
 use WP_Error;
 use WP_Term;
 
@@ -121,8 +123,9 @@ final class Meta_Terms_Manager {
 	 * Accepts array or object; keys are meta keys, values are meta values.
 	 * Skips reserved keys; refused_meta_keys() lists them.
 	 *
-	 * Returns true on success, or a WP_Error listing any keys that could not
-	 * be written due to a database error.
+	 * Returns true on success, or a WP_Error listing any keys the destination
+	 * did not store, whether a database error or a hook, such as a sanitizer,
+	 * refused them.
 	 *
 	 * @param int          $post_id Post ID to update meta for.
 	 * @param array|object $meta    Meta to set.
@@ -185,34 +188,76 @@ final class Meta_Terms_Manager {
 		// the unslashed one.
 		$stored_key = (string) wp_unslash( $key );
 
-		// Slashed only for the write: The compare below reads the stored value
-		// back unslashed.
-		$result = update_post_meta( $post_id, $key, wp_slash( $meta_value ) );
+		try {
+			// Slashed only for the write: The compare below reads the stored
+			// value back unslashed.
+			$result = update_post_meta(
+				$post_id,
+				$key,
+				wp_slash( $meta_value )
+			);
 
-		if ( false !== $result ) {
-			return true;
-		}
+			if ( false !== $result ) {
+				return true;
+			}
 
-		if ( ! metadata_exists( 'post', $post_id, $stored_key ) ) {
+			if ( ! metadata_exists( 'post', $post_id, $stored_key ) ) {
+				return false;
+			}
+
+			$stored = get_post_meta( $post_id, $stored_key, true );
+
+			// A sanitizer registered for the key stores its own form of the
+			// value, which the row then holds instead of the sent one. The
+			// post's type selects the same sanitizer the write used. The sent
+			// value is compared first, so the common case runs no sanitizer
+			// again.
+			return self::holds_value( $stored, $meta_value )
+				|| self::holds_value(
+					$stored,
+					sanitize_meta(
+						$stored_key,
+						$meta_value,
+						'post',
+						get_object_subtype( 'post', $post_id )
+					)
+				);
+		} catch ( Throwable $error ) {
+			// A hook can throw, such as a sanitizer that refuses the value's
+			// type. The import reports the key, instead of the error ending the
+			// request.
+			self::audit_refused_value( $post_id, $key, $error );
+
 			return false;
 		}
+	}
 
-		$stored = get_post_meta( $post_id, $stored_key, true );
-
-		// A sanitizer registered for the key stores its own form of the value,
-		// which the row then holds instead of the sent one. The post's type
-		// selects the same sanitizer the write used. The sent value is compared
-		// first, so the common case runs no sanitizer again.
-		return self::holds_value( $stored, $meta_value )
-			|| self::holds_value(
-				$stored,
-				sanitize_meta(
-					$stored_key,
-					$meta_value,
-					'post',
-					get_object_subtype( 'post', $post_id )
-				)
+	/**
+	 * Records the error a hook raised while writing a key.
+	 *
+	 * Logging fires a public action, and a listener that throws must not end
+	 * the request either.
+	 *
+	 * @param int       $post_id Post the write targeted.
+	 * @param string    $key     Sanitized meta key.
+	 * @param Throwable $error   Error the hook raised.
+	 */
+	private static function audit_refused_value(
+		int $post_id,
+		string $key,
+		Throwable $error
+	): void {
+		try {
+			( new Import_Logger() )->meta_value_refused(
+				$post_id,
+				$key,
+				$error::class,
+				$error->getMessage()
 			);
+		// phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+		} catch ( Throwable ) {
+			// Nowhere left to report a logger that cannot log.
+		}
 	}
 
 	/**

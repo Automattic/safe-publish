@@ -239,4 +239,32 @@ class Import_Logger extends Logger {
 
 		$this->log_failure( Log_Events::IMPORT_ITEM_FAILED, $data );
 	}
+
+	/**
+	 * Logs an error a hook on the destination raised while writing a meta
+	 * value, such as a sanitizer refusing its type. The import reports the key
+	 * as failed and undoes itself, so the operator sees which field failed;
+	 * this records why.
+	 *
+	 * @param int    $post_id       Post the write targeted.
+	 * @param string $meta_key      Meta key whose write was refused.
+	 * @param string $error_class   Class of the error the hook raised.
+	 * @param string $error_message Message the hook raised.
+	 */
+	public function meta_value_refused(
+		int $post_id,
+		string $meta_key,
+		string $error_class,
+		string $error_message
+	): void {
+		$this->log_failure(
+			Log_Events::META_VALUE_REFUSED,
+			array(
+				'post_id'       => $post_id,
+				'meta_key'      => self::cap_forensic_string( $meta_key ),
+				'error_class'   => $error_class,
+				'error_message' => self::cap_forensic_string( $error_message ),
+			)
+		);
+	}
 }

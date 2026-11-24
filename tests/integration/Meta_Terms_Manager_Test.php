@@ -11,6 +11,8 @@ namespace Safe_Publish\Tests\Integration;
 
 use ReflectionClass;
 use Safe_Publish\API\Meta_Terms_Manager;
+use Safe_Publish\Utils\Audit_Log_Table;
+use Safe_Publish\Utils\Log_Events;
 use Safe_Publish\Utils\Options;
 use WP_Error;
 use WP_Term;
@@ -1141,6 +1143,146 @@ class Meta_Terms_Manager_Test extends Integration_Test_Case {
 		$this->assertSame(
 			'SOURCE TITLE',
 			get_post_meta( $this->post_id, 'sourcetitle', true )
+		);
+	}
+
+	/**
+	 * Verifies that update_meta() reports a value its sanitizer rejects, rather
+	 * than letting the error end the import, and still writes the rest.
+	 */
+	public function test_update_meta_reports_a_rejected_value(): void {
+		// ARRANGE: A sanitizer that accepts strings only, an array sent for its
+		// key, and a migratable key beside it.
+		$this->register_string_sanitizer( 'source_tags' );
+		$meta = array(
+			'source_tags'  => array( 'a', 'b' ),
+			'source_color' => 'blue',
+		);
+
+		// ACT: Write the payload.
+		$result = $this->manager->update_meta( $this->post_id, $meta );
+
+		unregister_post_meta( 'post', 'source_tags' );
+
+		// ASSERT: The key is reported, no row holds it, and the rest of the
+		// payload is still written.
+		$this->assertInstanceOf( WP_Error::class, $result );
+		$this->assertSame( 'meta_update_failed', $result->get_error_code() );
+		$this->assertSame(
+			'Failed to update post meta key(s): source_tags.',
+			$result->get_error_message()
+		);
+		$this->assertFalse(
+			metadata_exists( 'post', $this->post_id, 'source_tags' )
+		);
+		$this->assertSame(
+			'blue',
+			get_post_meta( $this->post_id, 'source_color', true )
+		);
+	}
+
+	/**
+	 * Verifies that update_meta() records what a sanitizer raised, so the audit
+	 * trail carries the cause and not only the failing key.
+	 */
+	public function test_update_meta_audits_a_rejected_value(): void {
+		// ARRANGE: An empty import audit channel, a sanitizer that accepts
+		// strings only, and an array sent for its key.
+		Audit_Log_Table::create_table();
+		Audit_Log_Table::clear( 'import' );
+		$this->register_string_sanitizer( 'source_tags' );
+
+		// ACT: Write the payload.
+		$this->manager->update_meta(
+			$this->post_id,
+			array( 'source_tags' => array( 'a', 'b' ) )
+		);
+
+		unregister_post_meta( 'post', 'source_tags' );
+
+		// ASSERT: One error-level event names the key and what was raised.
+		$events = Audit_Log_Table::get_events(
+			array(
+				'channel'    => 'import',
+				'event_type' => Log_Events::META_VALUE_REFUSED,
+			)
+		);
+		$this->assertCount( 1, $events );
+		$this->assertSame( 'error', $events[0]['level'] );
+		$this->assertSame( $this->post_id, $events[0]['data']['post_id'] );
+		$this->assertSame( 'source_tags', $events[0]['data']['meta_key'] );
+		$this->assertSame( 'TypeError', $events[0]['data']['error_class'] );
+		$this->assertStringContainsString(
+			'must be of type string, array given',
+			$events[0]['data']['error_message']
+		);
+	}
+
+	/**
+	 * Verifies that update_meta() stores an oversized key and error message
+	 * capped when it audits a refused value.
+	 */
+	public function test_update_meta_caps_what_it_audits(): void {
+		// ARRANGE: An empty import audit channel, and a sanitizer that throws a
+		// message far past the stored limit for a key just as long.
+		Audit_Log_Table::create_table();
+		Audit_Log_Table::clear( 'import' );
+		$key     = str_repeat( 'k', 4096 );
+		$thrower = static function (): never {
+			throw new \RuntimeException( str_repeat( 'm', 4096 ) );
+		};
+		add_filter( "sanitize_post_meta_{$key}", $thrower );
+
+		// ACT: Write the payload.
+		$this->manager->update_meta( $this->post_id, array( $key => 'value' ) );
+
+		remove_filter( "sanitize_post_meta_{$key}", $thrower );
+
+		// ASSERT: Both keep their leading 512 bytes and no more.
+		$events = Audit_Log_Table::get_events(
+			array(
+				'channel'    => 'import',
+				'event_type' => Log_Events::META_VALUE_REFUSED,
+			)
+		);
+		$this->assertCount( 1, $events );
+		$this->assertSame(
+			str_repeat( 'k', 512 ),
+			$events[0]['data']['meta_key']
+		);
+		$this->assertSame(
+			str_repeat( 'm', 512 ),
+			$events[0]['data']['error_message']
+		);
+	}
+
+	/**
+	 * Verifies that update_meta() still reports a rejected value when a
+	 * listener on the audit action throws, rather than ending the request.
+	 */
+	public function test_update_meta_reports_when_logging_throws(): void {
+		// ARRANGE: A sanitizer that accepts strings only, an array sent for its
+		// key, and a listener that throws when the refusal is logged.
+		$this->register_string_sanitizer( 'source_tags' );
+		$thrower = static function (): void {
+			throw new \RuntimeException( 'Listener failure.' );
+		};
+		add_action( 'safe_publish_event_logged', $thrower );
+
+		// ACT: Write the payload.
+		$result = $this->manager->update_meta(
+			$this->post_id,
+			array( 'source_tags' => array( 'a', 'b' ) )
+		);
+
+		remove_action( 'safe_publish_event_logged', $thrower );
+		unregister_post_meta( 'post', 'source_tags' );
+
+		// ASSERT: The key is still reported, and nothing propagated.
+		$this->assertInstanceOf( WP_Error::class, $result );
+		$this->assertSame(
+			'Failed to update post meta key(s): source_tags.',
+			$result->get_error_message()
 		);
 	}
 

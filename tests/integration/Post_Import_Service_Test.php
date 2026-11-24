@@ -4689,4 +4689,100 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 		);
 		$this->assertSame( 'blue', get_post_meta( $post_id, 'spcolor', true ) );
 	}
+
+	/**
+	 * Verifies that a meta value its sanitizer rejects fails a new import and
+	 * leaves no post behind, rather than ending the request.
+	 */
+	public function test_import_reports_a_rejected_meta_value(): void {
+		// ARRANGE: A sanitizer that accepts strings only, and a source payload
+		// sending an array for its key.
+		$this->register_string_sanitizer( 'sp_tags' );
+		$session_id                = $this->repository->create_session(
+			'https://source.example.com',
+			'single'
+		);
+		$this->mock_post_overrides = array(
+			'meta' => array( 'sp_tags' => array( 'a', 'b' ) ),
+		);
+
+		// ACT: Import a source post the destination does not hold yet.
+		$result = $this->import_service->import_post(
+			array(
+				'id'        => 9521,
+				'title'     => 'New title',
+				'link'      => 'https://source.example.com/rejected-meta',
+				'post_type' => 'posts',
+			),
+			$session_id
+		);
+
+		unregister_post_meta( 'post', 'sp_tags' );
+
+		// ASSERT: The import reports the key and keeps no draft of the post.
+		$this->assertFalse( $result['success'] );
+		$this->assertSame(
+			'Failed to update post meta key(s): sp_tags.',
+			$result['error']
+		);
+		$this->assertSame( array(), $this->posts_for_source_id( 9521 ) );
+	}
+
+	/**
+	 * Verifies that a meta value its sanitizer rejects fails an update and
+	 * undoes it, rather than keeping what the update wrote before the error.
+	 */
+	public function test_failed_update_undoes_a_rejected_meta_value(): void {
+		// ARRANGE: Import a post once with a migratable field.
+		$session_id                = $this->repository->create_session(
+			'https://source.example.com',
+			'single'
+		);
+		$post_data                 = array(
+			'id'        => 9522,
+			'title'     => 'Queued title',
+			'link'      => 'https://source.example.com/rejected-meta-undo',
+			'post_type' => 'posts',
+		);
+		$this->mock_post_overrides = array(
+			'content' => '<p>Version A.</p>',
+			'meta'    => array( 'sp_label' => 'one' ),
+		);
+
+		$first = $this->import_service->import_post( $post_data, $session_id );
+		$this->assertTrue( $first['success'] );
+
+		$post_id = (int) $first['post_id'];
+		$content = get_post_field( 'post_content', $post_id );
+
+		// ARRANGE: The source now changes the content and the field, and sends
+		// an array for a key whose sanitizer accepts strings only.
+		$this->register_string_sanitizer( 'sp_tags' );
+		$this->mock_post_overrides = array(
+			'content' => '<p>Version B.</p>',
+			'meta'    => array(
+				'sp_label' => 'two',
+				'sp_tags'  => array( 'a', 'b' ),
+			),
+		);
+
+		// ACT: Re-import the post.
+		$result = $this->import_service->import_post( $post_data, $session_id );
+
+		unregister_post_meta( 'post', 'sp_tags' );
+
+		// ASSERT: The rejected key failed the update, and the undo restored the
+		// content and the field.
+		$this->assertFalse( $result['success'] );
+		$this->assertSame(
+			'Failed to update post meta key(s): sp_tags.',
+			$result['error']
+		);
+		$this->assertStringContainsString( 'Version A.', $content );
+		$this->assertSame(
+			$content,
+			get_post_field( 'post_content', $post_id )
+		);
+		$this->assertSame( 'one', get_post_meta( $post_id, 'sp_label', true ) );
+	}
 }
