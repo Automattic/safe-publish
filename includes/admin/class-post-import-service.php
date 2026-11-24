@@ -2936,10 +2936,12 @@ class Post_Import_Service {
 		);
 
 		// Only keys the write touches, so the restore deletes no reserved meta.
+		// Each is read unslashed, as the write stores it, and kept as sent, as
+		// the restore's own writes unslash it the same way.
 		foreach ( Meta_Terms_Manager::importable_meta_keys( $meta ) as $key ) {
 			$snapshot['custom_meta'][ $key ] = get_post_meta(
 				$post_id,
-				$key,
+				(string) wp_unslash( $key ),
 				true
 			);
 		}

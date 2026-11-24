@@ -1013,6 +1013,29 @@ class Meta_Terms_Manager_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that update_meta() returns true on a re-import of an unchanged
+	 * value under a key with a backslash, which the write stores without it.
+	 */
+	public function test_update_meta_accepts_unchanged_slashed_key(): void {
+		// ARRANGE: A value sent under a key with a backslash, imported once.
+		$meta = array( 'source\\color' => 'blue' );
+		$this->assertTrue(
+			$this->manager->update_meta( $this->post_id, $meta )
+		);
+
+		// ACT: Re-import the identical value, as an update would.
+		$result = $this->manager->update_meta( $this->post_id, $meta );
+
+		// ASSERT: No false failure, and the row holds the value under the key
+		// without its backslash.
+		$this->assertTrue( $result );
+		$this->assertSame(
+			'blue',
+			get_post_meta( $this->post_id, 'sourcecolor', true )
+		);
+	}
+
+	/**
 	 * Verifies that update_meta() still reports a WP_Error when a write of a
 	 * falsy value to a missing key genuinely fails, rather than mistaking the
 	 * absent key (which reads back as "") for a successfully stored false.
