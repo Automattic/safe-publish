@@ -1036,6 +1036,115 @@ class Meta_Terms_Manager_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that update_meta() returns true on a re-import of an unchanged
+	 * value a registered sanitizer stores in another form.
+	 */
+	public function test_update_meta_accepts_sanitized_value(): void {
+		// ARRANGE: A sanitizer registered for every post type, and a value it
+		// rewrites, imported once.
+		register_meta(
+			'post',
+			'source_note',
+			array(
+				'single'            => true,
+				'type'              => 'string',
+				'sanitize_callback' => 'sanitize_text_field',
+			)
+		);
+		$meta = array( 'source_note' => '<b>Bold</b> note' );
+		$this->assertTrue(
+			$this->manager->update_meta( $this->post_id, $meta )
+		);
+
+		// ACT: Re-import the identical value, as an update would.
+		$result = $this->manager->update_meta( $this->post_id, $meta );
+
+		unregister_meta_key( 'post', 'source_note' );
+
+		// ASSERT: No false failure, although the row holds the sanitized form
+		// rather than the sent one.
+		$this->assertTrue( $result );
+		$this->assertSame(
+			'Bold note',
+			get_post_meta( $this->post_id, 'source_note', true )
+		);
+	}
+
+	/**
+	 * Verifies that update_meta() returns true on a re-import of an unchanged
+	 * value a sanitizer registered for the post's type stores in another form.
+	 */
+	public function test_update_meta_accepts_post_type_sanitized(): void {
+		// ARRANGE: A sanitizer registered for posts only, as
+		// register_post_meta() does for a post type, and a value it rewrites,
+		// imported once.
+		register_post_meta(
+			'post',
+			'source_title',
+			array(
+				'single'            => true,
+				'type'              => 'string',
+				'sanitize_callback' => static fn( mixed $value ): string =>
+					strtoupper( (string) $value ),
+			)
+		);
+		$meta = array( 'source_title' => 'Source title' );
+		$this->assertTrue(
+			$this->manager->update_meta( $this->post_id, $meta )
+		);
+
+		// ACT: Re-import the identical value, as an update would.
+		$result = $this->manager->update_meta( $this->post_id, $meta );
+
+		unregister_post_meta( 'post', 'source_title' );
+
+		// ASSERT: No false failure, although the row holds the sanitized form
+		// rather than the sent one.
+		$this->assertTrue( $result );
+		$this->assertSame(
+			'SOURCE TITLE',
+			get_post_meta( $this->post_id, 'source_title', true )
+		);
+	}
+
+	/**
+	 * Verifies that update_meta() returns true on a re-import of an unchanged
+	 * value under a key with a backslash, which the write stores and sanitizes
+	 * under the key without it.
+	 */
+	public function test_update_meta_accepts_sanitized_slashed_key(): void {
+		// ARRANGE: A sanitizer registered for the stored key, and a value it
+		// rewrites, sent under the key with a backslash and imported once.
+		register_post_meta(
+			'post',
+			'sourcetitle',
+			array(
+				'single'            => true,
+				'type'              => 'string',
+				'sanitize_callback' => static fn( mixed $value ): string =>
+					strtoupper( (string) $value ),
+			)
+		);
+		$meta = array( 'source\\title' => 'Source title' );
+		$this->assertTrue(
+			$this->manager->update_meta( $this->post_id, $meta )
+		);
+
+		// ACT: Re-import the identical value, as an update would.
+		$result = $this->manager->update_meta( $this->post_id, $meta );
+
+		unregister_post_meta( 'post', 'sourcetitle' );
+
+		// ASSERT: No false failure, and the row holds the sanitized value under
+		// the key without its backslash.
+		$this->assertTrue( $result );
+		$this->assertSame(
+			'SOURCE TITLE',
+			get_post_meta( $this->post_id, 'sourcetitle', true )
+		);
+	}
+
+	/**
 	 * Verifies that update_meta() still reports a WP_Error when a write of a
 	 * falsy value to a missing key genuinely fails, rather than mistaking the
 	 * absent key (which reads back as "") for a successfully stored false.
