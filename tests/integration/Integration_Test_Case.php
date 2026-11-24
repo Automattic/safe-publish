@@ -51,7 +51,7 @@ abstract class Integration_Test_Case extends WP_UnitTestCase {
 
 	/**
 	 * Registers a sanitizer for a post meta key that accepts strings only, as
-	 * one declaring its parameter type does, so any other value makes it throw.
+	 * one declaring its parameter type does, so an array makes it throw.
 	 *
 	 * @param string $key Meta key.
 	 */
