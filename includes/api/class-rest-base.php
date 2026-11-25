@@ -70,36 +70,4 @@ abstract class REST_Base {
 			$additional_args
 		);
 	}
-
-	/**
-	 * Gets user agent string.
-	 *
-	 * @return string
-	 */
-	public function get_user_agent(): string {
-		return $this->http_client->get_user_agent();
-	}
-
-	/**
-	 * Makes a safe remote GET request.
-	 *
-	 * @param string $url  Request URL.
-	 * @param array  $args Optional. Request arguments. Default empty array.
-	 * @return array|WP_Error Response or error.
-	 */
-	public function safe_remote_get( string $url, array $args = array() ): array|WP_Error {
-		return $this->http_client->safe_remote_get( $url, $args );
-	}
-
-
-
-	/**
-	 * Determines whether to verify SSL certificates based on environment and URL.
-	 *
-	 * @param string $url URL being requested.
-	 * @return bool Whether to verify SSL certificates.
-	 */
-	public function should_verify_ssl( string $url ): bool {
-		return $this->http_client->should_verify_ssl( $url );
-	}
 }
