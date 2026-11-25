@@ -1,6 +1,5 @@
 /**
- * DataViews actions for the unified Posts listing. Each action's isEligible
- * inspects `local_state` so row menus adapt without caller pre-filtering.
+ * DataViews actions for the Posts listing and the Needs attention inbox.
  *
  * @file This file defines DataViews actions for the Safe Publish plugin.
  */

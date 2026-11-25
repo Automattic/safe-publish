@@ -1,9 +1,9 @@
 /**
- * Tests for the useImportPost hook — the canonical client for
- * safe_publish_create_draft, shared by ImportModal and PostDiffModal. Drift
- * in the request shape silently breaks both modals, so the contract is
- * pinned here: Payload keys, isUpdate toggle, postType fallback, success
- * parsing, and each distinct error path.
+ * Tests for the useImportPost hook.
+ *
+ * The hook is the canonical client for safe_publish_create_draft, so its
+ * contract is pinned here: Payload keys, isUpdate toggle, postType fallback,
+ * success parsing, and each distinct error path.
  */
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { act, renderHook, waitFor } from '@testing-library/react';

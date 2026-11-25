@@ -1,7 +1,5 @@
 /**
- * Tests for the ImportModal. An import that lands as a draft has no
- * confirmation step and starts on mount; one that overwrites a published post
- * waits for an explicit confirmation.
+ * Tests for the ImportModal.
  */
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
