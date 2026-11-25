@@ -1201,41 +1201,29 @@ class Source_Media_REST_Field_Test extends WP_UnitTestCase {
 	 * creation order.
 	 */
 	public function test_attached_field_lists_bare_gallery_children_in_order(): void {
-		// ARRANGE: A bare [gallery] with two images seeded so the lower-ID one
-		// carries the higher menu_order, proving menu_order drives the order.
+		// ARRANGE: A bare [gallery] with six images, one more than get_posts()
+		// returns by default, seeded so menu_order runs opposite to ID order.
 		$post_id = self::factory()->post->create(
 			array( 'post_content' => 'Intro [gallery] outro' )
 		);
-		$second  = $this->seed_attached_child(
-			$post_id,
-			'2025/01/g-second.jpg',
-			'image/jpeg',
-			2
-		);
-		$first   = $this->seed_attached_child(
-			$post_id,
-			'2025/01/g-first.jpg',
-			'image/jpeg',
-			1
-		);
+		$created = array();
+		for ( $order = 6; $order >= 1; $order-- ) {
+			$created[] = array(
+				'id'         => $this->seed_attached_child(
+					$post_id,
+					"2025/01/g-{$order}.jpg",
+					'image/jpeg',
+					$order
+				),
+				'menu_order' => $order,
+			);
+		}
 
 		// ACT: Request the field.
 		$set = $this->attached_media_for( $post_id );
 
-		// ASSERT: Both images, ordered by menu_order, each carrying its order.
-		$this->assertSame(
-			array(
-				array(
-					'id'         => $first,
-					'menu_order' => 1,
-				),
-				array(
-					'id'         => $second,
-					'menu_order' => 2,
-				),
-			),
-			$set
-		);
+		// ASSERT: All six, ordered by menu_order, each carrying its order.
+		$this->assertSame( array_reverse( $created ), $set );
 	}
 
 	/**

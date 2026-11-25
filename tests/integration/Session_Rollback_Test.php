@@ -144,11 +144,15 @@ class Session_Rollback_Test extends Integration_Test_Case {
 	 * owns.
 	 */
 	public function test_rollback_item_deletes_owned_imported_media(): void {
-		// ARRANGE: An imported post owning one plugin-imported attachment.
-		$session_id    = $this->repository->create_session( 'https://example.com', 'bulk' );
-		$post_id       = $this->factory()->post->create( array( 'post_title' => 'Owner' ) );
-		$attachment_id = $this->seed_imported_attachment( $post_id );
-		$item_id       = $this->repository->log_import_action(
+		// ARRANGE: An imported post owning six plugin-imported attachments, one
+		// more than get_posts() returns by default.
+		$session_id     = $this->repository->create_session( 'https://example.com', 'bulk' );
+		$post_id        = $this->factory()->post->create( array( 'post_title' => 'Owner' ) );
+		$attachment_ids = array();
+		for ( $i = 0; $i < 6; $i++ ) {
+			$attachment_ids[] = $this->seed_imported_attachment( $post_id );
+		}
+		$item_id = $this->repository->log_import_action(
 			$session_id,
 			1,
 			'Owner',
@@ -163,7 +167,13 @@ class Session_Rollback_Test extends Integration_Test_Case {
 		$this->assertIsArray( $result );
 		$this->assertSame( 'deleted', $result['action'] );
 		$this->assertNull( get_post( $post_id ) );
-		$this->assertNull( get_post( $attachment_id ) );
+		$this->assertSame(
+			array(),
+			array_filter(
+				$attachment_ids,
+				static fn ( int $id ): bool => null !== get_post( $id )
+			)
+		);
 	}
 
 	/**
