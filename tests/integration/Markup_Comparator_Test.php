@@ -127,6 +127,17 @@ class Markup_Comparator_Test extends Integration_Test_Case {
 				'<svg><title><b>x</b></title></svg>',
 				'<svg><title>&lt;b&gt;x&lt;/b&gt;</title></svg>',
 			),
+			'markup in noscript title'   => array(
+				// Where scripts run, the second NOSCRIPT ends in its title.
+				'<noscript><p title="&lt;/noscript&gt;&lt;b&gt;x&lt;/b&gt;">'
+					. '</p></noscript>',
+				'<noscript><p title="</noscript><b>x</b>"></p></noscript>',
+			),
+			'text after plaintext'       => array(
+				// Browsers show everything after PLAINTEXT as written.
+				'<plaintext>&amp;',
+				'<plaintext>&',
+			),
 			'stray closer in svg'        => array(
 				'<svg></math><a/><text>x</text></svg>',
 				'<svg></math><a><text>x</text></svg>',
@@ -209,28 +220,52 @@ class Markup_Comparator_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Provides markup holding SVG or MathML, which parse differently from HTML.
+	 * Provides markup holding a tag browsers parse differently from the tag
+	 * processor.
 	 *
 	 * @return array<string, array{0: string}> Markup.
 	 */
-	public static function foreign_markup_provider(): array {
+	public static function divergent_markup_provider(): array {
 		return array(
-			'svg'    => array( '<p>a</p><svg><path d="M0"/></svg>' ),
-			'mathml' => array( '<math><mi>x</mi></math>' ),
+			'svg'       => array( '<p>a</p><svg><path d="M0"/></svg>' ),
+			'mathml'    => array( '<math><mi>x</mi></math>' ),
+			'noscript'  => array( '<noscript><p>a</p></noscript>' ),
+			'plaintext' => array( '<p>a</p><plaintext>b' ),
 		);
 	}
 
 	/**
-	 * Verifies that markup holding SVG or MathML has no key, so it compares
-	 * byte for byte.
+	 * Verifies that markup holding a tag browsers parse differently from the
+	 * tag processor has no key, so it compares byte for byte.
 	 *
-	 * @dataProvider foreign_markup_provider
+	 * @dataProvider divergent_markup_provider
 	 *
-	 * @param string $markup Markup holding SVG or MathML.
+	 * @param string $markup Markup holding the tag.
 	 */
-	public function test_foreign_markup_has_no_key( string $markup ): void {
+	public function test_divergent_markup_has_no_key( string $markup ): void {
 		// ACT + ASSERT: The markup cannot be keyed.
 		$this->assertNull( Markup_Comparator::key( $markup ) );
+	}
+
+	/**
+	 * Verifies that building a key holds less memory than the markup it reads.
+	 */
+	public function test_key_holds_less_memory_than_the_markup(): void {
+		// ARRANGE: Markup of many small tags, read from a fresh peak once a
+		// first key has loaded what the comparator needs.
+		$markup = str_repeat( '<a>', 50000 );
+		Markup_Comparator::key( '<a>' );
+		memory_reset_peak_usage();
+		$baseline = memory_get_usage();
+
+		// ACT: Build the markup's key.
+		Markup_Comparator::key( $markup );
+
+		// ASSERT: Memory did not grow with the markup.
+		$this->assertLessThan(
+			strlen( $markup ),
+			memory_get_peak_usage() - $baseline
+		);
 	}
 
 	/**

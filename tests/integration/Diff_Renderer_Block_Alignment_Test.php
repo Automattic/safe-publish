@@ -11,6 +11,7 @@ namespace Safe_Publish\Tests\Integration;
 
 use ReflectionMethod;
 use Safe_Publish\API\Diff_Renderer;
+use Safe_Publish\Utils\Markup_Comparator;
 
 /**
  * Covers how the block diff pairs blocks: Equivalent blocks align first, and
@@ -278,6 +279,25 @@ class Diff_Renderer_Block_Alignment_Test extends Integration_Test_Case {
 			'<p>One</p><img src="a.jpg',
 			'<p>One</p><img src="b.jpg'
 		);
+
+		// ASSERT: The classic block reports the change.
+		$this->assertSame(
+			array( 'modified' ),
+			array_column( $diffs, 'status' )
+		);
+	}
+
+	/**
+	 * Verifies that a block spelling out another block's key reports the
+	 * change.
+	 */
+	public function test_block_spelling_a_key_reports_the_change(): void {
+		// ARRANGE: Local markup, and source markup made of the local key.
+		$local  = '<p>&lt;svg&gt;</p>';
+		$source = (string) Markup_Comparator::key( $local );
+
+		// ACT: Diff the classic block.
+		$diffs = $this->render_block_diffs( $local, $source );
 
 		// ASSERT: The classic block reports the change.
 		$this->assertSame(

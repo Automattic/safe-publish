@@ -26,6 +26,20 @@ if ( ! defined( 'ABSPATH' ) ) {
 final class Markup_Comparator {
 
 	/**
+	 * Tags that browsers parse differently from the tag processor: SVG and
+	 * MathML hold foreign content, NOSCRIPT holds text where scripts run, and
+	 * PLAINTEXT makes the rest of the markup text.
+	 *
+	 * @var string[]
+	 */
+	private const DIVERGENT_TAGS = array(
+		'MATH',
+		'NOSCRIPT',
+		'PLAINTEXT',
+		'SVG',
+	);
+
+	/**
 	 * Checks whether two markup strings hold the same blocks and HTML.
 	 *
 	 * @param string $a One markup string.
@@ -47,12 +61,12 @@ final class Markup_Comparator {
 	 *
 	 * Blocks compare by name and parsed attributes, and HTML token by token,
 	 * with attributes in name order, style declarations trimmed, and character
-	 * references decoded. SVG and MathML parse differently from HTML, which
-	 * the processor follows, so markup holding them has no key.
+	 * references decoded. Tokens are hashed with SHA-256 as they are read, so
+	 * memory stays flat and distinct markup cannot be made to share a key.
 	 *
 	 * @param string $markup Markup to read.
-	 * @return string|null Key, or null when the markup ends inside a token or
-	 *                     holds SVG or MathML.
+	 * @return string|null Hex digest, or null when the markup ends inside a
+	 *                     token or holds one of the DIVERGENT_TAGS.
 	 */
 	public static function key( string $markup ): ?string {
 		if ( has_blocks( $markup ) ) {
@@ -60,12 +74,12 @@ final class Markup_Comparator {
 		}
 
 		$processor = new WP_HTML_Tag_Processor( $markup );
-		$tokens    = array();
+		$context   = hash_init( 'sha256' );
 
 		while ( $processor->next_token() ) {
 			$tag = $processor->get_tag();
 
-			if ( 'SVG' === $tag || 'MATH' === $tag ) {
+			if ( in_array( $tag, self::DIVERGENT_TAGS, true ) ) {
 				return null;
 			}
 
@@ -79,23 +93,29 @@ final class Markup_Comparator {
 			}
 			ksort( $attributes, SORT_STRING );
 
-			$tokens[] = array(
-				$processor->get_token_type(),
-				$tag,
-				$processor->is_tag_closer(),
-				$attributes,
-				$processor->get_full_comment_text(),
-				$processor->get_modifiable_text(),
+			$token = wp_json_encode(
+				array(
+					$processor->get_token_type(),
+					$tag,
+					$processor->is_tag_closer(),
+					$attributes,
+					$processor->get_full_comment_text(),
+					$processor->get_modifiable_text(),
+				)
 			);
+
+			if ( false === $token ) {
+				return null;
+			}
+
+			hash_update( $context, $token );
 		}
 
 		if ( $processor->paused_at_incomplete_token() ) {
 			return null;
 		}
 
-		$key = wp_json_encode( $tokens );
-
-		return false === $key ? null : $key;
+		return hash_final( $context );
 	}
 
 	/**
