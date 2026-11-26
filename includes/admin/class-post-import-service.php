@@ -2956,7 +2956,8 @@ class Post_Import_Service {
 	 *
 	 * @param int   $post_id  Post ID.
 	 * @param array $snapshot Snapshot from capture_pre_update_state().
-	 * @return WP_Error|null Error when post or terms could not be restored.
+	 * @return WP_Error|null Error when the post, its meta, or its terms could
+	 *                       not be restored.
 	 */
 	private function restore_pre_update_state(
 		int $post_id,
@@ -2967,7 +2968,7 @@ class Post_Import_Service {
 		$result = wp_update_post( wp_slash( $snapshot['post_fields'] ), true );
 
 		if ( is_wp_error( $result ) ) {
-			$content_error = new WP_Error(
+			$restore_error = new WP_Error(
 				'content_restore_failed',
 				sprintf(
 					/* translators: %s: WordPress error message. */
@@ -2977,7 +2978,7 @@ class Post_Import_Service {
 				array( 'action' => 'content_restore_failed' )
 			);
 		} else {
-			$content_error = Post_Content_Integrity::verify(
+			$restore_error = Post_Content_Integrity::verify(
 				$post_id,
 				$snapshot['post_fields'],
 				Post_Content_Integrity::OPERATION_ROLLBACK
@@ -2998,12 +2999,29 @@ class Post_Import_Service {
 			delete_post_thumbnail( $post_id );
 		}
 
-		foreach ( $snapshot['custom_meta'] as $key => $value ) {
-			if ( '' === $value ) {
-				delete_post_meta( $post_id, $key );
-			} else {
-				update_post_meta( $post_id, $key, wp_slash( $value ) );
-			}
+		$unrestored_keys = $this->meta_terms_manager->restore_meta(
+			$post_id,
+			$snapshot['custom_meta']
+		);
+
+		if ( array() !== $unrestored_keys ) {
+			$meta_error = new WP_Error(
+				'meta_restore_failed',
+				sprintf(
+					/* translators: %s: Comma-separated meta keys. */
+					__(
+						'Failed to restore post meta key(s): %s.',
+						'safe-publish'
+					),
+					implode( ', ', $unrestored_keys )
+				),
+				array( 'action' => 'meta_restore_failed' )
+			);
+
+			$restore_error = self::add_restore_failure(
+				$restore_error,
+				$meta_error
+			);
 		}
 
 		$terms_restored = Term_Assignment_State::restore(
@@ -3022,19 +3040,36 @@ class Post_Import_Service {
 				array( 'action' => 'terms_restore_failed' )
 			);
 
-			if ( null === $content_error ) {
-				return $terms_error;
-			}
-
-			return new WP_Error(
-				$content_error->get_error_code(),
-				$content_error->get_error_message() . ' '
-					. $terms_error->get_error_message(),
-				array( 'action' => 'terms_restore_failed' )
-			);
+			return self::add_restore_failure( $restore_error, $terms_error );
 		}
 
-		return $content_error;
+		return $restore_error;
+	}
+
+	/**
+	 * Adds a restore failure to the failures before it, if any.
+	 *
+	 * The first failure keeps its code and action: The post's own fields are
+	 * restored first, and failing them leaves the larger gap. The message
+	 * names every failure.
+	 *
+	 * @param WP_Error|null $error   Earlier restore failure.
+	 * @param WP_Error      $failure Restore failure to add.
+	 * @return WP_Error Combined restore failure.
+	 */
+	private static function add_restore_failure(
+		?WP_Error $error,
+		WP_Error $failure
+	): WP_Error {
+		if ( null === $error ) {
+			return $failure;
+		}
+
+		return new WP_Error(
+			$error->get_error_code(),
+			$error->get_error_message() . ' ' . $failure->get_error_message(),
+			$error->get_error_data()
+		);
 	}
 
 	/**
@@ -3043,7 +3078,8 @@ class Post_Import_Service {
 	 *
 	 * @param int   $post_id  Post ID.
 	 * @param array $snapshot Snapshot from capture_pre_update_state().
-	 * @return WP_Error|null Error when post or terms could not be restored.
+	 * @return WP_Error|null Error when the post, its meta, or its terms could
+	 *                       not be restored, or new media survived cleanup.
 	 */
 	private function rollback_failed_update(
 		int $post_id,
