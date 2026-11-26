@@ -157,12 +157,19 @@ final class Meta_Terms_Manager {
 					// stores scalars as strings, so compare stringwise; and
 					// since an absent key also reads back as "", require the
 					// key to exist to tell a failed falsy write from a no-op.
-					$stored  = get_post_meta( $post_id, $key, true );
+					// The write stores the key unslashed, so the row is read
+					// back under the unslashed one.
+					$stored_key = (string) wp_unslash( $key );
+
+					$stored  = get_post_meta( $post_id, $stored_key, true );
 					$matches = is_array( $meta_value ) || is_object( $meta_value )
 						? $stored == $meta_value // phpcs:ignore WordPress.PHP.StrictComparisons.LooseComparison
 						: (string) $stored === (string) $meta_value;
 
-					if ( ! metadata_exists( 'post', $post_id, $key ) || ! $matches ) {
+					if (
+						! metadata_exists( 'post', $post_id, $stored_key )
+						|| ! $matches
+					) {
 						$failed_keys[] = $key;
 					}
 				}

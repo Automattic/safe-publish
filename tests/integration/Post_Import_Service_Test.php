@@ -4633,4 +4633,60 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 			(int) get_post_thumbnail_id( $post_id )
 		);
 	}
+
+	/**
+	 * Verifies that undoing a failed update restores a custom field the source
+	 * sends under a key with a backslash, rather than deleting it.
+	 */
+	public function test_failed_update_undo_restores_slashed_key_meta(): void {
+		// ARRANGE: Import a post once with a field the source sends under a key
+		// with a backslash, which the write stores without it.
+		$session_id                = $this->repository->create_session(
+			'https://source.example.com',
+			'single'
+		);
+		$post_data                 = array(
+			'id'        => 9520,
+			'title'     => 'Queued title',
+			'link'      => 'https://source.example.com/slashed-meta-undo',
+			'post_type' => 'posts',
+		);
+		$this->mock_post_overrides = array(
+			'meta' => array( 'sp\\color' => 'blue' ),
+		);
+
+		$first = $this->import_service->import_post( $post_data, $session_id );
+		$this->assertTrue( $first['success'] );
+
+		$post_id = (int) $first['post_id'];
+
+		// ARRANGE: The source now changes the field and adds one whose write
+		// fails, so the update is undone.
+		$this->mock_post_overrides = array(
+			'meta' => array(
+				'sp\\color'        => 'green',
+				'sp_blocked_field' => 'imported',
+			),
+		);
+
+		$block_meta = static function ( $check, $object_id, $meta_key ) {
+			unset( $object_id );
+			return 'sp_blocked_field' === $meta_key ? false : $check;
+		};
+		add_filter( 'update_post_metadata', $block_meta, 10, 3 );
+
+		// ACT: Re-import the post.
+		$result = $this->import_service->import_post( $post_data, $session_id );
+
+		remove_filter( 'update_post_metadata', $block_meta, 10 );
+
+		// ASSERT: The blocked field failed the update, and the undo restored
+		// the field's previous value.
+		$this->assertFalse( $result['success'] );
+		$this->assertSame(
+			'Failed to update post meta key(s): sp_blocked_field.',
+			$result['error']
+		);
+		$this->assertSame( 'blue', get_post_meta( $post_id, 'spcolor', true ) );
+	}
 }
