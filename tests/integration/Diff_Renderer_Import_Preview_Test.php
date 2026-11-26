@@ -531,6 +531,59 @@ class Diff_Renderer_Import_Preview_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that a copy kses rewrote on save reports no differences.
+	 */
+	public function test_copy_rewritten_on_save_reports_no_differences(): void {
+		// ARRANGE: An author stores the imported fixture, so kses rewrites it.
+		$source   = $this->source_content() . "\n\n"
+			. '<!-- wp:paragraph --><p><a href="https://example.org/"'
+			. ' target="_blank" rel="noreferrer noopener">Out</a>&nbsp;now.</p>'
+			. '<!-- /wp:paragraph -->';
+		$fields   = array(
+			'title'   => 'Fish & Chips',
+			'excerpt' => 'Fish & Chips',
+		);
+		$imported = $this->store_imported_as_author( $source, $fields );
+		$this->assertNotSame(
+			$imported,
+			get_post_field( 'post_content', $this->post_id )
+		);
+
+		// ACT: Compare the rewritten copy against the untouched source.
+		$result = $this->render_diff( $source, array(), $fields );
+
+		// ASSERT: No view reports a change.
+		$this->assertSame( '', $result['contentDiffHtml'] );
+		$this->assertSame( array(), $this->modified_block_names( $result ) );
+		$this->assertSame( '', $result['nonContentDiffs']['title'] );
+		$this->assertSame( '', $result['nonContentDiffs']['excerpt'] );
+	}
+
+	/**
+	 * Verifies that an edit to a copy kses rewrote on save is the only block
+	 * reported.
+	 */
+	public function test_rewritten_copy_reports_only_the_edited_block(): void {
+		// ARRANGE: An author stores the imported fixture, then the source
+		// edits one paragraph.
+		$fields = array(
+			'title'   => 'Title',
+			'excerpt' => 'Excerpt.',
+		);
+		$this->store_imported_as_author( $this->source_content(), $fields );
+		$edited = $this->source_content( 'Body, revised.' );
+
+		// ACT: Compare the rewritten copy against the edited source.
+		$result = $this->render_diff( $edited, array(), $fields );
+
+		// ASSERT: Exactly the edited paragraph reports.
+		$this->assertSame(
+			array( 'core/paragraph' ),
+			$this->modified_block_names( $result )
+		);
+	}
+
+	/**
 	 * Builds the fixture content: a reusable-block reference, an internal
 	 * link, a nav link, and an image, plus a paragraph a test can edit.
 	 *
@@ -617,6 +670,38 @@ class Diff_Renderer_Import_Preview_Test extends Integration_Test_Case {
 				'post_content' => wp_slash( $this->import_with_media( $source ) ),
 			)
 		);
+	}
+
+	/**
+	 * Runs the real import over content and stores the result as an author,
+	 * so kses rewrites it as it does for any user without unfiltered_html.
+	 *
+	 * @param string $source Source content.
+	 * @param array  $fields Title and excerpt to store.
+	 * @return string Content as the import wrote it, before kses.
+	 */
+	private function store_imported_as_author(
+		string $source,
+		array $fields
+	): string {
+		$imported = $this->import_with_media( $source );
+		$admin_id = get_current_user_id();
+		wp_set_current_user(
+			self::factory()->user->create( array( 'role' => 'author' ) )
+		);
+		wp_update_post(
+			wp_slash(
+				array(
+					'ID'           => $this->post_id,
+					'post_title'   => $fields['title'],
+					'post_content' => $imported,
+					'post_excerpt' => $fields['excerpt'],
+				)
+			)
+		);
+		wp_set_current_user( $admin_id );
+
+		return $imported;
 	}
 
 	/**
@@ -797,13 +882,15 @@ class Diff_Renderer_Import_Preview_Test extends Integration_Test_Case {
 	 *
 	 * @param string $source      Source post content.
 	 * @param array  $credentials Optional. Source REST auth credentials.
+	 * @param array  $fields      Optional. Source title and excerpt.
 	 * @return array render_diff() result.
 	 */
 	private function render_diff(
 		string $source,
-		array $credentials = array()
+		array $credentials = array(),
+		array $fields = array()
 	): array {
-		$make_request = static function ( $url ) use ( $source ) {
+		$make_request = static function ( $url ) use ( $source, $fields ) {
 			if ( str_contains( (string) $url, '/catalog/post-types' ) ) {
 				return \_safe_publish_test_catalog_response();
 			}
@@ -812,9 +899,13 @@ class Diff_Renderer_Import_Preview_Test extends Integration_Test_Case {
 				'response' => array( 'code' => 200 ),
 				'body'     => (string) wp_json_encode(
 					array(
-						'title'   => array( 'raw' => 'Title' ),
+						'title'   => array(
+							'raw' => $fields['title'] ?? 'Title',
+						),
 						'content' => array( 'raw' => $source ),
-						'excerpt' => array( 'raw' => 'Excerpt.' ),
+						'excerpt' => array(
+							'raw' => $fields['excerpt'] ?? 'Excerpt.',
+						),
 					)
 				),
 			);

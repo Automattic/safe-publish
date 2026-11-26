@@ -167,7 +167,7 @@ final class Diff_Renderer {
 		}
 
 		// Generate all diffs.
-		$content_diff_html = $this->generate_simple_diff(
+		$content_diff_html = $this->generate_markup_diff(
 			$current['content'],
 			$incoming['content'],
 			__( 'Current Content', 'safe-publish' ),
@@ -535,7 +535,7 @@ final class Diff_Renderer {
 		$diffs = array();
 
 		// Title diff.
-		$diffs['title'] = $this->generate_simple_diff(
+		$diffs['title'] = $this->generate_markup_diff(
 			$current['title'] ?? '',
 			$incoming['title'] ?? '',
 			_x( 'Current', 'title diff column header', 'safe-publish' ),
@@ -545,7 +545,7 @@ final class Diff_Renderer {
 		// Excerpt diff (with normalization).
 		$current_excerpt  = $this->prepare_excerpt_for_diff( $current['excerpt'] ?? '' );
 		$incoming_excerpt = $this->prepare_excerpt_for_diff( $incoming['excerpt'] ?? '' );
-		$diffs['excerpt'] = $this->generate_simple_diff(
+		$diffs['excerpt'] = $this->generate_markup_diff(
 			$current_excerpt,
 			$incoming_excerpt,
 			_x( 'Current', 'excerpt diff column header', 'safe-publish' ),
@@ -606,6 +606,35 @@ final class Diff_Renderer {
 				'title_left'  => $title_left,
 				'title_right' => $title_right,
 			)
+		);
+	}
+
+	/**
+	 * Generates a simple diff for two markup strings, ignoring how WordPress
+	 * writes the markup it keeps.
+	 *
+	 * @param string $current     Current markup.
+	 * @param string $incoming    Incoming markup.
+	 * @param string $title_left  Title for left side.
+	 * @param string $title_right Title for right side.
+	 *
+	 * @return string Diff HTML, or '' when the markup is equivalent.
+	 */
+	private function generate_markup_diff(
+		string $current,
+		string $incoming,
+		string $title_left,
+		string $title_right
+	): string {
+		if ( Markup_Comparator::equivalent( $current, $incoming ) ) {
+			return '';
+		}
+
+		return $this->generate_simple_diff(
+			$current,
+			$incoming,
+			$title_left,
+			$title_right
 		);
 	}
 
@@ -765,9 +794,9 @@ final class Diff_Renderer {
 	/**
 	 * Generates block-level diffs for Gutenberg content.
 	 *
-	 * Blocks with equal saved markup align first, so an inserted or removed
-	 * block leaves the blocks around it unchanged. An entry's index is its
-	 * block's position in the incoming content, or in the current content
+	 * Blocks with equivalent saved markup align first, so an inserted or
+	 * removed block leaves the blocks around it unchanged. An entry's index is
+	 * its block's position in the incoming content, or in the current content
 	 * for a removed block.
 	 *
 	 * @param string $current  Current content.
@@ -795,8 +824,8 @@ final class Diff_Renderer {
 		$diff = new Text_Diff(
 			'native',
 			array(
-				array_column( $cur_blocks, 'signal' ),
-				array_column( $inc_blocks, 'signal' ),
+				array_column( $cur_blocks, 'key' ),
+				array_column( $inc_blocks, 'key' ),
 			)
 		);
 
@@ -830,7 +859,8 @@ final class Diff_Renderer {
 	 *
 	 * @param string $content Normalized content.
 	 *
-	 * @return list<array{position: int, block: array, signal: string}> Blocks in document order.
+	 * @return list<array{position: int, block: array, signal: string, key: string}>
+	 *         Blocks in document order.
 	 */
 	private static function diffable_blocks( string $content ): array {
 		$normalize_block_html = static function ( string $html ): string {
@@ -861,6 +891,8 @@ final class Diff_Renderer {
 				'position' => $position,
 				'block'    => $block,
 				'signal'   => $signal,
+				// Alignment and the verdict ignore how kses writes the markup.
+				'key'      => Markup_Comparator::key( $signal ) ?? $signal,
 			);
 		}
 
@@ -888,7 +920,7 @@ final class Diff_Renderer {
 			$status = 'added';
 		} elseif (
 			$cur['block']['blockName'] !== $inc['block']['blockName']
-			|| $cur['signal'] !== $inc['signal']
+			|| $cur['key'] !== $inc['key']
 		) {
 			$status = 'modified';
 		}
