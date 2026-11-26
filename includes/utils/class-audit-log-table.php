@@ -235,43 +235,6 @@ final class Audit_Log_Table {
 	}
 
 	/**
-	 * Returns the most recent created_at_gmt timestamp for events matching any
-	 * of the given patterns.
-	 *
-	 * @param string   $channel         Channel to filter by (e.g. 'auth').
-	 * @param string[] $event_patterns  Substrings to match against the event column (OR logic).
-	 * @return string|null GMT MySQL datetime string, or null if none match.
-	 */
-	public static function get_last_timestamp(
-		string $channel,
-		array $event_patterns
-	): ?string {
-		global $wpdb;
-
-		$table           = self::table_name();
-		$like_conditions = array();
-		$values          = array( $channel );
-
-		foreach ( $event_patterns as $pattern ) {
-			$like_conditions[] = 'event LIKE %s';
-			$values[]          = '%' . $wpdb->esc_like( $pattern ) . '%';
-		}
-
-		$event_where = implode( ' OR ', $like_conditions );
-
-		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
-		$result = $wpdb->get_var(
-			$wpdb->prepare(
-				"SELECT MAX(created_at_gmt) FROM `{$table}` WHERE channel = %s AND ({$event_where})",
-				...$values
-			)
-		);
-		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
-
-		return false !== $result ? $result : null;
-	}
-
-	/**
 	 * Deletes all log events for a given channel.
 	 *
 	 * @param string $channel Channel whose rows should be deleted (e.g. 'auth').
