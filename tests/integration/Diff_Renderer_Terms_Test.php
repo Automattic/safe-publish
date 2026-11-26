@@ -159,6 +159,59 @@ class Diff_Renderer_Terms_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Provides whether the site keeps core's term-description filtering, and
+	 * the description an import stores from <p>New</p>.
+	 *
+	 * @return array<string, array{0: bool, 1: string}> Filtering and stored description.
+	 */
+	public static function description_change_provider(): array {
+		return array(
+			'narrowed'   => array( true, 'New' ),
+			'unfiltered' => array( false, '<p>New</p>' ),
+		);
+	}
+
+	/**
+	 * Verifies that a changed description shows as the import would store it.
+	 *
+	 * @dataProvider description_change_provider
+	 *
+	 * @param bool   $filtered Whether core filters term descriptions.
+	 * @param string $stored   Description the import stores.
+	 */
+	public function test_description_change_shows_the_stored_form(
+		bool $filtered,
+		string $stored
+	): void {
+		// ARRANGE: An imported term carrying a description. The test harness
+		// restores hooks after this test.
+		if ( ! $filtered ) {
+			remove_filter( 'pre_term_description', 'wp_filter_kses' );
+		}
+		$this->import_terms(
+			array( $this->record( 101, 'News', 'news', 0, 'Old' ) )
+		);
+		$record = $this->record( 101, 'News', 'news', 0, '<p>New</p>' );
+
+		// ACT: Compare the source's new description, then import it.
+		$html = $this->render_taxonomies( array( $record ) );
+		$this->import_terms( array( $record ) );
+
+		// ASSERT: The comparison shows the description the import stored.
+		$this->assertSame(
+			array(
+				'Deleted: news (category) description: Old',
+				'Added: news (category) description: ' . $stored,
+			),
+			$this->changed_lines( $html )
+		);
+		$this->assertSame(
+			$stored,
+			$this->term_by_slug( 'news' )->description
+		);
+	}
+
+	/**
 	 * Verifies that a description core narrows on the way in does not read as a
 	 * pending change. Comparing the source's own form would report one on every
 	 * import, for as long as the description carries the markup.
@@ -176,6 +229,55 @@ class Diff_Renderer_Terms_Test extends Integration_Test_Case {
 		);
 
 		// ASSERT: Nothing is rendered, whichever form the destination stored.
+		$this->assertSame( '', $html );
+	}
+
+	/**
+	 * Verifies that a stored description holding the source's markup, written
+	 * differently, does not read as a pending change.
+	 */
+	public function test_equivalent_description_is_not_a_change(): void {
+		// ARRANGE: A term imported once, then stored in its narrowed form with
+		// the attributes reordered.
+		$record = $this->record(
+			101,
+			'News',
+			'news',
+			0,
+			'<p><a href="/desk" rel="noopener" target="_blank">Desk</a></p>'
+		);
+		$this->import_terms( array( $record ) );
+		$this->store_term_field(
+			'news',
+			'description',
+			'<a href="/desk" target="_blank" rel="noopener">Desk</a>'
+		);
+
+		// ACT: The source sends the same description again.
+		$html = $this->render_taxonomies( array( $record ) );
+
+		// ASSERT: Nothing is rendered.
+		$this->assertSame( '', $html );
+	}
+
+	/**
+	 * Verifies that a stored name holding the source's, written differently,
+	 * reads as no rename, on its own line or as another term's parent.
+	 */
+	public function test_equivalent_name_is_not_a_change(): void {
+		// ARRANGE: A parent and child imported once, then the parent stored
+		// with its character reference decoded.
+		$records = array(
+			$this->record( 101, 'Caf&eacute;', 'cafe', 0, '' ),
+			$this->record( 102, 'News', 'news', 101, '' ),
+		);
+		$this->import_terms( $records );
+		$this->store_term_field( 'cafe', 'name', 'Café' );
+
+		// ACT: The source sends the same terms again.
+		$html = $this->render_taxonomies( $records );
+
+		// ASSERT: Nothing is rendered.
 		$this->assertSame( '', $html );
 	}
 
@@ -739,6 +841,26 @@ class Diff_Renderer_Terms_Test extends Integration_Test_Case {
 		$this->assertStringContainsString( 'category: Updates', $changed );
 		$this->assertStringNotContainsString( 'description', $html );
 		$this->assertSame( array(), $this->notes( $html ) );
+	}
+
+	/**
+	 * Verifies that the names-only fallback reads a stored name holding the
+	 * source's, written differently, as no rename.
+	 */
+	public function test_fallback_equivalent_name_is_not_a_change(): void {
+		// ARRANGE: A term imported once, then stored with its character
+		// reference decoded.
+		$this->import_terms(
+			array( $this->record( 101, 'Caf&eacute;', 'news', 0, '' ) )
+		);
+		$this->store_term_field( 'news', 'name', 'Café' );
+
+		// ACT: A source on an older plugin version sends only the embedded
+		// payload, naming the term as it keeps it.
+		$html = $this->render_embedded_category( 'Caf&eacute;' );
+
+		// ASSERT: Nothing is rendered.
+		$this->assertSame( '', $html );
 	}
 
 	/**
@@ -1724,5 +1846,30 @@ class Diff_Renderer_Terms_Test extends Integration_Test_Case {
 		$this->assertInstanceOf( WP_Term::class, $term );
 
 		return $term;
+	}
+
+	/**
+	 * Stores a category's name or description directly, so no save filter
+	 * runs.
+	 *
+	 * @param string $slug  Category slug.
+	 * @param string $field Column to write, either name or description.
+	 * @param string $value Value to store.
+	 */
+	private function store_term_field(
+		string $slug,
+		string $field,
+		string $value
+	): void {
+		global $wpdb;
+
+		$term = $this->term_by_slug( $slug );
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$wpdb->update(
+			'name' === $field ? $wpdb->terms : $wpdb->term_taxonomy,
+			array( $field => $value ),
+			array( 'term_id' => $term->term_id )
+		);
+		clean_term_cache( $term->term_id, $term->taxonomy );
 	}
 }

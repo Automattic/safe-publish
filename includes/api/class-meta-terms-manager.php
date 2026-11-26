@@ -15,6 +15,7 @@ use Safe_Publish\Admin\Content_Processor;
 use Safe_Publish\Admin\Import_Logger;
 use Safe_Publish\Admin\Navigation_Ref_Rewriter;
 use Safe_Publish\Admin\Post_Import_Service;
+use Safe_Publish\Utils\Markup_Comparator;
 use Safe_Publish\Utils\Meta_Key_Matcher;
 use Safe_Publish\Utils\Options;
 use Safe_Publish\Utils\Term_Conflict;
@@ -1179,7 +1180,11 @@ final class Meta_Terms_Manager {
 			$changes['parent'] = $parent;
 		}
 
-		if ( '' !== $record['name'] && $record['name'] !== $term->name ) {
+		// Core stores a name through kses, which may write it differently.
+		if (
+			'' !== $record['name']
+			&& ! Markup_Comparator::equivalent( $record['name'], $term->name )
+		) {
 			$taken = $this->name_is_taken(
 				$record['name'],
 				$term,
@@ -1198,35 +1203,41 @@ final class Meta_Terms_Manager {
 			}
 		}
 
-		if ( null !== $record['description'] ) {
-			$description = wp_kses_post( $record['description'] );
-
-			$narrowed = self::narrow_description( $record['description'] );
-
-			// Core narrows a term description as it saves, so compare that
-			// form too; richer markup would rewrite on every import.
-			if (
-				$description !== $term->description
-				&& $narrowed !== $term->description
-			) {
-				$changes['description'] = $description;
-			}
+		if (
+			null !== $record['description']
+			&& ! self::holds_description(
+				$term->description,
+				$record['description']
+			)
+		) {
+			$changes['description'] = wp_kses_post( $record['description'] );
 		}
 
 		return $changes;
 	}
 
 	/**
-	 * Narrows a source description to the form core stores on a term.
+	 * Checks whether a stored term description already holds the source's.
 	 *
-	 * @param string $description Source term description.
-	 * @return string Narrowed description.
+	 * Core narrows a term description as it saves, unless the site lifts that
+	 * filter, so either form counts; richer markup would otherwise rewrite on
+	 * every import.
+	 *
+	 * @param string $stored Stored term description.
+	 * @param string $source Source term description.
+	 * @return bool Whether importing the source's description changes nothing.
 	 */
-	public static function narrow_description( string $description ): string {
-		return wp_kses(
-			wp_kses_post( $description ),
-			'pre_term_description'
-		);
+	public static function holds_description(
+		string $stored,
+		string $source
+	): bool {
+		$description = wp_kses_post( $source );
+
+		return Markup_Comparator::equivalent( $description, $stored )
+			|| Markup_Comparator::equivalent(
+				wp_kses( $description, 'pre_term_description' ),
+				$stored
+			);
 	}
 
 	/**

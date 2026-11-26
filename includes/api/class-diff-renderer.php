@@ -16,6 +16,7 @@ use Safe_Publish\Admin\Content_Processor;
 use Safe_Publish\Content\Content_Media_Processor;
 use Safe_Publish\Content\Shortcode_ID_Rewriter;
 use Safe_Publish\Media\Media_Importer;
+use Safe_Publish\Utils\Markup_Comparator;
 use Safe_Publish\Utils\Options;
 use Safe_Publish\Utils\Post_Type_Map;
 use Safe_Publish\Utils\Source_Identity_Lookup;
@@ -1247,7 +1248,9 @@ final class Diff_Renderer {
 
 			$html = $this->generate_simple_diff(
 				$this->build_terms_text( $local ),
-				$this->build_terms_text( $records ),
+				$this->build_terms_text(
+					$this->local_term_names( $records, $local )
+				),
 				$title_left,
 				$title_right
 			);
@@ -1586,7 +1589,7 @@ final class Diff_Renderer {
 				continue;
 			}
 
-			$name = (string) ( $item['name'] ?? '' );
+			$name = $this->record_name( $item, $paired[ $id ] ?? null );
 			$slug = isset( $paired[ $id ] )
 				? (string) $paired[ $id ]->slug
 				: (string) ( $item['slug'] ?? '' );
@@ -1623,8 +1626,8 @@ final class Diff_Renderer {
 	}
 
 	/**
-	 * Renders one source record's display fields, showing the description in
-	 * the form the destination would store it in.
+	 * Renders one source record's display fields, showing a name or description
+	 * the destination already holds as stored.
 	 *
 	 * @param array                                       $record Source term record.
 	 * @param array<int, array{name:string, slug:string}> $index Source term ID mapped to name and slug.
@@ -1639,22 +1642,23 @@ final class Diff_Renderer {
 		?WP_Term $pair
 	): array {
 		$id          = absint( $record['source_term_id'] ?? 0 );
-		$name        = (string) ( $record['name'] ?? '' );
+		$name        = $this->record_name( $record, $pair );
 		$stored      = $pair instanceof WP_Term ? (string) $pair->description : null;
 		$source      = (string) ( $record['description'] ?? '' );
 		$description = wp_kses_post( $source );
 
-		// Mirrors the reconcile: Core narrows a description as it saves, and
-		// how far depends on who imports, so either form already stored means
-		// nothing would change.
+		// The reconcile keeps a stored description that holds the source's.
+		// Otherwise core narrows the description as it saves, unless the site
+		// lifts that filter.
 		if (
 			null !== $stored
-			&& (
-				$stored === $description
-				|| Meta_Terms_Manager::narrow_description( $source ) === $stored
-			)
+			&& Meta_Terms_Manager::holds_description( $stored, $source )
 		) {
 			$description = $stored;
+		} elseif (
+			false !== has_filter( 'pre_term_description', 'wp_filter_kses' )
+		) {
+			$description = wp_kses( $description, 'pre_term_description' );
 		}
 
 		return array(
@@ -1688,6 +1692,63 @@ final class Diff_Renderer {
 		return '' !== $slug
 			? $slug
 			: sanitize_title( (string) ( $record['name'] ?? '' ) );
+	}
+
+	/**
+	 * Reads the name a record shows: The paired destination term's when it
+	 * holds the same name, written differently.
+	 *
+	 * @param array        $record Source term record.
+	 * @param WP_Term|null $pair   Destination term the record pairs with, or null.
+	 *
+	 * @return string Name.
+	 */
+	private function record_name( array $record, ?WP_Term $pair ): string {
+		return $this->known_name(
+			(string) ( $record['name'] ?? '' ),
+			$pair instanceof WP_Term ? array( (string) $pair->name ) : array()
+		);
+	}
+
+	/**
+	 * Names each source term as the local term holding the same name, written
+	 * differently, so the names-only comparison does not read it as a rename.
+	 *
+	 * @param array $records Source term records by taxonomy.
+	 * @param array $local   Local term names by taxonomy.
+	 *
+	 * @return array Source term records by taxonomy.
+	 */
+	private function local_term_names( array $records, array $local ): array {
+		foreach ( $records as $taxonomy => $items ) {
+			foreach ( (array) $items as $i => $item ) {
+				$records[ $taxonomy ][ $i ]['name'] = $this->known_name(
+					(string) ( $item['name'] ?? '' ),
+					(array) ( $local[ $taxonomy ] ?? array() )
+				);
+			}
+		}
+
+		return $records;
+	}
+
+	/**
+	 * Reads the known name that holds a name, written differently, falling
+	 * back to the name itself.
+	 *
+	 * @param string $name  Name to look up.
+	 * @param array  $known Names to look in.
+	 *
+	 * @return string Name.
+	 */
+	private function known_name( string $name, array $known ): string {
+		foreach ( $known as $other ) {
+			if ( Markup_Comparator::equivalent( $name, (string) $other ) ) {
+				return (string) $other;
+			}
+		}
+
+		return $name;
 	}
 
 	/**

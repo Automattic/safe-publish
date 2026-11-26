@@ -194,6 +194,110 @@ class Term_Field_Reconcile_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Provides stored descriptions that hold the source's markup, narrowed or
+	 * not, with its attributes in another order.
+	 *
+	 * @return array<string, array{0: string}> Stored description.
+	 */
+	public static function equivalent_description_provider(): array {
+		$link = '<a href="/desk" target="_blank" rel="noopener">Desk</a>';
+
+		return array(
+			'narrowed'   => array( $link ),
+			'unfiltered' => array( "<p>{$link}</p>" ),
+		);
+	}
+
+	/**
+	 * Verifies that a stored description holding the source's markup, written
+	 * differently, is not rewritten. A WordPress upgrade that changes how kses
+	 * writes markup leaves such descriptions behind.
+	 *
+	 * @dataProvider equivalent_description_provider
+	 *
+	 * @param string $stored Stored description.
+	 */
+	public function test_equivalent_description_is_not_rewritten(
+		string $stored
+	): void {
+		// ARRANGE: A term imported once, then stored in another form.
+		$record = $this->record(
+			501,
+			'News',
+			'news',
+			0,
+			'<p><a href="/desk" rel="noopener" target="_blank">Desk</a></p>'
+		);
+		$this->import_terms( array( $record ) );
+		$this->store_term_field( 'news', 'description', $stored );
+		$this->term_updates = 0;
+
+		// ACT: Re-import the identical record.
+		$this->import_terms( array( $record ) );
+
+		// ASSERT: The stored description stands, with no further write.
+		$this->assertSame(
+			$stored,
+			$this->term_by_slug( 'news' )->description
+		);
+		$this->assertSame( 0, $this->term_updates );
+	}
+
+	/**
+	 * Verifies that a reconciled description is sanitized on a site that lifts
+	 * core's term-description filtering, where nothing else strips the unsafe
+	 * markup a compromised source could send.
+	 */
+	public function test_reconciled_description_is_sanitized(): void {
+		// ARRANGE: A site whose term descriptions keep their markup, and a term
+		// imported once. The test harness restores hooks after this test.
+		remove_filter( 'pre_term_description', 'wp_filter_kses' );
+		$this->import_terms(
+			array( $this->record( 501, 'News', 'news', 0, 'Old' ) )
+		);
+
+		// ACT: The source sends a new description carrying an event handler.
+		$this->import_terms(
+			array(
+				$this->record(
+					501,
+					'News',
+					'news',
+					0,
+					'<p onclick="alert(1)">New</p>'
+				),
+			)
+		);
+
+		// ASSERT: The handler is stripped while the markup survives.
+		$this->assertSame(
+			'<p>New</p>',
+			$this->term_by_slug( 'news' )->description
+		);
+	}
+
+	/**
+	 * Verifies that a stored name holding the source's, written differently,
+	 * is not rewritten, as when kses from WordPress 7.2 decodes a character
+	 * reference an older source keeps.
+	 */
+	public function test_equivalent_name_is_not_rewritten(): void {
+		// ARRANGE: A term imported once, then stored with its character
+		// reference decoded.
+		$record = $this->record( 501, 'Caf&eacute;', 'news', 0, null );
+		$this->import_terms( array( $record ) );
+		$this->store_term_field( 'news', 'name', 'Café' );
+		$this->term_updates = 0;
+
+		// ACT: Re-import the identical record.
+		$this->import_terms( array( $record ) );
+
+		// ASSERT: The stored name stands, with no further write.
+		$this->assertSame( 'Café', $this->term_by_slug( 'news' )->name );
+		$this->assertSame( 0, $this->term_updates );
+	}
+
+	/**
 	 * Verifies that a slug rename on the source leaves the destination slug in
 	 * place, keeping destination URLs stable.
 	 */
@@ -1014,6 +1118,31 @@ class Term_Field_Reconcile_Test extends Integration_Test_Case {
 		$this->assertInstanceOf( WP_Term::class, $term );
 
 		return $term;
+	}
+
+	/**
+	 * Stores a category's name or description directly, so no save filter
+	 * runs.
+	 *
+	 * @param string $slug  Category slug.
+	 * @param string $field Column to write, either name or description.
+	 * @param string $value Value to store.
+	 */
+	private function store_term_field(
+		string $slug,
+		string $field,
+		string $value
+	): void {
+		global $wpdb;
+
+		$term = $this->term_by_slug( $slug );
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$wpdb->update(
+			'name' === $field ? $wpdb->terms : $wpdb->term_taxonomy,
+			array( $field => $value ),
+			array( 'term_id' => $term->term_id )
+		);
+		clean_term_cache( $term->term_id, $term->taxonomy );
 	}
 
 	/**
