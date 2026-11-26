@@ -1,6 +1,6 @@
 {
   "name": "safe-publish",
-  "version": "1.7.1",
+  "version": "1.8.0",
   "author": "WPVIP",
   "description": "Safe Publish plugin",
   "license": "GPL-2.0-or-later",
@@ -107,7 +107,8 @@
     "extends": "./node_modules/@wordpress/scripts/config/.stylelintrc.json",
     "ignoreFiles": [
       ".playwright-mcp/**",
-      ".scratch/**"
+      ".scratch/**",
+      "coverage/**"
     ]
   },
   "lint-staged": {

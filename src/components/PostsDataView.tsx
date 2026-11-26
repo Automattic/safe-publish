@@ -1,6 +1,8 @@
 /**
- * Unified Posts listing. The chip row picks the data source: All/Not imported
- * are catalog-primary; Up to date/Outdated are local-primary.
+ * Unified Posts listing.
+ *
+ * The Local State select picks the data source: All/Not imported are
+ * catalog-primary; Up to date/Outdated are local-primary.
  *
  * @file This file defines the PostsDataView component.
  */

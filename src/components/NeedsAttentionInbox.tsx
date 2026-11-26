@@ -1,7 +1,8 @@
 /**
- * Needs attention inbox — one server-paginated list of import failures and open
- * degradations for the connected source, with Remove (failures) and a
- * self-verifying Retry (degradations). Failures sort before degradations.
+ * Needs attention inbox for the connected source.
+ *
+ * One server-paginated list of import failures and open degradations, with Open
+ * and Ignored views. Failures sort before degradations.
  *
  * @file This file defines the NeedsAttentionInbox component.
  */

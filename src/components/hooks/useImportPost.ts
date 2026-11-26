@@ -1,6 +1,6 @@
 /**
- * Custom hook that drives the safe_publish_create_draft AJAX flow used by
- * the Import action on the Manage listing (first-time and re-import paths).
+ * Custom hook that drives the safe_publish_create_draft AJAX flow for
+ * first-time imports and re-imports.
  *
  * @file This file defines the useImportPost hook.
  */
