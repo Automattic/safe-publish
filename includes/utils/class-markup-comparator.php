@@ -47,10 +47,12 @@ final class Markup_Comparator {
 	 *
 	 * Blocks compare by name and parsed attributes, and HTML token by token,
 	 * with attributes in name order, style declarations trimmed, and character
-	 * references decoded.
+	 * references decoded. SVG and MathML parse differently from HTML, which
+	 * the processor follows, so markup holding them has no key.
 	 *
 	 * @param string $markup Markup to read.
-	 * @return string|null Key, or null when the markup ends inside a token.
+	 * @return string|null Key, or null when the markup ends inside a token or
+	 *                     holds SVG or MathML.
 	 */
 	public static function key( string $markup ): ?string {
 		if ( has_blocks( $markup ) ) {
@@ -61,6 +63,12 @@ final class Markup_Comparator {
 		$tokens    = array();
 
 		while ( $processor->next_token() ) {
+			$tag = $processor->get_tag();
+
+			if ( 'SVG' === $tag || 'MATH' === $tag ) {
+				return null;
+			}
+
 			$attributes = array();
 			$names      = $processor->get_attribute_names_with_prefix( '' );
 			foreach ( $names ?? array() as $name ) {
@@ -73,7 +81,7 @@ final class Markup_Comparator {
 
 			$tokens[] = array(
 				$processor->get_token_type(),
-				$processor->get_tag(),
+				$tag,
 				$processor->is_tag_closer(),
 				$attributes,
 				$processor->get_full_comment_text(),

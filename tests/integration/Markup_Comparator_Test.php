@@ -81,65 +81,85 @@ class Markup_Comparator_Test extends Integration_Test_Case {
 	 */
 	public static function changed_markup_provider(): array {
 		return array(
-			'removed attribute'         => array(
+			'removed attribute'          => array(
 				'<p onclick="alert(1)">a</p>',
 				'<p>a</p>',
 			),
-			'removed element'           => array(
+			'removed element'            => array(
 				'<p>a</p><script>alert(1)</script>',
 				'<p>a</p>alert(1)',
 			),
-			'changed attribute value'   => array(
+			'changed attribute value'    => array(
 				'<a href="https://example.org/a">x</a>',
 				'<a href="https://example.org/b">x</a>',
 			),
-			'removed style declaration' => array(
+			'removed style declaration'  => array(
 				'<p style="color: red; behavior: url(x.htc);">a</p>',
 				'<p style="color: red">a</p>',
 			),
-			'semicolons outside styles' => array(
+			'semicolons outside styles'  => array(
 				'<p title="a; b">x</p>',
 				'<p title="a;b">x</p>',
 			),
-			'valueless style'           => array(
+			'valueless style'            => array(
 				'<p style>x</p>',
 				'<p>x</p>',
 			),
-			'changed block attribute'   => array(
+			'changed block attribute'    => array(
 				'<!-- wp:button {"url":"https://example.org/?a=1&b=2"} -->'
 					. '<div></div><!-- /wp:button -->',
 				'<!-- wp:button {"url":"https://example.org/?a=1&amp;b=2"} -->'
 					. '<div></div><!-- /wp:button -->',
 			),
-			'removed body tag'          => array(
+			'self-closing tag in svg'    => array(
+				'<svg><a/><text>x</text></svg>',
+				'<svg><a><text>x</text></svg>',
+			),
+			'self-closing svg'           => array(
+				'<svg/><text>x</text>',
+				'<svg><text>x</text>',
+			),
+			'self-closing tag in mathml' => array(
+				'<math><mi/><mn>1</mn></math>',
+				'<math><mi><mn>1</mn></math>',
+			),
+			'markup in svg title'        => array(
+				'<svg><title><b>x</b></title></svg>',
+				'<svg><title>&lt;b&gt;x&lt;/b&gt;</title></svg>',
+			),
+			'stray closer in svg'        => array(
+				'<svg></math><a/><text>x</text></svg>',
+				'<svg></math><a><text>x</text></svg>',
+			),
+			'removed body tag'           => array(
 				'<body class="x"><p>a</p>',
 				'<p>a</p>',
 			),
-			'changed text'              => array(
+			'changed text'               => array(
 				'<p>a < b and 1 > 0</p>',
 				'<p>a <b> 0</p>',
 			),
-			'end tag'                   => array(
+			'end tag'                    => array(
 				'<p>a</p>',
 				'<p>a<p>',
 			),
-			'comment kind'              => array(
+			'comment kind'               => array(
 				'<!--x-->',
 				'<![CDATA[x]]>',
 			),
-			'instruction target'        => array(
+			'instruction target'         => array(
 				'<?x a?>',
 				'<?y a?>',
 			),
-			'doctype and text'          => array(
+			'doctype and text'           => array(
 				'<!DOCTYPE html>',
 				' html',
 			),
-			'truncated tag'             => array(
+			'truncated tag'              => array(
 				'<p>a</p><img src="x',
 				'<p>a</p>',
 			),
-			'truncated tags that vary'  => array(
+			'truncated tags that vary'   => array(
 				'<p>a</p><img src="x',
 				'<p>b</p><img src="x',
 			),
@@ -186,6 +206,31 @@ class Markup_Comparator_Test extends Integration_Test_Case {
 		// ASSERT: The change is a difference.
 		$this->assertFalse( $forward );
 		$this->assertFalse( $backward );
+	}
+
+	/**
+	 * Provides markup holding SVG or MathML, which parse differently from HTML.
+	 *
+	 * @return array<string, array{0: string}> Markup.
+	 */
+	public static function foreign_markup_provider(): array {
+		return array(
+			'svg'    => array( '<p>a</p><svg><path d="M0"/></svg>' ),
+			'mathml' => array( '<math><mi>x</mi></math>' ),
+		);
+	}
+
+	/**
+	 * Verifies that markup holding SVG or MathML has no key, so it compares
+	 * byte for byte.
+	 *
+	 * @dataProvider foreign_markup_provider
+	 *
+	 * @param string $markup Markup holding SVG or MathML.
+	 */
+	public function test_foreign_markup_has_no_key( string $markup ): void {
+		// ACT + ASSERT: The markup cannot be keyed.
+		$this->assertNull( Markup_Comparator::key( $markup ) );
 	}
 
 	/**
