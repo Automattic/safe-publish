@@ -57,16 +57,6 @@ class Settings_Sanitizer {
 	}
 
 	/**
-	 * Sanitizes a checkbox setting value.
-	 *
-	 * @param mixed $value Value to sanitize.
-	 * @return bool Sanitized checkbox value.
-	 */
-	public function sanitize_checkbox( mixed $value ): bool {
-		return (bool) $value;
-	}
-
-	/**
 	 * Sanitizes the username for Basic authentication.
 	 *
 	 * @param mixed $value Value to sanitize.

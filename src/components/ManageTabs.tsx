@@ -1,8 +1,9 @@
 /**
- * Manage page tabs: The Posts listing and the Needs attention inbox. The inbox
- * tab label shows the live count of failures plus open degradations, kept fresh
- * by both tabs. Deep links open the inbox via ?tab=needs-attention or the
- * legacy ?state=failed.
+ * Manage page tabs: The Posts listing and the Needs attention inbox.
+ *
+ * The inbox tab label shows the live count of its Open view, kept fresh by both
+ * tabs. Deep links open the inbox via ?tab=needs-attention or the legacy
+ * ?state=failed.
  *
  * @file This file defines the ManageTabs component.
  */

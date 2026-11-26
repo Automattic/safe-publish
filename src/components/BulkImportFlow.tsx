@@ -1,8 +1,5 @@
 /**
- * Confirmation, progress, and results modal for the Source Posts bulk
- * Import action. POSTs to `safe_publish_bulk_import`, which inserts new
- * posts and updates existing ones based on whether the source id resolves
- * to a local post.
+ * Confirmation, progress, and results modal for the bulk Import action.
  *
  * @file This file defines the BulkImportFlow component.
  */

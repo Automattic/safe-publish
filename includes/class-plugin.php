@@ -214,13 +214,13 @@ final class Plugin {
 	 * Registered here rather than in a menu class because the screens span
 	 * both admin modes: The import-mode menu lives in Admin_Menu_Manager while
 	 * the export-only top-level page lives in this class, so neither owns the
-	 * full list. The "Source Posts" submenu reuses the `safe-publish` slug, so
-	 * it shares the top-level hook suffix and needs no separate entry. The
-	 * Audit Log submenu resolves to `safe-publish_page_safe-publish-audit-log`
+	 * full list. The "Manage" submenu reuses the `safe-publish` slug, so it
+	 * shares the top-level hook suffix and needs no separate entry. The Audit
+	 * Log submenu resolves to `safe-publish_page_safe-publish-audit-log`
 	 * because WordPress builds the suffix from the sanitized parent menu title
 	 * ("Safe Publish"), not the parent slug. For audit-only users it is a
-	 * top-level page instead. Screens absent for the user simply never match the
-	 * current hook suffix.
+	 * top-level page instead. Screens absent for the user simply never match
+	 * the current hook suffix.
 	 *
 	 * @param string[] $allowed_screens Hook suffixes where Pendo is enabled.
 	 * @return string[] Filtered list including the plugin's admin screens.

@@ -146,6 +146,47 @@ class Attachment_Parent_Reconcile_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that importing a parent adopts all its orphaned attachments.
+	 */
+	public function test_parent_import_adopts_every_orphan(): void {
+		// ARRANGE: Six orphans recording the unimported parent, one more than
+		// get_posts() returns by default.
+		$orphan_ids = array();
+		for ( $i = 0; $i < 6; $i++ ) {
+			$orphan_id = self::factory()->attachment->create(
+				array( 'post_parent' => 0 )
+			);
+			update_post_meta(
+				$orphan_id,
+				Options::META_SOURCE_ATTACHMENT_PARENT_ID,
+				self::PARENT_SOURCE_ID
+			);
+			update_post_meta(
+				$orphan_id,
+				Options::META_IMPORTED_FROM,
+				self::SOURCE
+			);
+			$orphan_ids[] = $orphan_id;
+		}
+		$this->post_bodies = array(
+			self::PARENT_SOURCE_ID => $this->post_body(
+				self::PARENT_SOURCE_ID,
+				'<p>Parent body.</p>',
+				array()
+			),
+		);
+
+		// ACT: Import the parent post.
+		$dest_parent = $this->import( self::PARENT_SOURCE_ID );
+
+		// ASSERT: The sweep adopts all six.
+		$this->assertSame(
+			array_fill( 0, 6, $dest_parent ),
+			wp_list_pluck( array_map( 'get_post', $orphan_ids ), 'post_parent' )
+		);
+	}
+
+	/**
 	 * Verifies that an attachment whose source parent is already imported is
 	 * parented to that destination post as it is sideloaded, via the forward
 	 * pass, even though the parent renders no media of its own.

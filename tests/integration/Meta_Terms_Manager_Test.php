@@ -1054,7 +1054,7 @@ class Meta_Terms_Manager_Test extends Integration_Test_Case {
 				'sanitize_callback' => 'sanitize_text_field',
 			)
 		);
-		$meta = array( 'source_note' => '<b>Bold</b> note' );
+		$meta = array( 'source_note' => '  Source   note  ' );
 		$this->assertTrue(
 			$this->manager->update_meta( $this->post_id, $meta )
 		);
@@ -1068,7 +1068,7 @@ class Meta_Terms_Manager_Test extends Integration_Test_Case {
 		// rather than the sent one.
 		$this->assertTrue( $result );
 		$this->assertSame(
-			'Bold note',
+			'Source note',
 			get_post_meta( $this->post_id, 'source_note', true )
 		);
 	}

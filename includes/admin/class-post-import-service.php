@@ -2409,7 +2409,7 @@ class Post_Import_Service {
 				'post_type'        => 'attachment',
 				'post_status'      => 'any',
 				'post_parent'      => 0,
-				// TODO: Paginate without leaving orphaned attachments behind.
+				// Uncapped: A cap would leave some of a post's orphans behind.
 				// phpcs:ignore WordPressVIPMinimum.Performance.NoPaging
 				'posts_per_page'   => -1,
 				'fields'           => 'ids',

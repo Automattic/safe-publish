@@ -508,8 +508,7 @@ export interface DiffHtmlData {
  */
 export interface PostsDataViewProps {
 	sourceSiteUrl: string;
-	// Reports failures + open degradations after each list fetch, keeping the
-	// Manage tab label fresh.
+	// Reports the inbox's Open-view count, keeping the Manage tab label fresh.
 	onNeedsAttentionCountChange?: ( count: number ) => void;
 }
 
@@ -522,7 +521,7 @@ export interface PostsDataViewProps {
  * @property {string} settingsUrl           URL to the plugin settings page.
  * @property {string} homeUrl               Destination home URL for slug detection.
  * @property {string} containerId           Container element ID.
- * @property {number} [needsAttentionCount] Failures + open degradations at render.
+ * @property {number} [needsAttentionCount] Items in the inbox's Open view at render.
  */
 export interface AdminData {
 	ajaxurl: string;
