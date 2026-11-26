@@ -252,7 +252,9 @@ final class Meta_Terms_Manager {
 				$post_id,
 				$key,
 				$error::class,
-				$error->getMessage()
+				$error->getMessage(),
+				$error->getFile(),
+				$error->getLine()
 			);
 		// phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
 		} catch ( Throwable ) {
@@ -272,6 +274,47 @@ final class Meta_Terms_Manager {
 		return is_array( $value ) || is_object( $value )
 			? $stored == $value // phpcs:ignore WordPress.PHP.StrictComparisons.LooseComparison
 			: (string) $stored === (string) $value;
+	}
+
+	/**
+	 * Writes back the meta values a failed update replaced.
+	 *
+	 * Skips each key whose row still holds exactly its previous value, such as
+	 * one whose write a hook refused, so no sanitizer runs on a value the row
+	 * already holds. An empty previous value always deletes the key, since an
+	 * absent key reads back as "" too. A hook that throws is audited, and the
+	 * restore moves on to the next key.
+	 *
+	 * @param int                     $post_id Post ID to restore.
+	 * @param array<array-key, mixed> $values  Previous values keyed by sanitized meta key, each
+	 *                                         read unslashed.
+	 * @return string[] Keys a hook refused to restore.
+	 */
+	public function restore_meta( int $post_id, array $values ): array {
+		$failed_keys = array();
+
+		foreach ( $values as $meta_key => $value ) {
+			$key        = (string) $meta_key;
+			$stored_key = (string) wp_unslash( $key );
+
+			try {
+				if ( '' === $value ) {
+					delete_post_meta( $post_id, $key );
+				} elseif (
+					get_post_meta( $post_id, $stored_key, true ) !== $value
+				) {
+					update_post_meta( $post_id, $key, wp_slash( $value ) );
+				}
+			} catch ( Throwable $error ) {
+				// A hook can refuse the previous value too, such as a sanitizer
+				// registered after the value was stored.
+				self::audit_refused_value( $post_id, $key, $error );
+
+				$failed_keys[] = $key;
+			}
+		}
+
+		return $failed_keys;
 	}
 
 	/**

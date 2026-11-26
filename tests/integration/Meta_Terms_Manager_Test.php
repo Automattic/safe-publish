@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace Safe_Publish\Tests\Integration;
 
 use ReflectionClass;
+use ReflectionFunction;
 use Safe_Publish\API\Meta_Terms_Manager;
 use Safe_Publish\Utils\Audit_Log_Table;
 use Safe_Publish\Utils\Log_Events;
@@ -1182,8 +1183,8 @@ class Meta_Terms_Manager_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Verifies that update_meta() records what a sanitizer raised, so the audit
-	 * trail carries the cause and not only the failing key.
+	 * Verifies that update_meta() records what a sanitizer raised, and where,
+	 * so the audit trail carries the cause and not only the failing key.
 	 */
 	public function test_update_meta_audits_a_rejected_value(): void {
 		// ARRANGE: An empty import audit channel, a sanitizer that accepts
@@ -1191,6 +1192,10 @@ class Meta_Terms_Manager_Test extends Integration_Test_Case {
 		Audit_Log_Table::create_table();
 		Audit_Log_Table::clear( 'import' );
 		$this->register_string_sanitizer( 'source_tags' );
+		$registered = get_registered_meta_keys( 'post', 'post' );
+		$sanitizer  = new ReflectionFunction(
+			$registered['source_tags']['sanitize_callback']
+		);
 
 		// ACT: Write the payload.
 		$this->manager->update_meta(
@@ -1200,7 +1205,8 @@ class Meta_Terms_Manager_Test extends Integration_Test_Case {
 
 		unregister_post_meta( 'post', 'source_tags' );
 
-		// ASSERT: One error-level event names the key and what was raised.
+		// ASSERT: One error-level event names the key, what was raised, and
+		// the sanitizer that raised it.
 		$events = Audit_Log_Table::get_events(
 			array(
 				'channel'    => 'import',
@@ -1215,6 +1221,14 @@ class Meta_Terms_Manager_Test extends Integration_Test_Case {
 		$this->assertStringContainsString(
 			'must be of type string, array given',
 			$events[0]['data']['error_message']
+		);
+		$this->assertSame(
+			$sanitizer->getFileName(),
+			$events[0]['data']['error_file']
+		);
+		$this->assertSame(
+			$sanitizer->getStartLine(),
+			$events[0]['data']['error_line']
 		);
 	}
 
@@ -1284,6 +1298,55 @@ class Meta_Terms_Manager_Test extends Integration_Test_Case {
 			'Failed to update post meta key(s): source_tags.',
 			$result->get_error_message()
 		);
+	}
+
+	/**
+	 * Verifies that restore_meta() reports a refused numeric key as a string,
+	 * though PHP holds it as an integer array key.
+	 */
+	public function test_restore_meta_reports_a_refused_numeric_key(): void {
+		// ARRANGE: A sanitizer that accepts strings only, for a numeric key
+		// whose row now holds a string in place of a previous array.
+		$this->register_string_sanitizer( '42' );
+		update_post_meta( $this->post_id, '42', 'imported' );
+
+		// ACT: Restore the previous array.
+		$result = $this->manager->restore_meta(
+			$this->post_id,
+			array( '42' => array( 'a', 'b' ) )
+		);
+
+		unregister_post_meta( 'post', '42' );
+
+		// ASSERT: The key is reported, and its row is left as it was.
+		$this->assertSame( array( '42' ), $result );
+		$this->assertSame(
+			'imported',
+			get_post_meta( $this->post_id, '42', true )
+		);
+	}
+
+	/**
+	 * Verifies that restore_meta() leaves alone a row that still holds its
+	 * previous value under a key with a backslash, which the write stores
+	 * without it, so the key's sanitizer does not run.
+	 */
+	public function test_restore_meta_skips_an_unchanged_slashed_key(): void {
+		// ARRANGE: An array stored under the key without its backslash, then a
+		// sanitizer for that key that accepts strings only.
+		update_post_meta( $this->post_id, 'sptags', array( 'a' ) );
+		$this->register_string_sanitizer( 'sptags' );
+
+		// ACT: Restore the same array under the key with the backslash.
+		$result = $this->manager->restore_meta(
+			$this->post_id,
+			array( 'sp\\tags' => array( 'a' ) )
+		);
+
+		unregister_post_meta( 'post', 'sptags' );
+
+		// ASSERT: Nothing is reported, so the sanitizer did not run.
+		$this->assertSame( array(), $result );
 	}
 
 	/**

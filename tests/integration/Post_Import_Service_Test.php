@@ -4785,4 +4785,70 @@ class Post_Import_Service_Test extends Source_Posts_API_Test_Base {
 		);
 		$this->assertSame( 'one', get_post_meta( $post_id, 'sp_label', true ) );
 	}
+
+	/**
+	 * Verifies that undoing a failed update leaves a refused key's row as it
+	 * was, so a stored value its sanitizer rejects cannot end the request.
+	 */
+	public function test_failed_update_undo_leaves_a_refused_key_alone(): void {
+		// ARRANGE: Import a post whose field holds an array, before a sanitizer
+		// that accepts strings only exists for it.
+		$session_id                = $this->repository->create_session(
+			'https://source.example.com',
+			'single'
+		);
+		$post_data                 = array(
+			'id'        => 9523,
+			'title'     => 'Queued title',
+			'link'      => 'https://source.example.com/refused-meta-undo',
+			'post_type' => 'posts',
+		);
+		$this->mock_post_overrides = array(
+			'content' => '<p>Version A.</p>',
+			'meta'    => array(
+				'sp_tags'  => array( 'a', 'b' ),
+				'sp_label' => 'one',
+			),
+		);
+
+		$first = $this->import_service->import_post( $post_data, $session_id );
+		$this->assertTrue( $first['success'] );
+
+		$post_id = (int) $first['post_id'];
+		$content = get_post_field( 'post_content', $post_id );
+
+		// ARRANGE: The sanitizer is registered, and the source changes the
+		// content and both fields, still sending an array for the first.
+		$this->register_string_sanitizer( 'sp_tags' );
+		$this->mock_post_overrides = array(
+			'content' => '<p>Version B.</p>',
+			'meta'    => array(
+				'sp_tags'  => array( 'a', 'b', 'c' ),
+				'sp_label' => 'two',
+			),
+		);
+
+		// ACT: Re-import the post.
+		$result = $this->import_service->import_post( $post_data, $session_id );
+
+		unregister_post_meta( 'post', 'sp_tags' );
+
+		// ASSERT: Only the refused key failed the update, and the undo restored
+		// the rest without writing that key back.
+		$this->assertFalse( $result['success'] );
+		$this->assertSame(
+			'Failed to update post meta key(s): sp_tags.',
+			$result['error']
+		);
+		$this->assertStringContainsString( 'Version A.', $content );
+		$this->assertSame(
+			$content,
+			get_post_field( 'post_content', $post_id )
+		);
+		$this->assertSame( 'one', get_post_meta( $post_id, 'sp_label', true ) );
+		$this->assertSame(
+			array( 'a', 'b' ),
+			get_post_meta( $post_id, 'sp_tags', true )
+		);
+	}
 }

@@ -334,7 +334,7 @@ The taxonomy is not registered on the destination site, so its terms could not b
 | --- | --- | --- |
 | `invalid_url` | URL not valid or accessible | Check URL format and ensure the site is reachable |
 | `request_failed` | HTTP request to the source site failed | Check network connectivity and site availability |
-| `meta_update_failed` | One or more post meta keys failed to save, either from a database error or because a hook on the destination, such as a sanitizer, refused the value | Check destination site database permissions. If a hook raised an error, a **Meta value refused** event in the Audit Log names the key and the error |
+| `meta_update_failed` | One or more post meta keys failed to save, either from a database error or because a hook on the destination, such as a sanitizer, refused the value | Check destination site database permissions. If a hook raised an error, a **Meta value refused** event in the Audit Log names the key, the error, and where it was raised |
 | `source_author_unresolved` | Source post has no author or its author was deleted | Restore the source author or attribute the post manually |
 | `source_author_not_found` | Source author's email has no match on the destination | Create a user with the same email on the destination |
 
