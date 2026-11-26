@@ -864,6 +864,36 @@ class Diff_Renderer_Terms_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that the names-only fallback shows a source name as the first
+	 * local name holding it, when several do.
+	 */
+	public function test_fallback_takes_the_first_matching_local_name(): void {
+		// ARRANGE: Two terms, stored with one name written two ways, in the
+		// order the post lists them.
+		$this->import_terms(
+			array(
+				$this->record( 101, 'First', 'first', 0, '' ),
+				$this->record( 102, 'Second', 'second', 0, '' ),
+			)
+		);
+		$this->store_term_field( 'first', 'name', 'Caf&eacute;' );
+		$this->store_term_field( 'second', 'name', 'Café' );
+
+		// ACT: A source on an older plugin version sends only the embedded
+		// payload, writing the name a third way.
+		$html = $this->render_embedded_category( 'Caf&#233;' );
+
+		// ASSERT: The incoming side shows the first local name.
+		$this->assertSame(
+			array(
+				'Deleted: category: Caf&eacute;, Café',
+				'Added: category: Caf&eacute;',
+			),
+			$this->changed_lines( $html )
+		);
+	}
+
+	/**
 	 * Verifies that a source naming a taxonomy loosely still compares against
 	 * the post's terms, which the import reaches by narrowing the name.
 	 */

@@ -892,11 +892,24 @@ final class Diff_Renderer {
 				'block'    => $block,
 				'signal'   => $signal,
 				// Alignment and the verdict ignore how kses writes the markup.
-				'key'      => Markup_Comparator::key( $signal ) ?? $signal,
+				'key'      => self::comparison_key( $signal ),
 			);
 		}
 
 		return $blocks;
+	}
+
+	/**
+	 * Reads the string markup compares by: Its key, or the markup itself when
+	 * it has none. Keys are hex digests, and markup without one opens a tag or
+	 * comment, so each compares only with its own kind.
+	 *
+	 * @param string $markup Markup to read.
+	 *
+	 * @return string Key, or the markup.
+	 */
+	private static function comparison_key( string $markup ): string {
+		return Markup_Comparator::key( $markup ) ?? $markup;
 	}
 
 	/**
@@ -1736,10 +1749,16 @@ final class Diff_Renderer {
 	 * @return string Name.
 	 */
 	private function record_name( array $record, ?WP_Term $pair ): string {
-		return $this->known_name(
-			(string) ( $record['name'] ?? '' ),
-			$pair instanceof WP_Term ? array( (string) $pair->name ) : array()
-		);
+		$name = (string) ( $record['name'] ?? '' );
+
+		if (
+			$pair instanceof WP_Term
+			&& Markup_Comparator::equivalent( $name, (string) $pair->name )
+		) {
+			return (string) $pair->name;
+		}
+
+		return $name;
 	}
 
 	/**
@@ -1753,34 +1772,24 @@ final class Diff_Renderer {
 	 */
 	private function local_term_names( array $records, array $local ): array {
 		foreach ( $records as $taxonomy => $items ) {
+			// Key each local name once. A source name takes the first local
+			// name that shares its key.
+			$known = array();
+			foreach ( (array) ( $local[ $taxonomy ] ?? array() ) as $other ) {
+				$other = (string) $other;
+
+				$known[ self::comparison_key( $other ) ] ??= $other;
+			}
+
 			foreach ( (array) $items as $i => $item ) {
-				$records[ $taxonomy ][ $i ]['name'] = $this->known_name(
-					(string) ( $item['name'] ?? '' ),
-					(array) ( $local[ $taxonomy ] ?? array() )
-				);
+				$name = (string) ( $item['name'] ?? '' );
+				$key  = self::comparison_key( $name );
+
+				$records[ $taxonomy ][ $i ]['name'] = $known[ $key ] ?? $name;
 			}
 		}
 
 		return $records;
-	}
-
-	/**
-	 * Reads the known name that holds a name, written differently, falling
-	 * back to the name itself.
-	 *
-	 * @param string $name  Name to look up.
-	 * @param array  $known Names to look in.
-	 *
-	 * @return string Name.
-	 */
-	private function known_name( string $name, array $known ): string {
-		foreach ( $known as $other ) {
-			if ( Markup_Comparator::equivalent( $name, (string) $other ) ) {
-				return (string) $other;
-			}
-		}
-
-		return $name;
 	}
 
 	/**
