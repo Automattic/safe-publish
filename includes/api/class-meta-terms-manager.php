@@ -143,35 +143,8 @@ final class Meta_Terms_Manager {
 					continue;
 				}
 
-				// Slashed only for the write: The compare below reads the
-				// stored value back unslashed.
-				$result = update_post_meta(
-					$post_id,
-					$key,
-					wp_slash( $meta_value )
-				);
-
-				if ( false === $result ) {
-					// update_post_meta() returns false both on failure and
-					// on a no-op re-import of an unchanged value. WordPress
-					// stores scalars as strings, so compare stringwise; and
-					// since an absent key also reads back as "", require the
-					// key to exist to tell a failed falsy write from a no-op.
-					// The write stores the key unslashed, so the row is read
-					// back under the unslashed one.
-					$stored_key = (string) wp_unslash( $key );
-
-					$stored  = get_post_meta( $post_id, $stored_key, true );
-					$matches = is_array( $meta_value ) || is_object( $meta_value )
-						? $stored == $meta_value // phpcs:ignore WordPress.PHP.StrictComparisons.LooseComparison
-						: (string) $stored === (string) $meta_value;
-
-					if (
-						! metadata_exists( 'post', $post_id, $stored_key )
-						|| ! $matches
-					) {
-						$failed_keys[] = $key;
-					}
+				if ( ! self::write_meta( $post_id, $key, $meta_value ) ) {
+					$failed_keys[] = $key;
 				}
 			}
 
@@ -188,6 +161,72 @@ final class Meta_Terms_Manager {
 		}
 
 		return true;
+	}
+
+	/**
+	 * Writes one meta key and reports whether the row holds the value.
+	 *
+	 * A false result from update_post_meta() means a failed write or a no-op
+	 * re-import of an unchanged value, so it is checked against the row. An
+	 * absent key reads back as "", so telling a failed falsy write from a no-op
+	 * needs the key to exist.
+	 *
+	 * @param int    $post_id    Post ID to write to.
+	 * @param string $key        Sanitized meta key.
+	 * @param mixed  $meta_value Value as the source sent it.
+	 * @return bool True when the row holds the value.
+	 */
+	private static function write_meta(
+		int $post_id,
+		string $key,
+		mixed $meta_value
+	): bool {
+		// The write stores the key unslashed, so the row is read back under
+		// the unslashed one.
+		$stored_key = (string) wp_unslash( $key );
+
+		// Slashed only for the write: The compare below reads the stored value
+		// back unslashed.
+		$result = update_post_meta( $post_id, $key, wp_slash( $meta_value ) );
+
+		if ( false !== $result ) {
+			return true;
+		}
+
+		if ( ! metadata_exists( 'post', $post_id, $stored_key ) ) {
+			return false;
+		}
+
+		$stored = get_post_meta( $post_id, $stored_key, true );
+
+		// A sanitizer registered for the key stores its own form of the value,
+		// which the row then holds instead of the sent one. The post's type
+		// selects the same sanitizer the write used. The sent value is compared
+		// first, so the common case runs no sanitizer again.
+		return self::holds_value( $stored, $meta_value )
+			|| self::holds_value(
+				$stored,
+				sanitize_meta(
+					$stored_key,
+					$meta_value,
+					'post',
+					get_object_subtype( 'post', $post_id )
+				)
+			);
+	}
+
+	/**
+	 * Reports whether a value read back from a row equals a written one.
+	 *
+	 * @param mixed $stored Value read back from the row.
+	 * @param mixed $value  Value to compare it with.
+	 * @return bool True when the row holds the value.
+	 */
+	private static function holds_value( mixed $stored, mixed $value ): bool {
+		// WordPress stores scalars as strings, so compare stringwise.
+		return is_array( $value ) || is_object( $value )
+			? $stored == $value // phpcs:ignore WordPress.PHP.StrictComparisons.LooseComparison
+			: (string) $stored === (string) $value;
 	}
 
 	/**
