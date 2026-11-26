@@ -107,7 +107,8 @@
     "extends": "./node_modules/@wordpress/scripts/config/.stylelintrc.json",
     "ignoreFiles": [
       ".playwright-mcp/**",
-      ".scratch/**"
+      ".scratch/**",
+      "coverage/**"
     ]
   },
   "lint-staged": {
