@@ -438,9 +438,6 @@ class Source_Media_REST_Field {
 				'post_mime_type' => $mime_type,
 				'orderby'        => 'menu_order ID',
 				'order'          => 'ASC',
-				// TODO: Paginate while preserving the complete rendered set.
-				// phpcs:ignore WordPressVIPMinimum.Performance.NoPaging
-				'numberposts'    => -1,
 			)
 		);
 
