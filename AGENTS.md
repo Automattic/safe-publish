@@ -119,16 +119,16 @@ Use these sources of truth:
 
 - Read the minimum WordPress version from `Requires at least` in `safe-publish.php`.
 - Read the minimum PHP version from the `php` entry under `require` in `composer.json`.
-- Read supported combinations from the [WordPress PHP compatibility matrix](https://make.wordpress.org/core/handbook/references/php-compatibility-and-wordpress-versions/).
+- Read supported combinations from the [WordPress PHP compatibility matrix](https://make.wordpress.org/core/handbook/references/php-compatibility-and-wordpress-versions/). For a WordPress or PHP version the page does not list yet, use the WordPress dev notes for that version, and re-check once the page lists it.
 
-When WordPress or PHP compatibility changes, or the plugin's minimum WordPress or PHP version changes, update all of the following together:
+When WordPress or PHP compatibility changes, a new WordPress `X.Y-branch` appears, or the plugin's minimum WordPress or PHP version changes, update all of the following together:
 
-1. In `.github/workflows/integration-tests.yml`, list every stable WordPress major/minor release from the plugin's minimum through the current release, and every PHP major/minor release from the plugin's minimum through the newest version supported by at least one of those WordPress releases. Add an `exclude` entry for every combination marked unsupported by WordPress. Keep every supported combination running on every pull request.
+1. In `.github/workflows/integration-tests.yml`, list every WordPress major/minor release from the plugin's minimum through the newest one with a `WordPress/WordPress#X.Y-branch` ref, release candidates included, and every PHP major/minor release from the plugin's minimum through the newest version supported by at least one of those WordPress releases. Add an `exclude` entry for every combination marked unsupported by WordPress. Keep every supported combination running on every pull request.
 2. In the same file, keep the multisite job covering every supported WordPress major/minor release once, paired with the highest PHP version that release supports — multisite is an install mode, not a PHP-compatibility axis, so it does not need the full matrix — and keep the aggregate check gating on both jobs.
 3. In `.github/workflows/e2e-tests.yml`, include every supported WordPress major/minor release once, paired with the highest PHP version that release supports.
 4. In `.github/workflows/unit-tests.yml`, test every PHP major/minor version from the plugin's minimum through the newest PHP version represented in the integration matrix.
 5. In `.github/workflows/static-checks.yml`, run PHP checks on the plugin's minimum PHP version.
-6. Verify each stable `WordPress/WordPress#X.Y-branch` ref exists, parse every workflow as YAML, and run `npm run fix` followed by `npm run check`.
+6. Verify each `WordPress/WordPress#X.Y-branch` ref exists, parse every workflow as YAML, and run `npm run fix` followed by `npm run check`.
 
 The integration commands use wp-env's `/wordpress-phpunit` mount so the test library matches each matrix row; don't replace it with the Composer-pinned minimum-version test library in CI.
 
