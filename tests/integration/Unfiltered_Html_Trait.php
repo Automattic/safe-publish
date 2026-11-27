@@ -26,8 +26,13 @@ trait Unfiltered_Html_Trait {
 	 * @param int $user_id User to grant the capability to.
 	 */
 	protected function grant_unfiltered_html( int $user_id ): void {
+		$is_current = 0 !== $user_id && get_current_user_id() === $user_id;
+
 		if ( is_multisite() ) {
 			grant_super_admin( $user_id );
+		} elseif ( $is_current ) {
+			// current_user_can() reads the capabilities cached on this object.
+			wp_get_current_user()->add_cap( 'unfiltered_html' );
 		} else {
 			( new WP_User( $user_id ) )->add_cap( 'unfiltered_html' );
 		}
@@ -35,7 +40,7 @@ trait Unfiltered_Html_Trait {
 		// Core latches its capability-dependent filters on set_current_user —
 		// kses for content and a separate one rebuilding footnotes meta — so
 		// granting afterwards leaves them attached until the action re-fires.
-		if ( get_current_user_id() === $user_id ) {
+		if ( $is_current ) {
 			// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- Re-fires a core action rather than introducing a hook.
 			do_action( 'set_current_user' );
 		}
