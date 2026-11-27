@@ -40,7 +40,7 @@ Use `safe_publish_source_post_meta` to read the `acf` object from the REST respo
 add_filter(
     'safe_publish_source_post_meta',
     function ( array $meta, array $data ): array {
-        $acf = isset( $data['acf'] ) && is_array( $data['acf'] ) ? $data['acf'] : array();
+        $acf = is_array( $data['acf'] ?? null ) ? $data['acf'] : array();
 
         foreach ( $acf as $key => $value ) {
             $key = (string) $key;
@@ -56,6 +56,8 @@ add_filter(
             // Scalars map straight to meta. Repeater, group, and
             // flexible-content fields need update_field() instead.
             if ( is_scalar( $value ) ) {
+                // Write the key last, so it replaces the source's value.
+                unset( $meta[ $key ] );
                 $meta[ $key ] = $value;
             }
         }
@@ -67,17 +69,22 @@ add_filter(
 );
 ```
 
-The merged values are written to destination postmeta unchanged. Source values are untrusted, though: a compromised source could send markup, and ACF does not escape on output (`the_field()` echoes stored values verbatim), so storing them raw risks stored XSS. Sanitize each value for its field type before storing — `sanitize_text_field()` for plain text, `wp_kses_post()` for rich text — or make sure your theme escapes each value for its context on output.
+The merged values are written to destination postmeta unchanged. Source values are untrusted, though: a compromised source could send markup. `get_field()` returns stored values unescaped, so a theme that echoes them risks stored XSS. Since ACF 6.2.7, and in SCF, `the_field()` escapes unsafe HTML, unless the `acf/the_field/allow_unsafe_html` filter turns that off. Sanitize each value for its field type before storing — `sanitize_text_field()` for plain text, `wp_kses_post()` for rich text — or make sure your theme escapes each value for its context on output.
 
-To migrate only a known set of fields, replace the loop with an explicit allowlist:
+A sanitizer in the loop covers only the fields the `acf` object holds. To migrate a known set of fields, and sanitize each one on every import, replace the loop with an explicit allowlist:
 
 ```php
 foreach ( array( 'hero_title', 'subtitle' ) as $field ) {
-    if ( isset( $acf[ $field ] ) && is_scalar( $acf[ $field ] ) ) {
-        $meta[ $field ] = sanitize_text_field( (string) $acf[ $field ] );
-    }
+    $value = $acf[ $field ] ?? $meta[ $field ] ?? '';
+    $value = is_scalar( $value ) ? sanitize_text_field( (string) $value ) : '';
+
+    // Write the field last, so it replaces the source's value.
+    unset( $meta[ $field ] );
+    $meta[ $field ] = $value;
 }
 ```
+
+The allowlist writes each field on every import, after the source's meta, so the sanitized value replaces any value the source sent for that key. The value comes from the `acf` object, or from the source's own `meta` object when `acf` lacks it, and a missing or non-scalar value stores the field empty.
 
 ## Complex fields: repeater, group, and flexible content
 
@@ -86,16 +93,19 @@ Repeater, group, and flexible-content fields are stored across many postmeta row
 To store them correctly, let ACF write them through `update_field()`. That call needs the destination post ID, which does not exist yet when `safe_publish_source_post_meta` runs — the filter fires while fetching from the source, before the post is created. Stash the payload in the filter, then replay it once the post is saved:
 
 ```php
-// Stash the raw acf payload during the fetch.
+// Stash the raw acf payload during the fetch, on every import.
 add_filter(
     'safe_publish_source_post_meta',
     function ( array $meta, array $data ): array {
-        if ( isset( $data['acf'] ) && is_array( $data['acf'] ) ) {
-            $meta['_acf_import_payload'] = wp_json_encode( $data['acf'] );
-        }
+        $acf = is_array( $data['acf'] ?? null ) ? $data['acf'] : array();
+
+        // Write the stash last, so the replay runs after the source's meta.
+        unset( $meta['_acf_import_payload'] );
+        $meta['_acf_import_payload'] = wp_json_encode( $acf );
+
         return $meta;
     },
-    10,
+    PHP_INT_MAX,
     2
 );
 
@@ -108,20 +118,36 @@ $replay_acf = function ( $meta_id, int $post_id, string $meta_key, $meta_value )
     // Always clear the stash, even when ACF is unavailable to consume it.
     delete_post_meta( $post_id, '_acf_import_payload' );
 
-    if ( function_exists( 'update_field' ) ) {
-        $acf = json_decode( (string) $meta_value, true );
-        if ( is_array( $acf ) ) {
-            foreach ( $acf as $selector => $value ) {
-                update_field( $selector, $value, $post_id );
-            }
+    if ( ! function_exists( 'update_field' ) ) {
+        return;
+    }
+
+    $acf = json_decode( (string) $meta_value, true );
+
+    // Replay only the expected fields, each sanitized for its shape. This
+    // example expects a slides repeater with a caption text subfield.
+    $rows = array();
+
+    if ( isset( $acf['slides'] ) && is_array( $acf['slides'] ) ) {
+        foreach ( $acf['slides'] as $row ) {
+            $caption = is_array( $row ) ? ( $row['caption'] ?? '' ) : '';
+            $caption = is_scalar( $caption ) ? (string) $caption : '';
+
+            $rows[] = array( 'caption' => sanitize_text_field( $caption ) );
         }
     }
+
+    // Write the field on every import, so ACF reads only sanitized rows. The
+    // field key pins its definition, whatever the post's meta holds.
+    update_field( 'field_650f1a2b3c4d5', $rows, $post_id );
 };
 add_action( 'added_post_meta', $replay_acf, 10, 4 );
 add_action( 'updated_post_meta', $replay_acf, 10, 4 );
 ```
 
-The replayed values come from the source too — sanitize them as in Step 1, and validate the decoded shape against the fields you expect rather than passing arbitrary selectors to `update_field()`.
+The replay calls `update_field()` only for the fields you expect, because `update_field()` stores a selector it does not recognize as a plain meta key. The source can send its own `_acf_import_payload` too, so the replay validates every payload it receives. The stash filter runs at the latest priority and writes the stash last, so the replay runs after the source's meta and after the keys that other filters add. When the payload holds no rows for the field, or fails to decode, the field is stored empty.
+
+To adapt the replay, replace `field_650f1a2b3c4d5` with your repeater's field key, and include every subfield it defines in each row, sanitized, because ACF keeps a stored subfield that the replayed row omits.
 
 ## Optional: adjusting the source request
 
@@ -145,7 +171,7 @@ Avoid `_fields`: it is subtractive, so requesting `_fields=acf` drops the title,
 
 ## Caveats
 
-- **Source values are untrusted.** Safe Publish stores meta verbatim and does not sanitize values — sanitize each value for its field type on input, or escape it for its context on output.
+- **Source values are untrusted.** Safe Publish stores meta verbatim and does not sanitize values. The allowlist and complex-field recipes sanitize only the fields they write. Step 1's values and the source's other meta import unchanged. Escaping each value for its context on output covers every key.
 - **Source field groups must expose REST.** Values appear under `acf` only when the source field group has **Show in REST API** enabled.
 - **Matching definitions on the destination.** Safe Publish stores the values, but the editor renders them as ACF/SCF controls only when ACF or SCF is active on the destination and has matching field groups with the same field keys. Safe Publish does not create or sync field groups.
 - **Reference fields carry source IDs.** Image, file, post object, relationship, taxonomy, and user fields transfer as the source site's IDs. Remap them to destination IDs yourself when the referenced objects differ across sites.

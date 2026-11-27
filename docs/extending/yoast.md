@@ -63,18 +63,24 @@ add_filter(
         );
 
         foreach ( array_keys( $meta ) as $key ) {
+            // Compare the key as the import stores it, ignoring case.
+            $stored = strtolower( wp_unslash( sanitize_text_field( $key ) ) );
+
             if (
-                str_starts_with( (string) $key, '_yoast_wpseo_' ) &&
-                ! in_array( $key, $allowed, true )
+                str_starts_with( $stored, '_yoast_wpseo_' ) &&
+                ! in_array( $stored, $allowed, true )
             ) {
                 unset( $meta[ $key ] );
             }
         }
 
         return $meta;
-    }
+    },
+    PHP_INT_MAX
 );
 ```
+
+The filter runs at the latest priority, so it also drops excluded keys that other filters add.
 
 ## Caveats
 
