@@ -16,6 +16,7 @@ use Safe_Publish\Admin\Content_Processor;
 use Safe_Publish\Content\Content_Media_Processor;
 use Safe_Publish\Content\Shortcode_ID_Rewriter;
 use Safe_Publish\Media\Media_Importer;
+use Safe_Publish\Utils\Markup_Comparator;
 use Safe_Publish\Utils\Options;
 use Safe_Publish\Utils\Post_Type_Map;
 use Safe_Publish\Utils\Source_Identity_Lookup;
@@ -166,7 +167,7 @@ final class Diff_Renderer {
 		}
 
 		// Generate all diffs.
-		$content_diff_html = $this->generate_simple_diff(
+		$content_diff_html = $this->generate_markup_diff(
 			$current['content'],
 			$incoming['content'],
 			__( 'Current Content', 'safe-publish' ),
@@ -534,7 +535,7 @@ final class Diff_Renderer {
 		$diffs = array();
 
 		// Title diff.
-		$diffs['title'] = $this->generate_simple_diff(
+		$diffs['title'] = $this->generate_markup_diff(
 			$current['title'] ?? '',
 			$incoming['title'] ?? '',
 			_x( 'Current', 'title diff column header', 'safe-publish' ),
@@ -544,7 +545,7 @@ final class Diff_Renderer {
 		// Excerpt diff (with normalization).
 		$current_excerpt  = $this->prepare_excerpt_for_diff( $current['excerpt'] ?? '' );
 		$incoming_excerpt = $this->prepare_excerpt_for_diff( $incoming['excerpt'] ?? '' );
-		$diffs['excerpt'] = $this->generate_simple_diff(
+		$diffs['excerpt'] = $this->generate_markup_diff(
 			$current_excerpt,
 			$incoming_excerpt,
 			_x( 'Current', 'excerpt diff column header', 'safe-publish' ),
@@ -605,6 +606,35 @@ final class Diff_Renderer {
 				'title_left'  => $title_left,
 				'title_right' => $title_right,
 			)
+		);
+	}
+
+	/**
+	 * Generates a simple diff for two markup strings, ignoring how WordPress
+	 * writes the markup it keeps.
+	 *
+	 * @param string $current     Current markup.
+	 * @param string $incoming    Incoming markup.
+	 * @param string $title_left  Title for left side.
+	 * @param string $title_right Title for right side.
+	 *
+	 * @return string Diff HTML, or '' when the markup is equivalent.
+	 */
+	private function generate_markup_diff(
+		string $current,
+		string $incoming,
+		string $title_left,
+		string $title_right
+	): string {
+		if ( Markup_Comparator::equivalent( $current, $incoming ) ) {
+			return '';
+		}
+
+		return $this->generate_simple_diff(
+			$current,
+			$incoming,
+			$title_left,
+			$title_right
 		);
 	}
 
@@ -764,9 +794,9 @@ final class Diff_Renderer {
 	/**
 	 * Generates block-level diffs for Gutenberg content.
 	 *
-	 * Blocks with equal saved markup align first, so an inserted or removed
-	 * block leaves the blocks around it unchanged. An entry's index is its
-	 * block's position in the incoming content, or in the current content
+	 * Blocks with equivalent saved markup align first, so an inserted or
+	 * removed block leaves the blocks around it unchanged. An entry's index is
+	 * its block's position in the incoming content, or in the current content
 	 * for a removed block.
 	 *
 	 * @param string $current  Current content.
@@ -794,8 +824,8 @@ final class Diff_Renderer {
 		$diff = new Text_Diff(
 			'native',
 			array(
-				array_column( $cur_blocks, 'signal' ),
-				array_column( $inc_blocks, 'signal' ),
+				array_column( $cur_blocks, 'key' ),
+				array_column( $inc_blocks, 'key' ),
 			)
 		);
 
@@ -829,7 +859,8 @@ final class Diff_Renderer {
 	 *
 	 * @param string $content Normalized content.
 	 *
-	 * @return list<array{position: int, block: array, signal: string}> Blocks in document order.
+	 * @return list<array{position: int, block: array, signal: string, key: string}>
+	 *         Blocks in document order.
 	 */
 	private static function diffable_blocks( string $content ): array {
 		$normalize_block_html = static function ( string $html ): string {
@@ -860,10 +891,25 @@ final class Diff_Renderer {
 				'position' => $position,
 				'block'    => $block,
 				'signal'   => $signal,
+				// Alignment and the verdict ignore how kses writes the markup.
+				'key'      => self::comparison_key( $signal ),
 			);
 		}
 
 		return $blocks;
+	}
+
+	/**
+	 * Reads the string markup compares by: Its key, or the markup itself when
+	 * it has none. Keys are hex digests, and markup without one opens a tag or
+	 * comment, so each compares only with its own kind.
+	 *
+	 * @param string $markup Markup to read.
+	 *
+	 * @return string Key, or the markup.
+	 */
+	private static function comparison_key( string $markup ): string {
+		return Markup_Comparator::key( $markup ) ?? $markup;
 	}
 
 	/**
@@ -887,7 +933,7 @@ final class Diff_Renderer {
 			$status = 'added';
 		} elseif (
 			$cur['block']['blockName'] !== $inc['block']['blockName']
-			|| $cur['signal'] !== $inc['signal']
+			|| $cur['key'] !== $inc['key']
 		) {
 			$status = 'modified';
 		}
@@ -1247,7 +1293,9 @@ final class Diff_Renderer {
 
 			$html = $this->generate_simple_diff(
 				$this->build_terms_text( $local ),
-				$this->build_terms_text( $records ),
+				$this->build_terms_text(
+					$this->local_term_names( $records, $local )
+				),
 				$title_left,
 				$title_right
 			);
@@ -1586,7 +1634,7 @@ final class Diff_Renderer {
 				continue;
 			}
 
-			$name = (string) ( $item['name'] ?? '' );
+			$name = $this->record_name( $item, $paired[ $id ] ?? null );
 			$slug = isset( $paired[ $id ] )
 				? (string) $paired[ $id ]->slug
 				: (string) ( $item['slug'] ?? '' );
@@ -1623,8 +1671,8 @@ final class Diff_Renderer {
 	}
 
 	/**
-	 * Renders one source record's display fields, showing the description in
-	 * the form the destination would store it in.
+	 * Renders one source record's display fields, showing a name or description
+	 * the destination already holds as stored.
 	 *
 	 * @param array                                       $record Source term record.
 	 * @param array<int, array{name:string, slug:string}> $index Source term ID mapped to name and slug.
@@ -1639,22 +1687,23 @@ final class Diff_Renderer {
 		?WP_Term $pair
 	): array {
 		$id          = absint( $record['source_term_id'] ?? 0 );
-		$name        = (string) ( $record['name'] ?? '' );
+		$name        = $this->record_name( $record, $pair );
 		$stored      = $pair instanceof WP_Term ? (string) $pair->description : null;
 		$source      = (string) ( $record['description'] ?? '' );
 		$description = wp_kses_post( $source );
 
-		// Mirrors the reconcile: Core narrows a description as it saves, and
-		// how far depends on who imports, so either form already stored means
-		// nothing would change.
+		// The reconcile keeps a stored description that holds the source's.
+		// Otherwise core narrows the description as it saves, unless the site
+		// lifts that filter.
 		if (
 			null !== $stored
-			&& (
-				$stored === $description
-				|| Meta_Terms_Manager::narrow_description( $source ) === $stored
-			)
+			&& Meta_Terms_Manager::holds_description( $stored, $source )
 		) {
 			$description = $stored;
+		} elseif (
+			false !== has_filter( 'pre_term_description', 'wp_filter_kses' )
+		) {
+			$description = wp_kses( $description, 'pre_term_description' );
 		}
 
 		return array(
@@ -1688,6 +1737,59 @@ final class Diff_Renderer {
 		return '' !== $slug
 			? $slug
 			: sanitize_title( (string) ( $record['name'] ?? '' ) );
+	}
+
+	/**
+	 * Reads the name a record shows: The paired destination term's when it
+	 * holds the same name, written differently.
+	 *
+	 * @param array        $record Source term record.
+	 * @param WP_Term|null $pair   Destination term the record pairs with, or null.
+	 *
+	 * @return string Name.
+	 */
+	private function record_name( array $record, ?WP_Term $pair ): string {
+		$name = (string) ( $record['name'] ?? '' );
+
+		if (
+			$pair instanceof WP_Term
+			&& Markup_Comparator::equivalent( $name, (string) $pair->name )
+		) {
+			return (string) $pair->name;
+		}
+
+		return $name;
+	}
+
+	/**
+	 * Names each source term as the local term holding the same name, written
+	 * differently, so the names-only comparison does not read it as a rename.
+	 *
+	 * @param array $records Source term records by taxonomy.
+	 * @param array $local   Local term names by taxonomy.
+	 *
+	 * @return array Source term records by taxonomy.
+	 */
+	private function local_term_names( array $records, array $local ): array {
+		foreach ( $records as $taxonomy => $items ) {
+			// Key each local name once. A source name takes the first local
+			// name that shares its key.
+			$known = array();
+			foreach ( (array) ( $local[ $taxonomy ] ?? array() ) as $other ) {
+				$other = (string) $other;
+
+				$known[ self::comparison_key( $other ) ] ??= $other;
+			}
+
+			foreach ( (array) $items as $i => $item ) {
+				$name = (string) ( $item['name'] ?? '' );
+				$key  = self::comparison_key( $name );
+
+				$records[ $taxonomy ][ $i ]['name'] = $known[ $key ] ?? $name;
+			}
+		}
+
+		return $records;
 	}
 
 	/**

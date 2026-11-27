@@ -438,6 +438,107 @@ class Import_Sanitization_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Provides the kses parsers. Before WordPress 7.2 only the legacy one
+	 * exists, so both cases run it.
+	 *
+	 * @return array<string, array{0: bool}> Whether to force the legacy parser.
+	 */
+	public static function kses_parser_provider(): array {
+		return array(
+			'legacy parser'   => array( true ),
+			'HTML API parser' => array( false ),
+		);
+	}
+
+	/**
+	 * Verifies that a filtered user imports markup WordPress only rewrites.
+	 *
+	 * @dataProvider kses_parser_provider
+	 *
+	 * @param bool $legacy Whether to force the legacy kses parser.
+	 */
+	public function test_filtered_user_imports_rewritten_markup(
+		bool $legacy
+	): void {
+		// ARRANGE: An author imports markup kses rewrites, under the parser.
+		add_filter(
+			'wp_kses_force_legacy_parser',
+			$legacy ? '__return_true' : '__return_false'
+		);
+		wp_set_current_user(
+			self::factory()->user->create( array( 'role' => 'author' ) )
+		);
+		$session_id                = $this->repository->create_session(
+			'https://source.example.com',
+			'single'
+		);
+		$post_data                 = $this->rewritten_post_data( 8071 );
+		$this->mock_post_overrides = array(
+			'content' => $post_data['content'],
+			'excerpt' => $post_data['excerpt'],
+		);
+
+		// ACT: Create the post through the author's save filters.
+		$result = $this->import_service->import_post( $post_data, $session_id );
+
+		// ASSERT: The import succeeds although kses rewrote both fields.
+		$this->assertTrue( $result['success'] );
+		$post = get_post( $result['post_id'] );
+		$this->assertNotSame( $post_data['content'], $post->post_content );
+		$this->assertNotSame( $post_data['excerpt'], $post->post_excerpt );
+	}
+
+	/**
+	 * Verifies that a filtered user updates a post with markup WordPress only
+	 * rewrites.
+	 *
+	 * @dataProvider kses_parser_provider
+	 *
+	 * @param bool $legacy Whether to force the legacy kses parser.
+	 */
+	public function test_filtered_user_updates_with_rewritten_markup(
+		bool $legacy
+	): void {
+		// ARRANGE: An author imports plain content, then the source switches
+		// to markup kses rewrites.
+		add_filter(
+			'wp_kses_force_legacy_parser',
+			$legacy ? '__return_true' : '__return_false'
+		);
+		wp_set_current_user(
+			self::factory()->user->create( array( 'role' => 'author' ) )
+		);
+		$session_id                = $this->repository->create_session(
+			'https://source.example.com',
+			'single'
+		);
+		$post_data                 = $this->rewritten_post_data( 8072 );
+		$this->mock_post_overrides = array(
+			'content' => '<p>Original content.</p>',
+			'excerpt' => 'Original excerpt.',
+		);
+		$created                   = $this->import_service->import_post(
+			$post_data,
+			$session_id
+		);
+		$this->assertTrue( $created['success'] );
+		$this->mock_post_overrides = array(
+			'content' => $post_data['content'],
+			'excerpt' => $post_data['excerpt'],
+		);
+
+		// ACT: Update the post through the author's save filters.
+		$result = $this->import_service->import_post( $post_data, $session_id );
+
+		// ASSERT: The update succeeds although kses rewrote both fields.
+		$this->assertTrue( $result['success'] );
+		$this->assertSame( $created['post_id'], $result['post_id'] );
+		$post = get_post( $result['post_id'] );
+		$this->assertNotSame( $post_data['content'], $post->post_content );
+		$this->assertNotSame( $post_data['excerpt'], $post->post_excerpt );
+	}
+
+	/**
 	 * Verifies that a caller granted unfiltered_html imports content unchanged.
 	 */
 	public function test_import_succeeds_for_caller_with_unfiltered_html(): void {
@@ -516,6 +617,12 @@ class Import_Sanitization_Test extends Integration_Test_Case {
 					. '</svg>'
 					. '<!-- /wp:html -->',
 			),
+			'stripped style declaration' => array(
+				'<!-- wp:paragraph --><p><mark'
+					. ' style="background-color:rgba(0, 0, 0, 0);color:#cf2e2e"'
+					. ' class="has-inline-color">Red</mark></p>'
+					. '<!-- /wp:paragraph -->',
+			),
 		);
 	}
 
@@ -571,10 +678,12 @@ class Import_Sanitization_Test extends Integration_Test_Case {
 	}
 
 	/**
-	 * Verifies that save-time formatting changes are reported.
+	 * Verifies that an inline style kses only respaces does not fail the
+	 * import.
 	 */
-	public function test_bulk_import_reports_save_time_formatting_changes(): void {
-		// ARRANGE: Import content whose inline style is normalized by kses.
+	public function test_bulk_import_accepts_respaced_style(): void {
+		// ARRANGE: Import a style written as the classic editor writes it,
+		// which kses respaces.
 		$author_id = self::factory()->user->create(
 			array( 'role' => 'author' )
 		);
@@ -588,7 +697,7 @@ class Import_Sanitization_Test extends Integration_Test_Case {
 		$content = '<!-- wp:button -->'
 			. '<div class="wp-block-button">'
 			. '<a class="wp-block-button__link"'
-			. ' style="background-color: #ff0000; color: #ffffff">'
+			. ' style="background-color: #ff0000; color: #ffffff;">'
 			. 'Click Me</a></div>'
 			. '<!-- /wp:button -->';
 
@@ -614,9 +723,12 @@ class Import_Sanitization_Test extends Integration_Test_Case {
 			$session_id
 		);
 
-		// ASSERT: Any persisted difference is reported.
-		$this->assertFalse( $result['success'] );
-		$this->assertStringContainsString( 'post content', $result['error'] );
+		// ASSERT: The import succeeds although kses respaced the style.
+		$this->assertTrue( $result['success'] );
+		$this->assertNotSame(
+			$content,
+			get_post( $result['post_id'] )->post_content
+		);
 	}
 
 	/**
@@ -998,6 +1110,35 @@ class Import_Sanitization_Test extends Integration_Test_Case {
 				8033,
 				'https://source.example.com'
 			)
+		);
+	}
+
+	/**
+	 * Builds post data whose content and excerpt kses rewrites on save while
+	 * keeping what they hold.
+	 *
+	 * @param int $source_id Source post ID.
+	 * @return array Post data for import_post().
+	 */
+	private function rewritten_post_data( int $source_id ): array {
+		return array(
+			'id'             => $source_id,
+			'title'          => 'Rewritten Markup Test',
+			'content'        => '<!-- wp:image -->'
+				. '<figure class="wp-block-image">'
+				. '<img src="https://cdn.example.org/a.jpg" alt=""/></figure>'
+				. '<!-- /wp:image --><!-- wp:separator -->'
+				. '<hr class="wp-block-separator has-alpha-channel-opacity"/>'
+				. '<!-- /wp:separator --><!-- wp:paragraph --><p>'
+				. '<a href="https://example.org/" target="_blank"'
+				. ' rel="noreferrer noopener">Read</a>&nbsp;more.</p>'
+				. '<!-- /wp:paragraph -->',
+			'link'           => 'https://source.example.com/rewritten-markup',
+			'featured_media' => 0,
+			'post_type'      => 'posts',
+			'excerpt'        => 'Fish & Chips',
+			'meta'           => array(),
+			'terms'          => array(),
 		);
 	}
 }

@@ -1753,6 +1753,51 @@ class Session_Rollback_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that a filtered user restores content WordPress only rewrites.
+	 */
+	public function test_filtered_user_restores_rewritten_content(): void {
+		// ARRANGE: An update snapshot holds block markup kses rewrites.
+		$content    = '<!-- wp:image --><figure class="wp-block-image">'
+			. '<img src="https://cdn.example.org/a.jpg" alt=""/></figure>'
+			. '<!-- /wp:image -->';
+		$session_id = $this->repository->create_session(
+			'https://example.com',
+			'bulk'
+		);
+		$post_id    = self::factory()->post->create(
+			array( 'post_content' => 'Imported content.' )
+		);
+		$item_id    = $this->repository->log_import_action(
+			$session_id,
+			4,
+			'Rewritten rollback',
+			'updated',
+			$post_id,
+			null,
+			array(
+				'previous_content' => $content,
+				'action'           => 'updated_existing',
+			)
+		);
+		$author_id  = self::factory()->user->create(
+			array( 'role' => 'author' )
+		);
+		wp_set_current_user( $author_id );
+
+		// ACT: Restore through the author's save filters.
+		$result = $this->rollback_service->rollback_item( $item_id );
+
+		// ASSERT: The rewritten restore succeeds and is recorded.
+		$this->assertIsArray( $result );
+		$this->assertSame( 'restored', $result['action'] );
+		$this->assertNotSame( $content, get_post( $post_id )->post_content );
+		$this->assertSame(
+			1,
+			(int) $this->repository->get_item( $item_id )['rolled_back']
+		);
+	}
+
+	/**
 	 * Verifies that an unfiltered user can restore raw HTML unchanged.
 	 */
 	public function test_unfiltered_user_restores_raw_content(): void {

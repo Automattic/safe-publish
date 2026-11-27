@@ -12,12 +12,15 @@ declare(strict_types=1);
 namespace Safe_Publish\API;
 
 use Safe_Publish\Admin\Content_Processor;
+use Safe_Publish\Admin\Import_Logger;
 use Safe_Publish\Admin\Navigation_Ref_Rewriter;
 use Safe_Publish\Admin\Post_Import_Service;
+use Safe_Publish\Utils\Markup_Comparator;
 use Safe_Publish\Utils\Meta_Key_Matcher;
 use Safe_Publish\Utils\Options;
 use Safe_Publish\Utils\Term_Conflict;
 use Safe_Publish\Utils\Term_Reconcile_Report;
+use Throwable;
 use WP_Error;
 use WP_Term;
 
@@ -121,8 +124,9 @@ final class Meta_Terms_Manager {
 	 * Accepts array or object; keys are meta keys, values are meta values.
 	 * Skips reserved keys; refused_meta_keys() lists them.
 	 *
-	 * Returns true on success, or a WP_Error listing any keys that could not
-	 * be written due to a database error.
+	 * Returns true on success, or a WP_Error listing any keys the destination
+	 * did not store, whether a database error or a hook, such as a sanitizer,
+	 * refused them.
 	 *
 	 * @param int          $post_id Post ID to update meta for.
 	 * @param array|object $meta    Meta to set.
@@ -185,34 +189,78 @@ final class Meta_Terms_Manager {
 		// the unslashed one.
 		$stored_key = (string) wp_unslash( $key );
 
-		// Slashed only for the write: The compare below reads the stored value
-		// back unslashed.
-		$result = update_post_meta( $post_id, $key, wp_slash( $meta_value ) );
+		try {
+			// Slashed only for the write: The compare below reads the stored
+			// value back unslashed.
+			$result = update_post_meta(
+				$post_id,
+				$key,
+				wp_slash( $meta_value )
+			);
 
-		if ( false !== $result ) {
-			return true;
-		}
+			if ( false !== $result ) {
+				return true;
+			}
 
-		if ( ! metadata_exists( 'post', $post_id, $stored_key ) ) {
+			if ( ! metadata_exists( 'post', $post_id, $stored_key ) ) {
+				return false;
+			}
+
+			$stored = get_post_meta( $post_id, $stored_key, true );
+
+			// A sanitizer registered for the key stores its own form of the
+			// value, which the row then holds instead of the sent one. The
+			// post's type selects the same sanitizer the write used. The sent
+			// value is compared first, so the common case runs no sanitizer
+			// again.
+			return self::holds_value( $stored, $meta_value )
+				|| self::holds_value(
+					$stored,
+					sanitize_meta(
+						$stored_key,
+						$meta_value,
+						'post',
+						get_object_subtype( 'post', $post_id )
+					)
+				);
+		} catch ( Throwable $error ) {
+			// A hook can throw, such as a sanitizer that refuses the value's
+			// type. The import reports the key, instead of the error ending the
+			// request.
+			self::audit_refused_value( $post_id, $key, $error );
+
 			return false;
 		}
+	}
 
-		$stored = get_post_meta( $post_id, $stored_key, true );
-
-		// A sanitizer registered for the key stores its own form of the value,
-		// which the row then holds instead of the sent one. The post's type
-		// selects the same sanitizer the write used. The sent value is compared
-		// first, so the common case runs no sanitizer again.
-		return self::holds_value( $stored, $meta_value )
-			|| self::holds_value(
-				$stored,
-				sanitize_meta(
-					$stored_key,
-					$meta_value,
-					'post',
-					get_object_subtype( 'post', $post_id )
-				)
+	/**
+	 * Records the error a hook raised while writing a key.
+	 *
+	 * Logging fires a public action, and a listener that throws must not end
+	 * the request either.
+	 *
+	 * @param int       $post_id Post the write targeted.
+	 * @param string    $key     Sanitized meta key.
+	 * @param Throwable $error   Error the hook raised.
+	 */
+	private static function audit_refused_value(
+		int $post_id,
+		string $key,
+		Throwable $error
+	): void {
+		try {
+			( new Import_Logger() )->meta_value_refused(
+				$post_id,
+				$key,
+				$error::class,
+				$error->getMessage(),
+				$error->getFile(),
+				$error->getLine()
 			);
+		// phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+		} catch ( Throwable ) {
+			// Nowhere left to report a logger that cannot log.
+		}
 	}
 
 	/**
@@ -227,6 +275,47 @@ final class Meta_Terms_Manager {
 		return is_array( $value ) || is_object( $value )
 			? $stored == $value // phpcs:ignore WordPress.PHP.StrictComparisons.LooseComparison
 			: (string) $stored === (string) $value;
+	}
+
+	/**
+	 * Writes back the meta values a failed update replaced.
+	 *
+	 * Skips each key whose row still holds exactly its previous value, such as
+	 * one whose write a hook refused, so no sanitizer runs on a value the row
+	 * already holds. An empty previous value always deletes the key, since an
+	 * absent key reads back as "" too. A hook that throws is audited, and the
+	 * restore moves on to the next key.
+	 *
+	 * @param int                     $post_id Post ID to restore.
+	 * @param array<array-key, mixed> $values  Previous values keyed by sanitized meta key, each
+	 *                                         read unslashed.
+	 * @return string[] Keys a hook refused to restore.
+	 */
+	public function restore_meta( int $post_id, array $values ): array {
+		$failed_keys = array();
+
+		foreach ( $values as $meta_key => $value ) {
+			$key        = (string) $meta_key;
+			$stored_key = (string) wp_unslash( $key );
+
+			try {
+				if ( '' === $value ) {
+					delete_post_meta( $post_id, $key );
+				} elseif (
+					get_post_meta( $post_id, $stored_key, true ) !== $value
+				) {
+					update_post_meta( $post_id, $key, wp_slash( $value ) );
+				}
+			} catch ( Throwable $error ) {
+				// A hook can refuse the previous value too, such as a sanitizer
+				// registered after the value was stored.
+				self::audit_refused_value( $post_id, $key, $error );
+
+				$failed_keys[] = $key;
+			}
+		}
+
+		return $failed_keys;
 	}
 
 	/**
@@ -1091,7 +1180,11 @@ final class Meta_Terms_Manager {
 			$changes['parent'] = $parent;
 		}
 
-		if ( '' !== $record['name'] && $record['name'] !== $term->name ) {
+		// Core stores a name through kses, which may write it differently.
+		if (
+			'' !== $record['name']
+			&& ! Markup_Comparator::equivalent( $record['name'], $term->name )
+		) {
 			$taken = $this->name_is_taken(
 				$record['name'],
 				$term,
@@ -1110,35 +1203,41 @@ final class Meta_Terms_Manager {
 			}
 		}
 
-		if ( null !== $record['description'] ) {
-			$description = wp_kses_post( $record['description'] );
-
-			$narrowed = self::narrow_description( $record['description'] );
-
-			// Core narrows a term description as it saves, so compare that
-			// form too; richer markup would rewrite on every import.
-			if (
-				$description !== $term->description
-				&& $narrowed !== $term->description
-			) {
-				$changes['description'] = $description;
-			}
+		if (
+			null !== $record['description']
+			&& ! self::holds_description(
+				$term->description,
+				$record['description']
+			)
+		) {
+			$changes['description'] = wp_kses_post( $record['description'] );
 		}
 
 		return $changes;
 	}
 
 	/**
-	 * Narrows a source description to the form core stores on a term.
+	 * Checks whether a stored term description already holds the source's.
 	 *
-	 * @param string $description Source term description.
-	 * @return string Narrowed description.
+	 * Core narrows a term description as it saves, unless the site lifts that
+	 * filter, so either form counts; richer markup would otherwise rewrite on
+	 * every import.
+	 *
+	 * @param string $stored Stored term description.
+	 * @param string $source Source term description.
+	 * @return bool Whether importing the source's description changes nothing.
 	 */
-	public static function narrow_description( string $description ): string {
-		return wp_kses(
-			wp_kses_post( $description ),
-			'pre_term_description'
-		);
+	public static function holds_description(
+		string $stored,
+		string $source
+	): bool {
+		$description = wp_kses_post( $source );
+
+		return Markup_Comparator::equivalent( $description, $stored )
+			|| Markup_Comparator::equivalent(
+				wp_kses( $description, 'pre_term_description' ),
+				$stored
+			);
 	}
 
 	/**

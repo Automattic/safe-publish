@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace Safe_Publish\Admin;
 
+use Safe_Publish\Utils\Markup_Comparator;
 use WP_Error;
 
 // Prevent direct access.
@@ -17,7 +18,10 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * Verifies that WordPress persisted requested post content unchanged.
+ * Verifies that WordPress persisted requested post content intact.
+ *
+ * Markup that WordPress only rewrites, keeping every block, tag, attribute,
+ * and value, counts as intact.
  */
 final class Post_Content_Integrity {
 
@@ -41,7 +45,7 @@ final class Post_Content_Integrity {
 	 * @param int    $post_id   Persisted post ID.
 	 * @param array  $requested Requested post fields.
 	 * @param string $operation OPERATION_IMPORT or OPERATION_ROLLBACK.
-	 * @return WP_Error|null Error when WordPress changed a content field.
+	 * @return WP_Error|null Error when WordPress filtered a content field.
 	 */
 	public static function verify(
 		int $post_id,
@@ -70,7 +74,10 @@ final class Post_Content_Integrity {
 		foreach ( $field_labels as $field => $label ) {
 			if (
 				array_key_exists( $field, $requested )
-				&& (string) $requested[ $field ] !== $post->{$field}
+				&& ! Markup_Comparator::equivalent(
+					(string) $requested[ $field ],
+					(string) $post->{$field}
+				)
 			) {
 				$changed[ $field ] = $label;
 			}

@@ -26,6 +26,8 @@ use Safe_Publish\Content\Content_Media_Processor;
 use Safe_Publish\Content\Shortcode_ID_Rewriter;
 use Safe_Publish\Media\Media_Importer;
 use Safe_Publish\Tests\Integration\Source_Posts_API\Source_Posts_API_Test_Base;
+use Safe_Publish\Utils\Audit_Log_Table;
+use Safe_Publish\Utils\Log_Events;
 use Safe_Publish\Utils\Options;
 use Safe_Publish\Utils\Telemetry_Service;
 use WP_Error;
@@ -1126,7 +1128,8 @@ class Import_Rollback_Test extends Source_Posts_API_Test_Base {
 	}
 
 	/**
-	 * Verifies that term failure is the action when both restores fail.
+	 * Verifies that the content failure keeps its code and action when both
+	 * restores fail.
 	 */
 	public function test_failed_content_and_term_restore_reports_both(): void {
 		// ARRANGE: Filter the content written only during rollback.
@@ -1150,23 +1153,203 @@ class Import_Rollback_Test extends Source_Posts_API_Test_Base {
 			remove_filter( 'wp_insert_post_data', $filter );
 		}
 
-		// ASSERT: The content code survives and telemetry sees the term failure.
+		// ASSERT: The content code and action survive, and the message names
+		// both failures, the content one first.
 		$this->assertGreaterThan( 1, $previous_writes );
 		$this->assertSame( 'content_filtered', $result->get_error_code() );
 		$this->assertSame(
 			array(
-				'action'              => 'terms_restore_failed',
+				'action'              => 'content_filtered',
 				'original_error_code' => 'insert_term_failed',
 			),
 			$result->get_error_data()
 		);
-		$this->assertStringContainsString(
-			'Rollback failed because WordPress filtered',
+		$this->assertMatchesRegularExpression(
+			'/Rollback failed because WordPress filtered.*'
+				. ' Failed to restore the previous terms:/s',
 			$result->get_error_message()
 		);
-		$this->assertStringContainsString(
-			'Failed to restore the previous terms:',
+	}
+
+	/**
+	 * Verifies that an aborted update reports a meta value a hook refuses to
+	 * restore, audits why, and still restores the keys after it.
+	 */
+	public function test_failed_meta_restore_is_reported(): void {
+		// ARRANGE: An empty import audit channel, and a post holding values
+		// stored before sanitizers that accept strings only were registered.
+		Audit_Log_Table::create_table();
+		Audit_Log_Table::clear( 'import' );
+		$post_id = self::factory()->post->create(
+			array( 'post_title' => 'Previous title' )
+		);
+		update_post_meta( $post_id, 'sp_tags', array( 'a', 'b' ) );
+		update_post_meta( $post_id, 'sp_label', 'one' );
+		update_post_meta( $post_id, 'sp_count', '1.0' );
+		$this->register_string_sanitizer( 'sp_tags' );
+		$this->register_string_sanitizer( 'sp_label' );
+
+		// ACT: Overwrite the stored array with a string, send an array for the
+		// label, and change the count.
+		$result = $this->import_service->persist_updated_post(
+			array(
+				'ID'         => $post_id,
+				'post_title' => 'Imported title',
+			),
+			0,
+			'https://source.example.com/post',
+			array(
+				'sp_tags'  => 'x',
+				'sp_label' => array( 'refused' ),
+				'sp_count' => '1',
+			),
+			array(),
+			array(),
+			0
+		);
+
+		unregister_post_meta( 'post', 'sp_tags' );
+		unregister_post_meta( 'post', 'sp_label' );
+
+		// ASSERT: The incomplete undo names the key whose array the sanitizer
+		// refused to take back.
+		$this->assertInstanceOf( WP_Error::class, $result );
+		$this->assertSame( 'meta_restore_failed', $result->get_error_code() );
+		$this->assertSame(
+			'Failed to update post meta key(s): sp_label. The failed update'
+				. ' could not be fully reversed: Failed to restore post meta'
+				. ' key(s): sp_tags.',
 			$result->get_error_message()
+		);
+		$this->assertSame(
+			array(
+				'action'              => 'meta_restore_failed',
+				'original_error_code' => 'meta_update_failed',
+			),
+			$result->get_error_data()
+		);
+
+		// ASSERT: The undo restored the rest, including a count only loosely
+		// equal to the imported one.
+		$this->assertSame(
+			'Previous title',
+			get_post_field( 'post_title', $post_id )
+		);
+		$this->assertSame( 'x', get_post_meta( $post_id, 'sp_tags', true ) );
+		$this->assertSame( 'one', get_post_meta( $post_id, 'sp_label', true ) );
+		$this->assertSame( '1.0', get_post_meta( $post_id, 'sp_count', true ) );
+
+		// ASSERT: Both refusals are audited, newest first, the undo's with the
+		// error the sanitizer raised.
+		$events = Audit_Log_Table::get_events(
+			array(
+				'channel'    => 'import',
+				'event_type' => Log_Events::META_VALUE_REFUSED,
+			)
+		);
+		$this->assertSame(
+			array( 'sp_tags', 'sp_label' ),
+			array_column( array_column( $events, 'data' ), 'meta_key' )
+		);
+		$this->assertSame( 'TypeError', $events[0]['data']['error_class'] );
+		$this->assertStringContainsString(
+			'must be of type string, array given',
+			$events[0]['data']['error_message']
+		);
+	}
+
+	/**
+	 * Verifies that undoing a failed update deletes every field the update
+	 * added, including an empty one, which reads back like an absent key, and
+	 * one under a key with a backslash, which the write stores without it.
+	 */
+	public function test_failed_update_undo_deletes_added_meta(): void {
+		// ARRANGE: A post without the fields, and a field whose write fails.
+		$post_id    = self::factory()->post->create();
+		$block_meta = static function ( $check, $object_id, $meta_key ) {
+			unset( $object_id );
+			return 'sp_blocked_field' === $meta_key ? false : $check;
+		};
+		add_filter( 'update_post_metadata', $block_meta, 10, 3 );
+
+		// ACT: Add the fields, and fail the update on the blocked one.
+		$result = $this->import_service->persist_updated_post(
+			array(
+				'ID'         => $post_id,
+				'post_title' => 'Imported title',
+			),
+			0,
+			'https://source.example.com/post',
+			array(
+				'sp_note'          => 'added',
+				'sp_empty'         => '',
+				'sp\\tag'          => 'added',
+				'sp_blocked_field' => 'imported',
+			),
+			array(),
+			array(),
+			0
+		);
+
+		remove_filter( 'update_post_metadata', $block_meta, 10 );
+
+		// ASSERT: The update failed, and the undo deleted every added field.
+		$this->assertInstanceOf( WP_Error::class, $result );
+		$this->assertSame( 'meta_update_failed', $result->get_error_code() );
+		$this->assertFalse( metadata_exists( 'post', $post_id, 'sp_note' ) );
+		$this->assertFalse( metadata_exists( 'post', $post_id, 'sp_empty' ) );
+		$this->assertFalse( metadata_exists( 'post', $post_id, 'sptag' ) );
+	}
+
+	/**
+	 * Verifies that a filtered user's failed update restores content WordPress
+	 * only rewrites.
+	 */
+	public function test_filtered_rollback_restores_rewritten_content(): void {
+		// ARRANGE: A post stores block markup kses rewrites, written directly
+		// so it stays as written, and an author's update fails at its terms.
+		global $wpdb;
+		$content = '<!-- wp:image --><figure class="wp-block-image">'
+			. '<img src="https://cdn.example.org/a.jpg" alt=""/></figure>'
+			. '<!-- /wp:image -->';
+		$post_id = self::factory()->post->create();
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$wpdb->update(
+			$wpdb->posts,
+			array( 'post_content' => $content ),
+			array( 'ID' => $post_id )
+		);
+		clean_post_cache( $post_id );
+		wp_set_current_user(
+			self::factory()->user->create( array( 'role' => 'author' ) )
+		);
+		$filter = $this->fail_term_creation();
+
+		// ACT: Update the post, so the failure restores the stored content.
+		try {
+			$result = $this->import_service->persist_updated_post(
+				array(
+					'ID'         => $post_id,
+					'post_title' => 'Imported title',
+				),
+				0,
+				'https://source.example.com/post',
+				array(),
+				array( 'category' => array( 'Uncreatable category' ) ),
+				array(),
+				0
+			);
+		} finally {
+			remove_filter( 'pre_insert_term', $filter );
+		}
+
+		// ASSERT: Only the term failure is reported, and the rewritten restore
+		// stands.
+		$this->assertInstanceOf( WP_Error::class, $result );
+		$this->assertSame( 'terms_update_failed', $result->get_error_code() );
+		$this->assertNotSame(
+			$content,
+			get_post_field( 'post_content', $post_id )
 		);
 	}
 

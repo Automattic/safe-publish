@@ -77,7 +77,7 @@ Empty post content is valid and does not by itself block an import.
 
 **What happens:**
 
-Content passes through WordPress' normal save-time filters, including kses when the acting user lacks `unfiltered_html`. Safe Publish compares the requested content and excerpt with the persisted values. If a filter changes either field, the import fails with a descriptive error instead of reporting success.
+Content passes through WordPress' normal save-time filters, including kses when the acting user lacks `unfiltered_html`. Safe Publish compares the requested content and excerpt with the persisted values. If a filter removes or changes markup in either field, the import fails with a descriptive error instead of reporting success. Differences in how WordPress writes the markup it keeps, such as attribute order, quoting, character references, or the spacing of inline styles, do not fail the import.
 
 **Common failures:**
 

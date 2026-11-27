@@ -50,6 +50,25 @@ abstract class Integration_Test_Case extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Registers a sanitizer for a post meta key that accepts strings only, as
+	 * one declaring its parameter type does, so an array makes it throw.
+	 *
+	 * @param string $key Meta key.
+	 */
+	protected function register_string_sanitizer( string $key ): void {
+		register_post_meta(
+			'post',
+			$key,
+			array(
+				'single'            => true,
+				'type'              => 'string',
+				'sanitize_callback' => static fn( string $value ): string =>
+					trim( $value ),
+			)
+		);
+	}
+
+	/**
 	 * Removes all rows from the import history and attention issue tables.
 	 */
 	private function truncate_history_tables(): void {

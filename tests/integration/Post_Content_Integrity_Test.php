@@ -41,6 +41,38 @@ class Post_Content_Integrity_Test extends Integration_Test_Case {
 	}
 
 	/**
+	 * Verifies that content WordPress only rewrote is not reported.
+	 */
+	public function test_verify_accepts_rewritten_content(): void {
+		// ARRANGE: Store rewritten fields directly, so no save filter runs.
+		global $wpdb;
+		$post_id = self::factory()->post->create();
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$wpdb->update(
+			$wpdb->posts,
+			array(
+				'post_content' => '<img alt="" src="a.jpg">',
+				'post_excerpt' => 'Fish &amp; Chips',
+			),
+			array( 'ID' => $post_id )
+		);
+		clean_post_cache( $post_id );
+
+		// ACT: Compare the requested fields with their stored rewrites.
+		$result = Post_Content_Integrity::verify(
+			$post_id,
+			array(
+				'post_content' => '<img src="a.jpg" alt=""/>',
+				'post_excerpt' => 'Fish & Chips',
+			),
+			Post_Content_Integrity::OPERATION_IMPORT
+		);
+
+		// ASSERT: The rewrites are not reported as filtering.
+		$this->assertNull( $result );
+	}
+
+	/**
 	 * Verifies that fields omitted from a write are not compared.
 	 */
 	public function test_verify_ignores_omitted_content_fields(): void {

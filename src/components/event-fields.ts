@@ -82,6 +82,7 @@ const EVENT_LABELS: Record< string, string > = {
 	ITEM_ROLLBACK_FAILED: __( 'Item rollback failed', 'safe-publish' ),
 	ITEM_CLOSED_POST_MISSING: __( 'Item closed, post missing', 'safe-publish' ),
 	ITEM_ROLLBACK_STUCK: __( 'Item rollback stuck', 'safe-publish' ),
+	META_VALUE_REFUSED: __( 'Meta value refused', 'safe-publish' ),
 	SESSION_DELETED: __( 'Session deleted', 'safe-publish' ),
 	SESSION_DELETE_FAILED: __( 'Session delete failed', 'safe-publish' ),
 	IMPORT_ITEM_FAILED: __( 'Import item failed', 'safe-publish' ),
