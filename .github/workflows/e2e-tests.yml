@@ -25,6 +25,8 @@ jobs:
             php-version: '8.5'
           - wordpress-version: '7.1'
             php-version: '8.5'
+          - wordpress-version: '7.2'
+            php-version: '8.6'
     steps:
       - uses: actions/checkout@v7.0.1
 
@@ -73,8 +75,10 @@ jobs:
           global $wp_version;
           $expected = "${{ matrix.wordpress-version }}";
           WP_CLI::log( "WordPress " . $wp_version );
+          // Release candidates report versions such as 7.2-RC3-65782.
           if ( $wp_version !== $expected
-            && ! str_starts_with( $wp_version, $expected . "." ) ) {
+            && ! str_starts_with( $wp_version, $expected . "." )
+            && ! str_starts_with( $wp_version, $expected . "-" ) ) {
             WP_CLI::error( "Expected WordPress " . $expected );
           }
           '

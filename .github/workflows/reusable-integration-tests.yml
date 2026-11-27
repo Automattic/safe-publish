@@ -70,9 +70,11 @@ jobs:
           global $wp_version;
           $expected = "${{ inputs.wordpress-version }}";
           WP_CLI::log( "WordPress " . $wp_version );
+          // Release candidates report versions such as 7.2-RC3-65782.
           if ( "trunk" !== $expected
             && $wp_version !== $expected
-            && ! str_starts_with( $wp_version, $expected . "." ) ) {
+            && ! str_starts_with( $wp_version, $expected . "." )
+            && ! str_starts_with( $wp_version, $expected . "-" ) ) {
             WP_CLI::error( "Expected WordPress " . $expected );
           }
           '
