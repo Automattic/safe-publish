@@ -16,6 +16,10 @@ const LONG_ERROR =
 	'Could not reach the source site: cURL error 28: Operation timed out ' +
 	'after 10001 milliseconds with 0 bytes received.';
 
+// Outlasts the source requests a wait depends on, which run in turn and time
+// out after 10 seconds each (safe_publish_request_timeout).
+const SOURCE_TIMEOUT = 30_000;
+
 const titles: string[] = [];
 
 /**
@@ -97,8 +101,19 @@ async function openCompare(
 
 	await admin.visitAdminPage( 'admin.php', 'page=safe-publish' );
 	const row = page.getByRole( 'row' ).filter( { hasText: title } );
-	await row.getByRole( 'button', { name: 'Import' } ).click();
-	await expect( page.getByText( /has been imported/ ) ).toBeVisible();
+	await row
+		.getByRole( 'button', { name: 'Import' } )
+		.click( { timeout: SOURCE_TIMEOUT } );
+
+	// Either outcome ends the wait, so a failed import reports its own error.
+	const dialog = page.getByRole( 'dialog' );
+	const outcome = dialog
+		.getByText( /has been imported/ )
+		.or( dialog.getByRole( 'alert' ) );
+	await expect( outcome ).toBeVisible( { timeout: SOURCE_TIMEOUT } );
+	await expect( outcome ).toHaveText(
+		`"${ title }" has been imported as a draft.`
+	);
 
 	// Freshness compares whole seconds, so the change must land in a later
 	// second than the import to mark the row outdated.
@@ -113,11 +128,13 @@ async function openCompare(
 	// open modal would unmount it with the inline button.
 	await page.setViewportSize( { width, height } );
 	await page.reload();
-	await row.getByRole( 'button', { name: 'Actions' } ).click();
+	await row
+		.getByRole( 'button', { name: 'Actions' } )
+		.click( { timeout: SOURCE_TIMEOUT } );
 	await page.getByRole( 'menuitem', { name: 'Compare' } ).click();
 	await expect(
 		page.locator( '.safe-publish-compare-modal__section' ).first()
-	).toBeVisible();
+	).toBeVisible( { timeout: SOURCE_TIMEOUT } );
 }
 
 /**
