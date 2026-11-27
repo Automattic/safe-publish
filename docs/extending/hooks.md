@@ -131,10 +131,14 @@ Filter the post meta imported from the source, before it is written to the desti
 
 ```php
 add_filter( 'safe_publish_source_post_meta', function( array $meta, array $data ): array {
-    if ( isset( $data['acf']['hero_title'] ) ) {
-        // Source values are untrusted; sanitize for the field's type.
-        $meta['hero_title'] = sanitize_text_field( (string) $data['acf']['hero_title'] );
-    }
+    // Source values are untrusted; sanitize for the field's type.
+    $value = $data['acf']['hero_title'] ?? $meta['hero_title'] ?? '';
+    $value = is_scalar( $value ) ? sanitize_text_field( (string) $value ) : '';
+
+    // Write the key last, on every import, so it replaces the source's value.
+    unset( $meta['hero_title'] );
+    $meta['hero_title'] = $value;
+
     return $meta;
 }, 10, 2 );
 ```
