@@ -9,9 +9,13 @@ declare(strict_types=1);
 
 namespace Safe_Publish\Tests\Integration;
 
+use ReflectionMethod;
+use Safe_Publish\API\Diff_Renderer;
+use Safe_Publish\Utils\Markup_Comparator;
+
 /**
- * Covers how the block diff pairs blocks: Equal blocks align first, and an
- * edited block pairs with its own previous version.
+ * Covers how the block diff pairs blocks: Equivalent blocks align first, and
+ * an edited block pairs with its own previous version.
  */
 class Diff_Renderer_Block_Alignment_Test extends Integration_Test_Case {
 
@@ -190,12 +194,29 @@ class Diff_Renderer_Block_Alignment_Test extends Integration_Test_Case {
 					'unchanged: paragraph(Two)',
 				),
 			),
+			'move of rewritten blocks'      => array(
+				self::blocks(
+					self::rewritten_image( 'a.jpg' ),
+					self::rewritten_image( 'b.jpg' )
+				),
+				self::blocks( self::image( 'b.jpg' ), self::image( 'a.jpg' ) ),
+				array(
+					'added: image(b.jpg)',
+					'unchanged: image(a.jpg)',
+					'removed: image(b.jpg)',
+				),
+			),
+			'line break in text'            => array(
+				self::content( "One\ntwo" ),
+				self::content( 'One two' ),
+				array( 'unchanged: paragraph(One two)' ),
+			),
 		);
 	}
 
 	/**
-	 * Verifies that equal blocks align, so only the blocks that changed are
-	 * reported, each against its own previous version.
+	 * Verifies that equivalent blocks align, so only the blocks that changed
+	 * are reported, each against its own previous version.
 	 *
 	 * @dataProvider alignment_provider
 	 *
@@ -236,6 +257,52 @@ class Diff_Renderer_Block_Alignment_Test extends Integration_Test_Case {
 					$diff['index'] . '-' . $diff['status'],
 				$diffs
 			)
+		);
+	}
+
+	/**
+	 * Verifies that a block ending inside a tag compares by its markup, so a
+	 * change to it is reported.
+	 */
+	public function test_unreadable_block_change_is_reported(): void {
+		// ARRANGE: Load the diff engine that render_diff() loads.
+		/** @psalm-suppress MissingFile */
+		require_once ABSPATH . 'wp-includes/wp-diff.php';
+		$method = new ReflectionMethod(
+			Diff_Renderer::class,
+			'generate_block_diffs'
+		);
+
+		// ACT: Diff content that ends inside a different tag on each side.
+		$diffs = $method->invoke(
+			new Diff_Renderer(),
+			'<p>One</p><img src="a.jpg',
+			'<p>One</p><img src="b.jpg'
+		);
+
+		// ASSERT: The classic block reports the change.
+		$this->assertSame(
+			array( 'modified' ),
+			array_column( $diffs, 'status' )
+		);
+	}
+
+	/**
+	 * Verifies that a block spelling out another block's key reports the
+	 * change.
+	 */
+	public function test_block_spelling_a_key_reports_the_change(): void {
+		// ARRANGE: Local markup, and source markup made of the local key.
+		$local  = '<p>&lt;svg&gt;</p>';
+		$source = (string) Markup_Comparator::key( $local );
+
+		// ACT: Diff the classic block.
+		$diffs = $this->render_block_diffs( $local, $source );
+
+		// ASSERT: The classic block reports the change.
+		$this->assertSame(
+			array( 'modified' ),
+			array_column( $diffs, 'status' )
 		);
 	}
 
@@ -430,5 +497,18 @@ class Diff_Renderer_Block_Alignment_Test extends Integration_Test_Case {
 		return '<!-- wp:image --><figure class="wp-block-image"><img src="'
 			. 'https://example.com/' . $file . '" alt="' . $alt . '"/>'
 			. $figcaption . '</figure><!-- /wp:image -->';
+	}
+
+	/**
+	 * Builds an image block as kses rewrites image(): Attributes in name
+	 * order and no void-element slash.
+	 *
+	 * @param string $file Image file name.
+	 * @return string Serialized block.
+	 */
+	private static function rewritten_image( string $file ): string {
+		return '<!-- wp:image --><figure class="wp-block-image">'
+			. '<img alt="" src="https://example.com/' . $file . '">'
+			. '</figure><!-- /wp:image -->';
 	}
 }

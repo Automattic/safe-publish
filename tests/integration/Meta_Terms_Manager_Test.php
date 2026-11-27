@@ -644,10 +644,10 @@ class Meta_Terms_Manager_Test extends Integration_Test_Case {
 	 * Verifies that update_terms() strips unsafe markup from a term description
 	 * a compromised source could inject, while keeping safe formatting.
 	 *
-	 * Drops core's pre_term_description kses filter first so the term is stored
-	 * as it would be for an unfiltered_html importer on a web request — the
-	 * case where wp_insert_term alone would keep the raw markup and only this
-	 * importer's own sanitization stands between the source and stored XSS.
+	 * Drops core's pre_term_description kses filter first, standing in for a
+	 * site that lifts it, where wp_insert_term alone would keep the raw markup
+	 * and only this importer's own sanitization stands between the source and
+	 * stored XSS.
 	 */
 	public function test_update_terms_sanitizes_term_description_on_create(): void {
 		// ARRANGE: A new term whose description carries a script payload, with

@@ -1302,6 +1302,58 @@ class Import_Rollback_Test extends Source_Posts_API_Test_Base {
 	}
 
 	/**
+	 * Verifies that a filtered user's failed update restores content WordPress
+	 * only rewrites.
+	 */
+	public function test_filtered_rollback_restores_rewritten_content(): void {
+		// ARRANGE: A post stores block markup kses rewrites, written directly
+		// so it stays as written, and an author's update fails at its terms.
+		global $wpdb;
+		$content = '<!-- wp:image --><figure class="wp-block-image">'
+			. '<img src="https://cdn.example.org/a.jpg" alt=""/></figure>'
+			. '<!-- /wp:image -->';
+		$post_id = self::factory()->post->create();
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$wpdb->update(
+			$wpdb->posts,
+			array( 'post_content' => $content ),
+			array( 'ID' => $post_id )
+		);
+		clean_post_cache( $post_id );
+		wp_set_current_user(
+			self::factory()->user->create( array( 'role' => 'author' ) )
+		);
+		$filter = $this->fail_term_creation();
+
+		// ACT: Update the post, so the failure restores the stored content.
+		try {
+			$result = $this->import_service->persist_updated_post(
+				array(
+					'ID'         => $post_id,
+					'post_title' => 'Imported title',
+				),
+				0,
+				'https://source.example.com/post',
+				array(),
+				array( 'category' => array( 'Uncreatable category' ) ),
+				array(),
+				0
+			);
+		} finally {
+			remove_filter( 'pre_insert_term', $filter );
+		}
+
+		// ASSERT: Only the term failure is reported, and the rewritten restore
+		// stands.
+		$this->assertInstanceOf( WP_Error::class, $result );
+		$this->assertSame( 'terms_update_failed', $result->get_error_code() );
+		$this->assertNotSame(
+			$content,
+			get_post_field( 'post_content', $post_id )
+		);
+	}
+
+	/**
 	 * Verifies that the new featured-image attachment is deleted when the bulk
 	 * update path rolls back due to a custom meta failure, while the original
 	 * thumbnail is preserved.
